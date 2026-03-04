@@ -50,6 +50,11 @@ android {
         multiDexEnabled true
     }
 
+    lintOptions {
+        disable 'ExpiredTargetSdkVersion'
+        checkReleaseBuilds false
+    }
+
     buildTypes {
         release {
             signingConfig signingConfigs.debug

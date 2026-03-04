@@ -1,5 +1,5 @@
-name: neosync_client
-description: A new Flutter project.
+name: vaultsync_client
+description: High-performance, hardware-encrypted emulator save synchronization.
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -34,9 +34,17 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: false
+  image_path: "assets/vaultsync_icon.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/systems/
+    - assets/vaultsync_icon.png
