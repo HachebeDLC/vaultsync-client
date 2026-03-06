@@ -20,7 +20,8 @@ class _BootScreenState extends ConsumerState<BootScreen> {
   }
 
   Future<void> _loadData() async {
-    final isConfigured = await ref.read(apiClientProvider).isConfigured();
+    final client = ref.read(apiClientProvider);
+    final isConfigured = await client.isConfigured();
     
     if (!mounted) return;
 
@@ -29,24 +30,41 @@ class _BootScreenState extends ConsumerState<BootScreen> {
       return;
     }
 
-    await ref.read(authProvider.notifier).init();
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-
-    if (ref.read(authProvider.notifier).isAuthenticated) {
-      final paths = await ref.read(systemPathServiceProvider).getAllSystemPaths();
-      if (!mounted) return;
-      
-      if (paths.isEmpty) {
-        context.go('/library-setup');
-      } else {
-        // Start live file watcher
-        // ref.read(syncWatcherServiceProvider).startWatching(); // Re-enable if service exists
-        context.go('/dashboard');
+    try {
+      final baseUrl = await client.getBaseUrl();
+      if (baseUrl == null || baseUrl.isEmpty) {
+        context.go('/setup');
+        return;
       }
-    } else {
-      context.go('/auth');
+
+      print('🌐 BOOT: Checking connectivity to $baseUrl');
+      
+      // Attempt Auth initialization
+      await ref.read(authProvider.notifier).init();
+      
+      if (!mounted) return;
+
+      if (ref.read(authProvider.notifier).isAuthenticated) {
+        final paths = await ref.read(systemPathServiceProvider).getAllSystemPaths();
+        if (!mounted) return;
+        
+        if (paths.isEmpty) {
+          context.go('/library-setup');
+        } else {
+          context.go('/dashboard');
+        }
+      } else {
+        // Not authenticated, but server might be unreachable due to device lock.
+        // We go to /auth anyway; the login/register screen can handle retries.
+        context.go('/auth');
+      }
+    } catch (e) {
+      print('ℹ️ BOOT: Network restricted (likely device lock). Proceeding to Auth screen.');
+      if (mounted) {
+        // If we have a URL but just couldn't reach it, don't force setup.
+        // Let the user land on Auth where they can manually retry or wait for signal.
+        context.go('/auth');
+      }
     }
   }
 

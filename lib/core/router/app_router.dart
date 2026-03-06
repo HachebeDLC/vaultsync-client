@@ -8,6 +8,7 @@ import '../../features/startup/presentation/boot_screen.dart';
 import '../../features/startup/presentation/setup_screen.dart';
 import '../../features/startup/presentation/library_setup_screen.dart';
 import '../../features/sync/presentation/sync_screen.dart';
+import '../../features/sync/presentation/system_detail_screen.dart';
 
 final goRouter = GoRouter(
   initialLocation: '/',
@@ -31,6 +32,13 @@ final goRouter = GoRouter(
     GoRoute(
       path: '/dashboard',
       builder: (context, state) => const DashboardScreen(),
+    ),
+    GoRoute(
+      path: '/system-detail/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return SystemDetailScreen(systemId: id);
+      },
     ),
     GoRoute(
       path: '/sync',

@@ -50,7 +50,21 @@ class MainActivity: FlutterActivity() {
                     val dirtyIndices = call.argument<List<Int>>("dirtyIndices")
                     uploadFileNative(url, token, masterKey, remotePath, uri, hash, device, updated, dirtyIndices, result)
                 }
-                "downloadFileNative" -> downloadFileNative(call.argument<String>("url")!!, call.argument<String>("token"), call.argument<String>("masterKey"), call.argument<String>("remoteFilename")!!, call.argument<String>("uri")!!, call.argument<String>("localFilename")!!, result)
+                "downloadFileNative" -> {
+                    val url = call.argument<String>("url")!!
+                    val token = call.argument<String>("token")
+                    val masterKey = call.argument<String>("masterKey")
+                    val remoteFilename = call.argument<String>("remoteFilename")!!
+                    val uri = call.argument<String>("uri")!!
+                    val localFilename = call.argument<String>("localFilename")!!
+                    val updatedAt = call.argument<Number>("updatedAt")?.toLong()
+                    downloadFileNative(url, token, masterKey, remoteFilename, uri, localFilename, updatedAt, result)
+                }
+                "setFileTimestamp" -> {
+                    val path = call.argument<String>("path")!!
+                    val updatedAt = call.argument<Number>("updatedAt")!!.toLong()
+                    setFileTimestamp(path, updatedAt, result)
+                }
                 "getFileInfo" -> getFileInfo(call.argument<String>("uri")!!, result)
                 "checkPathExists" -> result.success(checkPathExists(call.argument<String>("path")))
                 "checkSafPermission" -> result.success(checkSafPermission(call.argument<String>("uri")!!))
@@ -257,10 +271,35 @@ class MainActivity: FlutterActivity() {
         }.start()
     }
 
-    private fun downloadFileNative(url: String, token: String?, masterKey: String?, remoteFilename: String, uriStr: String, localFilename: String, result: MethodChannel.Result) {
+    private fun setFileTimestamp(path: String, updatedAt: Long, result: MethodChannel.Result? = null) {
+        Thread {
+            try {
+                var success = false
+                if (path.startsWith("content://")) {
+                    // SAF metadata is generally read-only for lastModified.
+                    // We log this but don't throw an error to avoid breaking the sync UI.
+                    android.util.Log.i("VaultSync", "Note: Cannot touch SAF timestamp for $path")
+                } else {
+                    val file = File(path)
+                    if (file.exists()) {
+                        success = file.setLastModified(updatedAt)
+                    }
+                }
+                runOnUiThread { result?.success(success) }
+            } catch (e: Exception) {
+                // Fail gracefully
+                runOnUiThread { result?.success(false) }
+            }
+        }.start()
+    }
+
+    private fun downloadFileNative(url: String, token: String?, masterKey: String?, remoteFilename: String, uriStr: String, localFilename: String, updatedAt: Long?, result: MethodChannel.Result) {
         Thread {
             var connection: java.net.HttpURLConnection? = null
             var output: OutputStream? = null
+            var targetUri: Uri? = null
+            var targetFile: File? = null
+
             try {
                 val utf8 = Charsets.UTF_8
                 val magic = "VAULTSYNC".toByteArray(utf8)
@@ -286,10 +325,12 @@ class MainActivity: FlutterActivity() {
                         dir = dir.findFile(parts[i]) ?: dir.createDirectory(parts[i])!! 
                     }
                     val target = dir.findFile(parts.last()) ?: dir.createFile("application/octet-stream", parts.last())!!
+                    targetUri = target.uri
                     contentResolver.openOutputStream(target.uri, "wt")
                 } else {
                     val f = File(File(uriStr), localFilename)
                     if (!f.parentFile.exists()) f.parentFile.mkdirs()
+                    targetFile = f
                     f.outputStream()
                 }
 
@@ -328,6 +369,19 @@ class MainActivity: FlutterActivity() {
                         input.copyTo(output!!)
                     }
                 }
+                
+                output?.close()
+                output = null
+                
+                // Sync timestamp after successful download
+                if (updatedAt != null) {
+                    if (targetUri != null) {
+                        setFileTimestamp(targetUri.toString(), updatedAt)
+                    } else if (targetFile != null) {
+                        setFileTimestamp(targetFile.absolutePath, updatedAt)
+                    }
+                }
+
                 runOnUiThread { result.success(true) }
             } catch (e: Exception) { runOnUiThread { result.error("DOWNLOAD_ERROR", e.message, null) } }
             finally { try { output?.close() } catch(e: Exception) {}; try { connection?.errorStream?.close() } catch(e: Exception) {}; connection?.disconnect() }
@@ -354,7 +408,7 @@ class MainActivity: FlutterActivity() {
         Thread {
             try {
                 val results = JSONArray()
-                val allowedExts = setOf("srm", "save", "sav", "state", "ps2", "mcd", "dat", "nvmem", "eep", "vms", "vmu", "png", "bin", "db")
+                val allowedExts = setOf("srm", "save", "sav", "state", "ps2", "mcd", "dat", "nvmem", "eep", "vms", "vmu", "png", "bin", "db", "sfo", "bak")
                 fun isAllowedFile(name: String) = allowedExts.contains(name.split(".").last().lowercase()) || name.endsWith(".state.auto")
                 
                 val globalIgnores = setOf("cache", "shaders", "resourcepack", "load", "log", "logs", "temp", "tmp")
@@ -394,6 +448,13 @@ class MainActivity: FlutterActivity() {
                                         if (combinedIgnores.contains(name.lowercase())) {
                                             continue
                                         }
+                                        // Include the directory itself in the results
+                                        results.put(JSONObject().apply {
+                                            put("name", name)
+                                            put("relPath", relPath)
+                                            put("uri", DocumentsContract.buildDocumentUriUsingTree(rootUri, id).toString())
+                                            put("isDirectory", true)
+                                        })
                                         walkSaf(id, relPath, depth + 1)
                                     } else if (isAllowedFile(name)) {
                                         fileCount++
@@ -420,6 +481,13 @@ class MainActivity: FlutterActivity() {
                                 if (combinedIgnores.contains(file.name.lowercase())) {
                                     return@forEach
                                 }
+                                // Include directory in results
+                                results.put(JSONObject().apply {
+                                    put("name", file.name)
+                                    put("relPath", relPath)
+                                    put("uri", file.absolutePath)
+                                    put("isDirectory", true)
+                                })
                                 walkLocal(file, relPath)
                             } else if (isAllowedFile(file.name)) {
                                 fileCount++

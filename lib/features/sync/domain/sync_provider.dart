@@ -83,6 +83,22 @@ class SyncNotifier extends StateNotifier<SyncState> {
     }
   }
 
+  Future<void> syncSingleSystem(String systemId, String localPath, {List<String>? ignoredFolders}) async {
+    if (state.isSyncing) return;
+    state = state.copyWith(isSyncing: true, isCancelled: false, status: 'Syncing $systemId...', progress: 0.0);
+
+    try {
+      // Direct call to repository via service logic
+      await _syncService.syncSpecificSystem(systemId, localPath, ignoredFolders: ignoredFolders, onProgress: (msg) {
+        state = state.copyWith(status: msg);
+      });
+      
+      state = state.copyWith(status: 'Sync Complete!', progress: 1.0, isSyncing: false);
+    } catch (e) {
+      state = state.copyWith(status: 'Error: $e', isSyncing: false);
+    }
+  }
+
   Future<void> resolveConflict(Map<String, dynamic> conflict, bool keepLocal) async {
     try {
       await _syncService.resolveConflict(conflict, keepLocal);

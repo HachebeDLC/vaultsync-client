@@ -99,7 +99,7 @@ class DashboardScreen extends ConsumerWidget {
                     title: Text(systemId.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text(_formatSafPath(entry.value), maxLines: 1, overflow: TextOverflow.ellipsis),
                     trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                    onTap: () => context.push('/emulator-list?systemId=$systemId'),
+                    onTap: () => context.push('/system-detail/$systemId'),
                   ),
                 );
               },
@@ -110,7 +110,7 @@ class DashboardScreen extends ConsumerWidget {
               child: Card(
                 elevation: 4,
                 margin: const EdgeInsets.all(16),
-                child: Padding(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,

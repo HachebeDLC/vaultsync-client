@@ -85,6 +85,27 @@ class SyncService {
     }
   }
 
+  /// Syncs a single specific system immediately
+  Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress}) async {
+    // Ensure SAF permission if needed
+    final hasPermission = await _pathService.ensureSafPermission(localPath);
+    if (!hasPermission) {
+      onProgress?.call('Permission denied for $systemId.');
+      return;
+    }
+
+    final effectivePath = await _pathService.getEffectivePath(systemId);
+    
+    // Check if it's a RetroArch path
+    if (effectivePath.toLowerCase().contains('retroarch')) {
+      final raPaths = await _pathService.getRetroArchPaths();
+      final raSaves = raPaths['saves'] ?? effectivePath;
+      await _repository.syncSystem('RetroArch', raSaves, ignoredFolders: ignoredFolders, onProgress: onProgress);
+    } else {
+      await _repository.syncSystem(systemId, effectivePath, ignoredFolders: ignoredFolders, onProgress: onProgress);
+    }
+  }
+
   /// Original Logic: Called right before an emulator is launched to ensure saves are downloaded
   Future<void> syncGameBeforeLaunch(String systemId, String gameId, {Function(String)? onProgress}) async {
     onProgress?.call('Checking cloud saves for $gameId...');

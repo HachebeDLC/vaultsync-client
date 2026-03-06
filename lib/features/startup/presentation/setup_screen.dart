@@ -17,7 +17,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   @override
   void initState() {
     super.initState();
-    _urlController.text = 'https://neosync.artemisa-hb.cloud'; // Default for emulator
+    _urlController.text = ''; 
   }
 
   @override
