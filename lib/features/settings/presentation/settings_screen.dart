@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:workmanager/workmanager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/services/api_client_provider.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../../sync/services/sync_service.dart';
+import '../../sync/services/background_sync_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -48,21 +48,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _autoSync = value);
 
     if (value) {
-      print('🚀 SETTINGS: Registering periodic background sync...');
-      await Workmanager().registerPeriodicTask(
-        "periodicSyncTask",
-        "periodicSync",
-        frequency: const Duration(minutes: 15),
-        initialDelay: const Duration(minutes: 5),
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-          requiresBatteryNotLow: true,
-          requiresStorageNotLow: true,
-        ),
-      );
+      await ref.read(backgroundSyncServiceProvider).enableAutoSync();
     } else {
-      print('🛑 SETTINGS: Cancelling periodic background sync...');
-      await Workmanager().cancelByUniqueName("periodicSyncTask");
+      await ref.read(backgroundSyncServiceProvider).disableAutoSync();
     }
   }
 
