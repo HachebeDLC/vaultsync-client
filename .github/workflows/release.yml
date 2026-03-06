@@ -24,19 +24,15 @@ jobs:
           channel: 'stable'
 
       - name: Install dependencies
-        run: |
-          cd vaultsync_app
-          flutter pub get
+        run: flutter pub get
 
       - name: Build APK
-        run: |
-          cd vaultsync_app
-          flutter build apk --release --no-shrink
+        run: flutter build apk --release --no-shrink
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: vaultsync_app/build/app/outputs/flutter-apk/app-release.apk
+          files: build/app/outputs/flutter-apk/app-release.apk
           body: "VaultSync Release ${{ github.ref_name }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
