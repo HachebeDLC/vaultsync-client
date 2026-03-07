@@ -1,5 +1,7 @@
 import 'package:workmanager/workmanager.dart';
 import '../../../core/services/api_client.dart';
+import '../../../core/services/notification_service.dart';
+import '../../auth/data/auth_repository.dart';
 import '../../emulation/data/emulator_repository.dart';
 import '../data/sync_repository.dart';
 import '../services/sync_service.dart';
@@ -10,16 +12,23 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     print("Native called background task: $task");
     
-    // This would be cleaner with a dependency injection framework,
-    // but for simplicity, we'll recreate the dependencies here.
+    // Initialize notifications in background isolate
+    await NotificationService.init();
+
     final apiClient = ApiClient();
+    final authRepository = AuthRepository(apiClient);
     final syncRepository = SyncRepository(apiClient);
     final emulatorRepository = EmulatorRepository();
     final pathService = SystemPathService(emulatorRepository);
     final syncService = SyncService(syncRepository, pathService);
 
     try {
-      if (task == "uploadTask") {
+      // Background Auth Handling: Verify user is still authenticated
+      final user = await authRepository.checkAuth();
+      if (user == null) {
+        print("Background Sync: Skipping task '$task' because user is not authenticated.");
+        return Future.value(true); // Task "completed" but skipped
+      }
         final systemId = inputData?['systemId'] as String?;
         final gameId = inputData?['gameId'] as String?;
 
@@ -38,12 +47,16 @@ void callbackDispatcher() {
       } else if (task == "periodicSync") {
         // Periodic background check: use fastSync to save battery
         print("Starting battery-efficient periodic sync...");
+        await NotificationService.showSyncNotification(title: 'VaultSync', body: 'Starting background auto-sync...');
+        
         await syncService.runSync(
           fastSync: true,
           onProgress: (msg) {
             print("Periodic Sync: $msg");
           }
         );
+
+        await NotificationService.showSyncNotification(title: 'VaultSync', body: 'Background auto-sync complete.');
       } else {
         // Generic full sync
         await syncService.runSync(onProgress: (msg) {

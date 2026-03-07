@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:workmanager/workmanager.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/theme_provider.dart';
+import 'core/services/notification_service.dart';
 import 'features/sync/background/sync_worker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.init();
   await Workmanager().initialize(
     callbackDispatcher,
   );
