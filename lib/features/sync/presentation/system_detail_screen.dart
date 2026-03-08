@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../data/sync_repository.dart';
 import '../services/system_path_service.dart';
 import '../domain/sync_provider.dart';
@@ -171,6 +172,61 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
     await _refresh();
   }
 
+  Widget _getSystemIconWidget(String systemId, {double size = 28}) {
+    final id = systemId.toLowerCase();
+    
+    // 1. Map system variants to verified clean SVG filenames
+    String iconName = 'controller';
+    if (id.contains('ps2') || id.contains('aethersx2') || id.contains('nethersx2') || id.contains('psx') || id.contains('ps1') || id.contains('playstation')) {
+      iconName = 'playstation';
+    } else if (id.contains('gba') || id.contains('gbc') || id.contains('gb') || id.contains('gameboy')) {
+      iconName = 'gameboy';
+    } else if (id.contains('dc') || id.contains('flycast') || id.contains('redream') || id.contains('dreamcast')) {
+      iconName = 'dc';
+    } else if (id.contains('gc') || id.contains('dolphin')) {
+      iconName = 'gc';
+    } else if (id.contains('3ds') || id.contains('citra')) {
+      iconName = 'nintendo3ds';
+    } else if (id.contains('ds') || id.contains('melonds')) {
+      iconName = 'ds';
+    } else if (id.contains('switch') || id.contains('ns') || id.contains('eden')) {
+      iconName = 'nintendoswitch';
+    } else if (id.contains('psp') || id.contains('ppsspp')) {
+      iconName = 'psp';
+    } else if (id.contains('wii')) {
+      iconName = 'wii';
+    } else if (id.contains('n64')) {
+      iconName = 'n64';
+    } else if (id.contains('nes')) {
+      iconName = 'nes';
+    } else if (id.contains('snes')) {
+      iconName = 'snes';
+    } else if (id.contains('genesis') || id.contains('megadrive')) {
+      iconName = 'genesis';
+    } else if (id.contains('retroarch')) {
+      iconName = 'retroarch';
+    }
+
+    return SvgPicture.asset(
+      'assets/systems/$iconName.svg',
+      width: size,
+      height: size,
+      colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+      placeholderBuilder: (context) => Icon(_getFallbackIcon(id), size: size, color: Colors.white),
+      errorBuilder: (context, error, stackTrace) => Icon(_getFallbackIcon(id), size: size, color: Colors.white),
+    );
+  }
+
+  IconData _getFallbackIcon(String id) {
+    if (id.contains('gba') || id.contains('gbc') || id.contains('gb')) return Icons.gamepad;
+    if (id.contains('ps1') || id.contains('ps2') || id.contains('psx') || id.contains('psp')) return Icons.sports_esports;
+    if (id.contains('switch') || id.contains('ns')) return Icons.switch_left;
+    if (id.contains('ds') || id.contains('3ds')) return Icons.developer_board;
+    if (id.contains('n64') || id.contains('gc') || id.contains('wii')) return Icons.videogame_asset;
+    if (id.contains('retroarch')) return Icons.settings_input_component;
+    return Icons.folder;
+  }
+
   @override
   Widget build(BuildContext context) {
     final syncState = ref.watch(syncProvider);
@@ -178,7 +234,13 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.systemId.toUpperCase()} Details'),
+        title: Row(
+          children: [
+            _getSystemIconWidget(widget.systemId),
+            const SizedBox(width: 12),
+            Text(widget.systemId.toUpperCase()),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.sync),

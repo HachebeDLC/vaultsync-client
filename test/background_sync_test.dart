@@ -32,11 +32,11 @@ void main() {
         )).called(1);
   });
 
-  test('disableAutoSync should cancel all tasks', () async {
-    when(() => mockWorkmanager.cancelAll()).thenAnswer((_) async => Future.value());
+  test('disableAutoSync should cancel periodic task', () async {
+    when(() => mockWorkmanager.cancelByUniqueName('periodicSync')).thenAnswer((_) async => Future.value());
 
     await service.disableAutoSync();
 
-    verify(() => mockWorkmanager.cancelAll()).called(1);
+    verify(() => mockWorkmanager.cancelByUniqueName('periodicSync')).called(1);
   });
 }
