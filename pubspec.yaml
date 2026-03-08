@@ -32,6 +32,7 @@ dependencies:
   watcher: ^1.2.1
   pointycastle: 3.9.1
   mutex: ^3.1.0
+  system_tray: ^2.0.2
 
 dev_dependencies:
   flutter_test:
