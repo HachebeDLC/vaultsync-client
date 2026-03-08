@@ -41,11 +41,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       }
 
       if (success && mounted) {
-        // Zero-Knowledge: Derive the encryption key locally from password
-        await ref.read(apiClientProvider).deriveAndSaveMasterKey(password, email);
-        if (mounted) {
-          context.go('/');
-        }
+        context.go('/');
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
            SnackBar(content: Text(_isRegistering ? 'Registration failed' : 'Login failed')),

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:isolate';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -142,16 +143,19 @@ class ApiClient {
     await request.send();
   }
 
-  Future<void> deriveAndSaveMasterKey(String password, String email) async {
+  Future<void> deriveAndSaveMasterKey(String password, String salt) async {
     // Zero-Knowledge: The server never sees this derivation.
     // Using PBKDF2 with SHA-256 and a high iteration count.
+    // Run in Isolate to avoid blocking the UI thread.
     
-    final salt = utf8.encode(email); // Using email as salt for deterministic derivation per user
-    final pkcs = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))
-      ..init(Pbkdf2Parameters(Uint8List.fromList(salt), 100000, 32));
-    
-    final masterKeyBytes = pkcs.process(Uint8List.fromList(utf8.encode(password)));
-    final masterKey = base64Url.encode(masterKeyBytes);
+    final masterKey = await Isolate.run(() {
+      final saltBytes = utf8.encode(salt);
+      final pkcs = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))
+        ..init(Pbkdf2Parameters(Uint8List.fromList(saltBytes), 100000, 32));
+      
+      final masterKeyBytes = pkcs.process(Uint8List.fromList(utf8.encode(password)));
+      return base64Url.encode(masterKeyBytes);
+    });
     
     await _secureStorage.write(key: 'master_key', value: masterKey);
     print('🔐 AUTH: Zero-Knowledge Master Key derived via PBKDF2 (100k iterations) and secured locally.');

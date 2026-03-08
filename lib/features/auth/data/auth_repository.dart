@@ -15,8 +15,11 @@ class AuthRepository {
       final token = response['token'];
       if (token != null) {
         await _apiClient.setToken(token);
-        await _apiClient.deriveAndSaveMasterKey(password, email);
+        
         final userData = response['user'];
+        final salt = userData['salt'] ?? email; // Fallback to email for legacy users
+        await _apiClient.deriveAndSaveMasterKey(password, salt);
+        
         return User(id: userData['id'].toString(), email: userData['email']);
       }
       return null;
@@ -37,8 +40,11 @@ class AuthRepository {
       final token = response['token'];
       if (token != null) {
         await _apiClient.setToken(token);
-        await _apiClient.deriveAndSaveMasterKey(password, email);
+        
         final userData = response['user'];
+        final salt = userData['salt'] ?? email; // Fallback to email for legacy users
+        await _apiClient.deriveAndSaveMasterKey(password, salt);
+        
         return User(id: userData['id'].toString(), email: userData['email']);
       }
       return null;
