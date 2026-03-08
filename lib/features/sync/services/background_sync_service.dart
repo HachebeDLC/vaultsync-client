@@ -22,6 +22,6 @@ class BackgroundSyncService {
   }
 
   Future<void> disableAutoSync() async {
-    await _workmanager.cancelAll();
+    await _workmanager.cancelByUniqueName('periodicSync');
   }
 }
