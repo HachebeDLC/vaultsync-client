@@ -12,6 +12,7 @@ class SyncState {
   final String status;
   final double progress;
   final List<Map<String, dynamic>> conflicts;
+  final List<String> syncErrors;
 
   SyncState({
     this.isSyncing = false, 
@@ -19,6 +20,7 @@ class SyncState {
     this.status = '', 
     this.progress = 0.0,
     this.conflicts = const [],
+    this.syncErrors = const [],
   });
 
   SyncState copyWith({
@@ -27,6 +29,7 @@ class SyncState {
     String? status, 
     double? progress,
     List<Map<String, dynamic>>? conflicts,
+    List<String>? syncErrors,
   }) {
     return SyncState(
       isSyncing: isSyncing ?? this.isSyncing,
@@ -34,6 +37,7 @@ class SyncState {
       status: status ?? this.status,
       progress: progress ?? this.progress,
       conflicts: conflicts ?? this.conflicts,
+      syncErrors: syncErrors ?? this.syncErrors,
     );
   }
 }
