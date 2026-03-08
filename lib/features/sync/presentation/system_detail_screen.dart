@@ -5,6 +5,7 @@ import '../data/sync_repository.dart';
 import '../services/system_path_service.dart';
 import '../domain/sync_provider.dart';
 import 'version_history_screen.dart';
+import '../../../core/utils/responsive_layout.dart';
 
 class SystemDetailScreen extends ConsumerStatefulWidget {
   final String systemId;
@@ -231,22 +232,35 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
   Widget build(BuildContext context) {
     final syncState = ref.watch(syncProvider);
     final isSyncing = syncState.isSyncing;
+    final isDesktop = ResponsiveLayout.isDesktop(context);
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: !isDesktop,
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             _getSystemIconWidget(widget.systemId),
             const SizedBox(width: 12),
-            Text(widget.systemId.toUpperCase()),
+            Text(isDesktop ? '${widget.systemId.toUpperCase()} Management' : widget.systemId.toUpperCase()),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.sync),
-            tooltip: 'Sync This System',
-            onPressed: isSyncing ? null : _syncThisSystem,
-          ),
+          if (isDesktop)
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: TextButton.icon(
+                icon: const Icon(Icons.sync),
+                label: const Text('SYNC NOW'),
+                onPressed: isSyncing ? null : _syncThisSystem,
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.sync),
+              tooltip: 'Sync This System',
+              onPressed: isSyncing ? null : _syncThisSystem,
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: isSyncing ? null : _refresh,
@@ -278,9 +292,14 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
                     ? const Center(child: Text('System not configured.'))
                     : _rawFiles!.isEmpty
                         ? const Center(child: Text('No files found.'))
-                        : ListView(
-                            padding: const EdgeInsets.all(8),
-                            children: _buildHierarchy(''),
+                        : Center(
+                            child: Container(
+                              constraints: BoxConstraints(maxWidth: isDesktop ? 900 : double.infinity),
+                              child: ListView(
+                                padding: const EdgeInsets.all(8),
+                                children: _buildHierarchy(''),
+                              ),
+                            ),
                           ),
           ),
         ],
