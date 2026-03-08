@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mutex/mutex.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/api_client_provider.dart';
 
@@ -14,7 +15,7 @@ final syncRepositoryProvider = Provider<SyncRepository>((ref) {
 class SyncRepository {
   final ApiClient _apiClient;
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
-  bool _isSyncingGlobal = false;
+  final _syncLock = Mutex();
 
   SyncRepository(this._apiClient);
 
@@ -213,137 +214,136 @@ class SyncRepository {
   }
 
   Future<void> syncSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, String? filenameFilter, bool fastSync = false}) async {
-    if (_isSyncingGlobal) return;
-    _isSyncingGlobal = true;
-    print('🔄 SYNC: Starting system $systemId at $localPath (Fast: $fastSync)');
-    
-    try {
-      final response = await _apiClient.get('/api/v1/files');
-      final List<dynamic> fileList = response['files'] ?? [];
-      final remoteFiles = { for (var f in fileList) if ((f['path'] as String).startsWith('$systemId/')) f['path']: f };
+    await _syncLock.protect(() async {
+      print('🔄 SYNC: Starting system $systemId at $localPath (Fast: $fastSync)');
       
-      final String jsonResult = await _platform.invokeMethod('scanRecursive', {
-        'path': localPath, 
-        'systemId': systemId,
-        'ignoredFolders': ignoredFolders ?? [],
-      });
-      final List<dynamic> localList = json.decode(jsonResult);
-      
-      final localFiles = _processLocalFiles(systemId, localList);
+      try {
+        final response = await _apiClient.get('/api/v1/files');
+        final List<dynamic> fileList = response['files'] ?? [];
+        final remoteFiles = { for (var f in fileList) if ((f['path'] as String).startsWith('$systemId/')) f['path']: f };
+        
+        final String jsonResult = await _platform.invokeMethod('scanRecursive', {
+          'path': localPath, 
+          'systemId': systemId,
+          'ignoredFolders': ignoredFolders ?? [],
+        });
+        final List<dynamic> localList = json.decode(jsonResult);
+        
+        final localFiles = _processLocalFiles(systemId, localList);
 
-      List<Map<String, dynamic>> toUpload = [];
+        List<Map<String, dynamic>> toUpload = [];
 
-      List<Map<String, dynamic>> toDownload = [];
+        List<Map<String, dynamic>> toDownload = [];
 
-      for (final localRelPath in localFiles.keys) {
-        final localInfo = localFiles[localRelPath]!;
-        if (localInfo['isDirectory'] == true) continue;
+        for (final localRelPath in localFiles.keys) {
+          final localInfo = localFiles[localRelPath]!;
+          if (localInfo['isDirectory'] == true) continue;
 
-        final remotePath = '$systemId/$localRelPath';
-        if (filenameFilter != null && !remotePath.contains(filenameFilter)) continue;
-
-        final int localTs = (localInfo['lastModified'] as num).toInt() ~/ 1000;
-        final int localSize = (localInfo['size'] as num).toInt();
-
-        if (!remoteFiles.containsKey(remotePath)) {
-          print('➕ SYNC: New local file found: $localRelPath');
-          final hash = fastSync ? 'pending' : await _platform.invokeMethod<String>('calculateHash', {'path': localInfo['uri']});
-          toUpload.add({'local': localInfo['uri'], 'remote': remotePath, 'rel': localRelPath, 'hash': hash});
-        } else {
-          final remoteInfo = remoteFiles[remotePath]!;
-          final int remoteTs = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
-          final int remoteSize = (remoteInfo['size'] as num?)?.toInt() ?? -1;
-
-          // OPTIMIZATION: If size and timestamp match exactly, skip
-          if (localSize == remoteSize && localTs == remoteTs) {
-            continue; 
-          }
-
-          if (fastSync) {
-            // In Fast mode, we only upload if local is NEWER. 
-            // We skip the expensive hash check and skip downloads.
-            if (localTs > remoteTs) {
-              toUpload.add({'local': localInfo['uri'], 'remote': remotePath, 'rel': localRelPath, 'hash': null});
-            }
-            continue;
-          }
-
-          final localHash = await _platform.invokeMethod<String>('calculateHash', {'path': localInfo['uri']});
-
-          if (localHash != remoteInfo['hash']) {
-            if (localTs > remoteTs) {
-              toUpload.add({'local': localInfo['uri'], 'remote': remotePath, 'rel': localRelPath, 'hash': localHash});
-            } else {
-              toDownload.add({'remote': remotePath, 'rel': localRelPath});
-            }
-          } else {
-            // Hash matches but timestamp doesn't! 'Touch' local to match server
-            try {
-              await _platform.invokeMethod('setFileTimestamp', {
-                'path': localInfo['uri'],
-                'updatedAt': remoteInfo['updated_at']
-              });
-            } catch (e) {
-              print('⚠️ SYNC: Could not align timestamp for $localRelPath: $e');
-            }
-          }
-        }
-      }
-      
-      // Downloads only in full sync mode
-      if (!fastSync) {
-        for (final remotePath in remoteFiles.keys) {
-          final relPath = remotePath.substring(systemId.length + 1);
+          final remotePath = '$systemId/$localRelPath';
           if (filenameFilter != null && !remotePath.contains(filenameFilter)) continue;
-          
-          // Switch hardening: Ignore old structure files from the server
-          if (systemId.toLowerCase() == 'switch' && relPath.startsWith('nand/')) continue;
-          
-          if (!localFiles.containsKey(relPath)) {
-            toDownload.add({'remote': remotePath, 'rel': relPath});
+
+          final int localTs = (localInfo['lastModified'] as num).toInt() ~/ 1000;
+          final int localSize = (localInfo['size'] as num).toInt();
+
+          if (!remoteFiles.containsKey(remotePath)) {
+            print('➕ SYNC: New local file found: $localRelPath');
+            final hash = fastSync ? 'pending' : await _platform.invokeMethod<String>('calculateHash', {'path': localInfo['uri']});
+            toUpload.add({'local': localInfo['uri'], 'remote': remotePath, 'rel': localRelPath, 'hash': hash});
+          } else {
+            final remoteInfo = remoteFiles[remotePath]!;
+            final int remoteTs = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
+            final int remoteSize = (remoteInfo['size'] as num?)?.toInt() ?? -1;
+
+            // OPTIMIZATION: If size and timestamp match exactly, skip
+            if (localSize == remoteSize && localTs == remoteTs) {
+              continue; 
+            }
+
+            if (fastSync) {
+              // In Fast mode, we only upload if local is NEWER. 
+              // We skip the expensive hash check and skip downloads.
+              if (localTs > remoteTs) {
+                toUpload.add({'local': localInfo['uri'], 'remote': remotePath, 'rel': localRelPath, 'hash': null});
+              }
+              continue;
+            }
+
+            final localHash = await _platform.invokeMethod<String>('calculateHash', {'path': localInfo['uri']});
+
+            if (localHash != remoteInfo['hash']) {
+              if (localTs > remoteTs) {
+                toUpload.add({'local': localInfo['uri'], 'remote': remotePath, 'rel': localRelPath, 'hash': localHash});
+              } else {
+                toDownload.add({'remote': remotePath, 'rel': localRelPath});
+              }
+            } else {
+              // Hash matches but timestamp doesn't! 'Touch' local to match server
+              try {
+                await _platform.invokeMethod('setFileTimestamp', {
+                  'path': localInfo['uri'],
+                  'updatedAt': remoteInfo['updated_at']
+                });
+              } catch (e) {
+                print('⚠️ SYNC: Could not align timestamp for $localRelPath: $e');
+              }
+            }
           }
         }
-      }
-
-      print('📊 SYNC: Calculated diffs. Uploading ${toUpload.length} files. Downloading ${toDownload.length} files.');
-      int count = 0;
-      final total = toUpload.length + toDownload.length;
-
-      for (final item in toUpload) {
-        count++;
-        onProgress?.call('Uploading ${item['rel']} ($count/$total)');
-        try {
-          await uploadFile(item['local'], item['remote'], plainHash: item['hash']);
-        } catch (e) {
-          print('❌ SYNC: Upload failed for ${item['rel']}: $e');
-          onError?.call('Upload failed for ${item['rel']}: $e');
-        }
-      }
-      for (final item in toDownload) {
-        count++;
-        onProgress?.call('Downloading ${item['rel']} ($count/$total)');
-        final remoteInfo = remoteFiles[item['remote']]!;
         
-        final detectedUserId = systemId.toLowerCase() == 'switch' ? _detectPrimarySwitchUser(localList) : null;
-        String localRelPath = item['rel'];
-        if (systemId.toLowerCase() == 'switch' && detectedUserId != null) {
-          // Cloud path: <TITLE_ID>/file -> Local path: nand/user/save/0000000000000000/ACTUAL_HEX/<TITLE_ID>/file
-          localRelPath = 'nand/user/save/0000000000000000/$detectedUserId/$localRelPath';
+        // Downloads only in full sync mode
+        if (!fastSync) {
+          for (final remotePath in remoteFiles.keys) {
+            final relPath = remotePath.substring(systemId.length + 1);
+            if (filenameFilter != null && !remotePath.contains(filenameFilter)) continue;
+            
+            // Switch hardening: Ignore old structure files from the server
+            if (systemId.toLowerCase() == 'switch' && relPath.startsWith('nand/')) continue;
+            
+            if (!localFiles.containsKey(relPath)) {
+              toDownload.add({'remote': remotePath, 'rel': relPath});
+            }
+          }
         }
-        
-        try {
-          await downloadFile(item['remote'], localPath, localRelPath, updatedAt: remoteInfo['updated_at']);
-        } catch (e) {
-          print('❌ SYNC: Download failed for ${item['rel']}: $e');
-          onError?.call('Download failed for ${item['rel']}: $e');
-          onProgress?.call('Warning: Failed to download ${item['rel']}');
+
+        print('📊 SYNC: Calculated diffs. Uploading ${toUpload.length} files. Downloading ${toDownload.length} files.');
+        int count = 0;
+        final total = toUpload.length + toDownload.length;
+
+        for (final item in toUpload) {
+          count++;
+          onProgress?.call('Uploading ${item['rel']} ($count/$total)');
+          try {
+            await uploadFile(item['local'], item['remote'], plainHash: item['hash']);
+          } catch (e) {
+            print('❌ SYNC: Upload failed for ${item['rel']}: $e');
+            onError?.call('Upload failed for ${item['rel']}: $e');
+          }
         }
-      }
-    } catch (e) { 
-      print('❌ SYNC ERROR: $e'); 
-      onError?.call('Sync process failed: $e');
-    } 
-    finally { _isSyncingGlobal = false; }
+        for (final item in toDownload) {
+          count++;
+          onProgress?.call('Downloading ${item['rel']} ($count/$total)');
+          final remoteInfo = remoteFiles[item['remote']]!;
+          
+          final detectedUserId = systemId.toLowerCase() == 'switch' ? _detectPrimarySwitchUser(localList) : null;
+          String localRelPath = item['rel'];
+          if (systemId.toLowerCase() == 'switch' && detectedUserId != null) {
+            // Cloud path: <TITLE_ID>/file -> Local path: nand/user/save/0000000000000000/ACTUAL_HEX/<TITLE_ID>/file
+            localRelPath = 'nand/user/save/0000000000000000/$detectedUserId/$localRelPath';
+          }
+          
+          try {
+            await downloadFile(item['remote'], localPath, localRelPath, updatedAt: remoteInfo['updated_at']);
+          } catch (e) {
+            print('❌ SYNC: Download failed for ${item['rel']}: $e');
+            onError?.call('Download failed for ${item['rel']}: $e');
+            onProgress?.call('Warning: Failed to download ${item['rel']}');
+          }
+        }
+      } catch (e) { 
+        print('❌ SYNC ERROR: $e'); 
+        onError?.call('Sync process failed: $e');
+      } 
+    });
   }
 
   Future<void> uploadFile(dynamic localPathOrFile, String remotePath, {String? plainHash, bool force = false}) async {
