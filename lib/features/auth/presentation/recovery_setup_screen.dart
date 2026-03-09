@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/auth_provider.dart';
+import '../domain/recovery_constants.dart';
 
 class RecoverySetupScreen extends ConsumerStatefulWidget {
   const RecoverySetupScreen({super.key});
@@ -12,15 +13,6 @@ class RecoverySetupScreen extends ConsumerStatefulWidget {
 
 class _RecoverySetupScreenState extends ConsumerState<RecoverySetupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final List<String> _questions = [
-    'What was the name of your first pet?',
-    'What is your mother\'s maiden name?',
-    'What city were you born in?',
-    'What was the name of your elementary school?',
-    'What was the make of your first car?',
-    'What is your favorite book?',
-  ];
-
   final List<String?> _selectedQuestions = [null, null, null];
   final List<TextEditingController> _controllers = [
     TextEditingController(),
@@ -60,7 +52,7 @@ class _RecoverySetupScreenState extends ConsumerState<RecoverySetupScreen> {
               for (int i = 0; i < 3; i++) ...[
                 DropdownButtonFormField<String>(
                   decoration: InputDecoration(labelText: 'Question ${i + 1}'),
-                  items: _questions.map((q) => DropdownMenuItem(value: q, child: Text(q))).toList(),
+                  items: recoveryQuestions.map((q) => DropdownMenuItem(value: q, child: Text(q))).toList(),
                   onChanged: (val) => setState(() => _selectedQuestions[i] = val),
                   validator: (val) => val == null ? 'Please select a question' : null,
                 ),
@@ -77,9 +69,10 @@ class _RecoverySetupScreenState extends ConsumerState<RecoverySetupScreen> {
                   if (_formKey.currentState!.validate()) {
                     try {
                       final answers = _controllers.map((c) => c.text).toList();
+                      final indices = _selectedQuestions.map((q) => recoveryQuestions.indexOf(q!)).toList();
                       const salt = 'recover-v1'; // Standard internal versioning salt
                       
-                      await ref.read(authRepositoryProvider).setupRecovery(answers, salt);
+                      await ref.read(authRepositoryProvider).setupRecovery(answers, salt, indices);
                       
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(

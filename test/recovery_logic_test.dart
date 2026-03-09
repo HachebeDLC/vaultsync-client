@@ -15,13 +15,15 @@ void main() {
   });
 
   test('setupRecovery should normalize answers and call ApiClient', () async {
-    final answers = [' Pet ', 'Name', ' CITY'];
-    const salt = 'random_salt';
-    
-    when(() => mockApiClient.setupRecovery(any(), any())).thenAnswer((_) async => Future.value());
-    
-    await repository.setupRecovery(answers, salt);
-    
-    verify(() => mockApiClient.setupRecovery('pet:name:city', salt)).called(1);
+    final answers = ['Pet ', ' Name', 'City'];
+    const salt = 'salt';
+    final indices = [0, 1, 2];
+
+    when(() => mockApiClient.setupRecovery(any(), any(), any())).thenAnswer((_) async => Future.value());
+
+    await repository.setupRecovery(answers, salt, indices);
+
+    verify(() => mockApiClient.setupRecovery('pet:name:city', salt, indices)).called(1);
   });
+
 }

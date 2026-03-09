@@ -165,7 +165,7 @@ class ApiClient {
     return await _secureStorage.read(key: 'master_key');
   }
 
-  Future<void> setupRecovery(String answers, String recoverySalt) async {
+  Future<void> setupRecovery(String answers, String recoverySalt, List<int> questionIndices) async {
     final masterKey = await getEncryptionKey();
     if (masterKey == null) throw Exception('Master Key missing');
 
@@ -192,12 +192,15 @@ class ApiClient {
     final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(true, params);
     final encryptedMasterKey = cipher.process(Uint8List.fromList(masterKeyBytes));
     
-    // Final Payload: IV + EncryptedData
-    final recoveryPayload = base64Url.encode(Uint8List.fromList(iv + encryptedMasterKey));
+    // Final Payload: Metadata(Indices) + IV + EncryptedData
+    // We use a pipe character '|' to separate B64 metadata from B64 crypto blob
+    final metadata = base64Url.encode(utf8.encode(json.encode({'q': questionIndices})));
+    final cryptoBlob = base64Url.encode(Uint8List.fromList(iv + encryptedMasterKey));
+    final fullPayload = '$metadata|$cryptoBlob';
 
     // 3. Send to server
     await post('/api/v1/auth/recovery/setup', body: {
-      'recovery_payload': recoveryPayload,
+      'recovery_payload': fullPayload,
       'recovery_salt': recoverySalt,
     });
   }
@@ -206,8 +209,12 @@ class ApiClient {
     return await post('/api/v1/auth/recovery/payload', body: {'email': email});
   }
 
-  Future<void> recoverMasterKey(String answers, String recoverySalt, String encryptedPayload) async {
-    // 1. Derive Recovery Key from answers
+  Future<void> recoverMasterKey(String answers, String recoverySalt, String fullPayload) async {
+    // 1. Parse Payload
+    final parts = fullPayload.split('|');
+    final encryptedPayload = parts.length > 1 ? parts[1] : parts[0]; // Backward compatibility
+
+    // 2. Derive Recovery Key from answers
     final recoveryKey = await Isolate.run(() {
       final saltBytes = utf8.encode(recoverySalt);
       final pkcs = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64))
@@ -216,7 +223,7 @@ class ApiClient {
       return pkcs.process(Uint8List.fromList(utf8.encode(answers)));
     });
 
-    // 2. Decrypt Master Key
+    // 3. Decrypt Master Key
     final payloadBytes = base64Url.decode(encryptedPayload);
     final iv = payloadBytes.sublist(0, 16);
     final ciphertext = payloadBytes.sublist(16);
@@ -231,7 +238,7 @@ class ApiClient {
     
     final masterKey = base64Url.encode(masterKeyBytes);
 
-    // 3. Save locally
+    // 4. Save locally
     await _secureStorage.write(key: 'master_key', value: masterKey);
     print('🔐 AUTH: Master Key restored locally via Recovery Fail-Safe.');
   }

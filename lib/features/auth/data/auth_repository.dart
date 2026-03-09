@@ -71,19 +71,19 @@ class AuthRepository {
     }
   }
 
-  Future<void> setupRecovery(List<String> answers, String salt) async {
+  Future<void> setupRecovery(List<String> answers, String salt, List<int> questionIndices) async {
     // Normalize: lowercase, trimmed, joined by colon
     final normalized = answers.map((a) => a.trim().toLowerCase()).join(':');
-    await _apiClient.setupRecovery(normalized, salt);
+    await _apiClient.setupRecovery(normalized, salt, questionIndices);
   }
 
   Future<Map<String, dynamic>> fetchRecoveryInfo(String email) async {
     return await _apiClient.fetchRecoveryPayload(email);
   }
 
-  Future<void> recoverMasterKey(String email, List<String> answers, String salt, String encryptedPayload) async {
+  Future<void> recoverMasterKey(String email, List<String> answers, String salt, String fullPayload) async {
     final normalized = answers.map((a) => a.trim().toLowerCase()).join(':');
-    await _apiClient.recoverMasterKey(normalized, salt, encryptedPayload);
+    await _apiClient.recoverMasterKey(normalized, salt, fullPayload);
   }
 }
 
