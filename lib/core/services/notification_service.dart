@@ -5,7 +5,11 @@ class NotificationService {
 
   static Future<void> init() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
-    const initSettings = InitializationSettings(android: androidSettings);
+    const linuxSettings = LinuxInitializationSettings(defaultActionName: 'Open VaultSync');
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      linux: linuxSettings,
+    );
     await _notifications.initialize(initSettings);
   }
 
@@ -18,7 +22,11 @@ class NotificationService {
       priority: Priority.low,
       showWhen: true,
     );
-    const notificationDetails = NotificationDetails(android: androidDetails);
+    const linuxDetails = LinuxNotificationDetails();
+    const notificationDetails = NotificationDetails(
+      android: androidDetails,
+      linux: linuxDetails,
+    );
     await _notifications.show(0, title, body, notificationDetails);
   }
 
