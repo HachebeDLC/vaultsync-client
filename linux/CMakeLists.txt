@@ -1,6 +1,6 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.13)
-project(runner LANGUAGES C CXX)
+project(runner LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
@@ -57,11 +57,8 @@ pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
 
-# Native Sync FFI Source
-add_library(vaultsync_native SHARED
-  "../src/native_sync.c"
-)
-apply_standard_settings(vaultsync_native)
+# Add native sync sources to the binary directly
+target_sources(${BINARY_NAME} PRIVATE "../src/native_sync.cpp")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)

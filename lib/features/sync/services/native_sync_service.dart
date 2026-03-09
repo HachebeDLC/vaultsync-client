@@ -20,10 +20,8 @@ class NativeSyncService {
   }
 
   void _init() {
-    if (Platform.isWindows) {
-      _nativeLib = DynamicLibrary.open('vaultsync_native.dll');
-    } else if (Platform.isLinux) {
-      _nativeLib = DynamicLibrary.open('libvaultsync_native.so');
+    if (Platform.isWindows || Platform.isLinux) {
+      _nativeLib = DynamicLibrary.executable();
     } else {
       // Fallback or ignore for other platforms
       return;
