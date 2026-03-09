@@ -80,31 +80,48 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
     final isState = type == 'State';
     final isRetroArch = _localPath?.toLowerCase().contains('retroarch') ?? false;
     
-    return ListTile(
-      dense: true,
-      leading: Icon(
-        isState ? Icons.camera_alt_outlined : Icons.save_outlined, 
-        color: _getStatusColor(status), 
-        size: 18
-      ),
-      title: Row(
-        children: [
-          Expanded(child: Text(name, style: const TextStyle(fontSize: 14))),
-          if (isState && isRetroArch)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(4),
+    return Tooltip(
+      message: 'Click to view version history',
+      child: ListTile(
+        dense: true,
+        mouseCursor: SystemMouseCursors.click,
+        leading: Icon(
+          isState ? Icons.camera_alt_outlined : Icons.save_outlined, 
+          color: _getStatusColor(status), 
+          size: 18
+        ),
+        title: Row(
+          children: [
+            Expanded(child: Text(name, style: const TextStyle(fontSize: 14))),
+            if (isState && isRetroArch)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text('STATE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.blue)),
               ),
-              child: const Text('STATE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.blue)),
-            ),
-        ],
-      ),
-      subtitle: Text(status, style: TextStyle(color: _getStatusColor(status), fontSize: 11)),
-      trailing: IconButton(
-        icon: const Icon(Icons.history, size: 20),
-        onPressed: () {
+          ],
+        ),
+        subtitle: Text(status, style: TextStyle(color: _getStatusColor(status), fontSize: 11)),
+        trailing: IconButton(
+          icon: const Icon(Icons.history, size: 20),
+          tooltip: 'Version History',
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VersionHistoryScreen(
+                  remotePath: file['remotePath'],
+                  localBasePath: _localPath!,
+                  relPath: relPath,
+                ),
+              ),
+            );
+          },
+        ),
+        onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(

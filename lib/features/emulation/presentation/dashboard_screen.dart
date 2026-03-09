@@ -162,15 +162,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       final systemId = entry.key;
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.blue.withOpacity(0.1),
-                            child: _getSystemIconWidget(systemId),
-                          ),
-                          title: Text(systemId.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text(_formatSafPath(entry.value), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                        child: InkWell(
                           onTap: () => context.push('/system-detail/$systemId'),
+                          mouseCursor: SystemMouseCursors.click,
+                          child: Tooltip(
+                            message: 'Manage $systemId saves',
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.blue.withOpacity(0.1),
+                                child: _getSystemIconWidget(systemId),
+                              ),
+                              title: Text(systemId.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text(_formatSafPath(entry.value), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                            ),
+                          ),
                         ),
                       );
                     },
