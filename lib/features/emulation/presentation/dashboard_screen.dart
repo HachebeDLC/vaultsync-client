@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../sync/domain/sync_provider.dart';
 import '../../sync/services/system_path_service.dart';
+import '../../sync/services/shizuku_service.dart';
 import '../../../core/utils/responsive_layout.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -15,12 +17,24 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _navIndex = 0;
+  ShizukuStatus? _shizukuStatus;
 
   @override
   void initState() {
     super.initState();
     // Proactively refresh conflicts when dashboard loads
     Future.microtask(() => ref.read(syncProvider.notifier).refreshConflicts());
+    
+    if (Platform.isAndroid) {
+      _checkShizukuStatus();
+    }
+  }
+
+  Future<void> _checkShizukuStatus() async {
+    final status = await ref.read(shizukuServiceProvider).getStatus();
+    if (mounted) {
+      setState(() => _shizukuStatus = status);
+    }
   }
 
   String _formatSafPath(String path) {
@@ -84,6 +98,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  Widget _buildShizukuBanner() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.shield_outlined, color: Colors.orange, size: 20),
+              SizedBox(width: 8),
+              Text('Shizuku Recommended', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Shizuku is not running. On Android 13+, Shizuku is required for high-performance access to restricted folders.',
+            style: TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => setState(() => _shizukuStatus = null),
+                child: const Text('DISMISS'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _checkShizukuStatus,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                child: const Text('RETRY'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   IconData _getFallbackIcon(String id) {
     if (id.contains('gba') || id.contains('gbc') || id.contains('gb')) return Icons.gamepad;
     if (id.contains('ps1') || id.contains('ps2') || id.contains('psx') || id.contains('psp')) return Icons.sports_esports;
@@ -125,6 +189,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ],
               ),
             ),
+          
+          if (_shizukuStatus != null && !_shizukuStatus!.isRunning)
+            _buildShizukuBanner(),
+
           Expanded(
             child: pathsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),

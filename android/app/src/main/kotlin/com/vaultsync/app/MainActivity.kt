@@ -25,6 +25,8 @@ import javax.crypto.spec.SecretKeySpec
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.Charset
+import rikka.shizuku.Shizuku
+import android.content.pm.PackageManager
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.vaultsync.app/launcher"
@@ -110,9 +112,56 @@ class MainActivity: FlutterActivity() {
                     val packages = call.argument<List<String>>("packages")!!
                     result.success(getRecentlyClosedEmulator(packages))
                 }
+                "checkShizukuStatus" -> result.success(checkShizukuStatus())
+                "requestShizukuPermission" -> requestShizukuPermission(result)
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun checkShizukuStatus(): Map<String, Any> {
+        val status = mutableMapOf<String, Any>()
+        try {
+            if (Shizuku.pingBinder()) {
+                val isAuthorized = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                status["running"] = true
+                status["authorized"] = isAuthorized
+                status["version"] = Shizuku.getLatestServiceVersion()
+            } else {
+                status["running"] = false
+                status["authorized"] = false
+            }
+        } catch (e: Exception) {
+            status["running"] = false
+            status["authorized"] = false
+            status["error"] = e.message ?: "Unknown error"
+        }
+        return status
+    }
+
+    private fun requestShizukuPermission(result: MethodChannel.Result) {
+        if (!Shizuku.pingBinder()) {
+            result.error("SHIZUKU_NOT_RUNNING", "Shizuku is not running", null)
+            return
+        }
+        
+        val isAuthorized = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+        if (isAuthorized) {
+            result.success(true)
+            return
+        }
+
+        val permissionListener = object : Shizuku.OnRequestPermissionResultListener {
+            override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
+                Shizuku.removeRequestPermissionResultListener(this)
+                runOnUiThread {
+                    result.success(grantResult == PackageManager.PERMISSION_GRANTED)
+                }
+            }
+        }
+        
+        Shizuku.addRequestPermissionResultListener(permissionListener)
+        Shizuku.requestPermission(1001)
     }
 
     private fun hasUsageStatsPermission(): Boolean {
