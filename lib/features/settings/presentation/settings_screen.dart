@@ -22,6 +22,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _urlController = TextEditingController();
   bool _autoSync = false;
   bool _intelligentSync = false;
+  bool _useShizuku = false;
   bool _isWiping = false;
 
   @override
@@ -38,6 +39,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() {
       _autoSync = prefs.getBool('auto_sync') ?? false;
       _intelligentSync = prefs.getBool('intelligent_sync') ?? false;
+      _useShizuku = prefs.getBool('use_shizuku') ?? false;
     });
   }
 
@@ -99,6 +101,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('intelligent_sync', value);
     setState(() => _intelligentSync = value);
+  }
+
+  Future<void> _toggleShizuku(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('use_shizuku', value);
+    setState(() => _useShizuku = value);
   }
 
   Future<void> _wipeCloudData() async {
@@ -235,6 +243,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 value: _intelligentSync,
                 onChanged: _toggleIntelligentSync,
               ),
+              if (Platform.isAndroid)
+                SwitchListTile(
+                  title: const Text('Use Shizuku Bridge'),
+                  subtitle: const Text('Required for restricted Android/data folders'),
+                  secondary: const Icon(Icons.shield_outlined),
+                  value: _useShizuku,
+                  onChanged: _toggleShizuku,
+                ),
               const Padding(
                 padding: EdgeInsets.only(top: 24, bottom: 8),
                 child: Text('VAULTSYNC SERVER', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 12)),

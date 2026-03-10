@@ -363,6 +363,7 @@ class SystemPathService {
 
   Future<bool> ensureSafPermission(String path) async {
     if (!Platform.isAndroid) return true;
+    if (path.startsWith('shizuku://')) return true;
     
     // If it's not a restricted path, no SAF needed for targetSDK 29
     if (!path.contains('/Android/data/')) return true;
@@ -413,11 +414,18 @@ class SystemPathService {
     final path = await getSystemPath(systemId);
     if (path == null) return suggestSavePathById(systemId);
     
-    if (path.startsWith('content://')) return path;
+    if (path.startsWith('content://') || path.startsWith('shizuku://')) return path;
 
     if (!Platform.isAndroid) return path;
 
     final prefs = await SharedPreferences.getInstance();
+    
+    // Check if Shizuku is preferred for this path
+    final useShizuku = prefs.getBool('use_shizuku') ?? false;
+    if (useShizuku && path.contains('/Android/data/')) {
+      return 'shizuku://$path';
+    }
+
     final persistedUri = prefs.getString('saf_uri_$path');
     
     if (persistedUri != null) {
