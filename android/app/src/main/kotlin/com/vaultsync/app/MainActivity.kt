@@ -50,11 +50,13 @@ class MainActivity: FlutterActivity() {
         }
     }
 
-    private val userServiceArgs = Shizuku.UserServiceArgs(ComponentName(packageName, ShizukuService::class.java.name))
-        .daemon(false)
-        .processNameSuffix("shizuku")
-        .debuggable(true)
-        .version(1)
+    private val userServiceArgs by lazy {
+        Shizuku.UserServiceArgs(ComponentName(packageName, ShizukuService::class.java.name))
+            .daemon(false)
+            .processNameSuffix("shizuku")
+            .debuggable(true)
+            .version(1)
+    }
 
     private fun bindShizukuService() {
         if (shizukuService != null) return
@@ -166,6 +168,7 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun checkShizukuStatus(): Map<String, Any> {
+        android.util.Log.d("VaultSync", "Checking Shizuku status...")
         val status = mutableMapOf<String, Any>()
         try {
             if (Shizuku.pingBinder()) {
@@ -173,11 +176,14 @@ class MainActivity: FlutterActivity() {
                 status["running"] = true
                 status["authorized"] = isAuthorized
                 status["version"] = Shizuku.getLatestServiceVersion()
+                android.util.Log.d("VaultSync", "Shizuku is RUNNING (Auth: $isAuthorized)")
             } else {
                 status["running"] = false
                 status["authorized"] = false
+                android.util.Log.d("VaultSync", "Shizuku is NOT running")
             }
         } catch (e: Exception) {
+            android.util.Log.e("VaultSync", "Shizuku status check failed", e)
             status["running"] = false
             status["authorized"] = false
             status["error"] = e.message ?: "Unknown error"

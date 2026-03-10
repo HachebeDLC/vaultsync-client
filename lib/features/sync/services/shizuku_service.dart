@@ -32,19 +32,26 @@ class ShizukuService {
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
 
   Future<ShizukuStatus> getStatus() async {
+    print('🛡️ SHIZUKU: Requesting status from native...');
     try {
       final Map<dynamic, dynamic> result = await _platform.invokeMethod('checkShizukuStatus');
-      return ShizukuStatus.fromMap(result);
+      final status = ShizukuStatus.fromMap(result);
+      print('🛡️ SHIZUKU: Status running=${status.isRunning}, auth=${status.isAuthorized}');
+      return status;
     } on PlatformException catch (e) {
+      print('🛡️ SHIZUKU ERROR: ${e.message}');
       return ShizukuStatus(isRunning: false, isAuthorized: false, error: e.message);
     }
   }
 
   Future<bool> requestPermission() async {
+    print('🛡️ SHIZUKU: Requesting permission...');
     try {
       final bool result = await _platform.invokeMethod('requestShizukuPermission');
+      print('🛡️ SHIZUKU: Permission result: $result');
       return result;
-    } on PlatformException catch (_) {
+    } on PlatformException catch (e) {
+      print('🛡️ SHIZUKU ERROR: ${e.message}');
       return false;
     }
   }

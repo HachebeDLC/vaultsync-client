@@ -99,6 +99,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Widget _buildShizukuBanner() {
+    final isNotRunning = !_shizukuStatus!.isRunning;
+    
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -111,17 +113,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.shield_outlined, color: Colors.orange, size: 20),
-              SizedBox(width: 8),
-              Text('Shizuku Recommended', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+              const Icon(Icons.shield_outlined, color: Colors.orange, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                isNotRunning ? 'Shizuku Recommended' : 'Shizuku Authorization Needed',
+                style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Shizuku is not running. On Android 13+, Shizuku is required for high-performance access to restricted folders.',
-            style: TextStyle(fontSize: 12),
+          Text(
+            isNotRunning 
+              ? 'Shizuku is not running. On Android 13+, Shizuku is required for high-performance access to restricted folders.'
+              : 'Shizuku is running but VaultSync does not have permission to use it.',
+            style: const TextStyle(fontSize: 12),
           ),
           const SizedBox(height: 8),
           Row(
@@ -133,13 +140,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               const SizedBox(width: 8),
               ElevatedButton(
-                onPressed: _checkShizukuStatus,
+                onPressed: () async {
+                  if (isNotRunning) {
+                    _checkShizukuStatus();
+                  } else {
+                    final granted = await ref.read(shizukuServiceProvider).requestPermission();
+                    if (granted) _checkShizukuStatus();
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                 ),
-                child: const Text('RETRY'),
+                child: Text(isNotRunning ? 'RETRY' : 'GRANT PERMISSION'),
               ),
             ],
           ),
@@ -190,7 +204,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ),
           
-          if (_shizukuStatus != null && !_shizukuStatus!.isRunning)
+          if (_shizukuStatus != null && (!_shizukuStatus!.isRunning || !_shizukuStatus!.isAuthorized))
             _buildShizukuBanner(),
 
           Expanded(

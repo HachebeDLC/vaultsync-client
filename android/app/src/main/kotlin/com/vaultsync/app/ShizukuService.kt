@@ -41,6 +41,6 @@ class ShizukuService : IShizukuService.Stub() {
     }
 
     override fun destroy() {
-        exitProcess(0)
+        // No manual exit needed here if using standard binder lifecycle
     }
 }
