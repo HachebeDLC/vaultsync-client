@@ -37,8 +37,13 @@ android {
         jvmTarget = '1.8'
     }
 
+    buildFeatures {
+        aidl true
+    }
+
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
+        main.aidl.srcDirs += 'src/main/aidl'
     }
 
     defaultConfig {
