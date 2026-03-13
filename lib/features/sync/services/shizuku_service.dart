@@ -55,4 +55,10 @@ class ShizukuService {
       return false;
     }
   }
+
+  Future<void> openApp() async {
+    try {
+      await _platform.invokeMethod('openShizukuApp');
+    } catch (_) {}
+  }
 }

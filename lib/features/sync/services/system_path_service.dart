@@ -14,7 +14,6 @@ final systemPathServiceProvider = Provider<SystemPathService>((ref) {
 
 final systemPathsProvider = FutureProvider<Map<String, String>>((ref) async {
   final service = ref.watch(systemPathServiceProvider);
-  // Watch for changes in storage version to force reload
   await service.getStorageVersion(); 
   return service.getAllSystemPaths();
 });
@@ -30,7 +29,7 @@ class SystemPathService {
   static const Map<String, String> standaloneDefaults = {
     'ps2': '/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards',
     'aethersx2': '/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards',
-    'nethersx2': '/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards',
+    'nethersx2': '/storage/emulated/0/Android/data/xyz.nethersx2.android/files/memcards',
     'pcsx2': '/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards',
     'ppsspp': '/storage/emulated/0/PSP/SAVEDATA',
     'duckstation': '/storage/emulated/0/Android/data/com.github.stenzek.duckstation/files/memcards',
@@ -53,86 +52,19 @@ class SystemPathService {
     return Platform.environment['HOME'] ?? '/home';
   }
 
-  String _getDesktopConfigDir() {
-    if (Platform.isWindows) return Platform.environment['APPDATA'] ?? 'C:\\Users\\Default\\AppData\\Roaming';
-    return '${_getDesktopHome()}/.config';
-  }
-
-  String? _getEmuDeckRoot() {
-    if (!Platform.isLinux) return null;
-    final home = _getDesktopHome();
-    
-    // 1. Check Home directory
-    final homeEmu = Directory('$home/Emulation');
-    if (homeEmu.existsSync()) return homeEmu.path;
-    
-    // 2. Check SD Card (Steam Deck standard)
-    final runMedia = Directory('/run/media');
-    if (runMedia.existsSync()) {
-      try {
-        final users = runMedia.listSync();
-        for (final user in users) {
-          if (user is Directory) {
-            final drives = user.listSync();
-            for (final drive in drives) {
-              if (drive is Directory) {
-                final emuPath = Directory('${drive.path}/Emulation');
-                if (emuPath.existsSync()) return emuPath.path;
-              }
-            }
-          }
-        }
-      } catch (_) {}
-    }
-    
-    return null;
-  }
-
-  String? _getWindowsEmuRoot() {
-    if (!Platform.isWindows) return null;
-    final emuPath = Directory('C:\\Emulation');
-    if (emuPath.existsSync()) return emuPath.path;
-    return null;
-  }
-
   String? _getDesktopDefault(String key, String systemId) {
     final home = _getDesktopHome();
-    final config = _getDesktopConfigDir();
-    final emuDeckRoot = _getEmuDeckRoot();
-    final winEmuRoot = _getWindowsEmuRoot();
-    
-    // Prioritize Linux EmuDeck if found
-    if (emuDeckRoot != null) {
-      final emuPath = '$emuDeckRoot/saves/$key/saves';
-      if (Directory(emuPath).existsSync()) return emuPath;
-      final emuPathAlt = '$emuDeckRoot/saves/$key';
-      if (Directory(emuPathAlt).existsSync()) return emuPathAlt;
-    }
-
-    // Prioritize Windows C:\Emulation if found
-    if (winEmuRoot != null) {
-      final emuPath = '$winEmuRoot\\saves\\$key\\saves';
-      if (Directory(emuPath).existsSync()) return emuPath;
-      final emuPathAlt = '$winEmuRoot\\saves\\$key';
-      if (Directory(emuPathAlt).existsSync()) return emuPathAlt;
-    }
-
     final Map<String, Map<String, String>> desktopPaths = {
       'windows': {
         'ps2': '$home\\Documents\\PCSX2\\memcards',
-        'aethersx2': '$home\\Documents\\PCSX2\\memcards',
-        'pcsx2': '$home\\Documents\\PCSX2\\memcards',
-        'duckstation': '$home\\Documents\\DuckStation\\memcards',
         'ppsspp': '$home\\Documents\\PPSSPP\\SAVEDATA',
         'dolphin': '$home\\Documents\\Dolphin Emulator',
-        'citra': '$config\\Citra\\sdmc\\Nintendo 3DS',
-        'yuzu': '$config\\yuzu\\nand',
-        'retroarch': '$config\\RetroArch\\saves',
+        'citra': '$home\\AppData\\Roaming\\Citra\\sdmc\\Nintendo 3DS',
+        'yuzu': '$home\\AppData\\Roaming\\yuzu\\nand',
+        'retroarch': '$home\\AppData\\Roaming\\RetroArch\\saves',
       },
       'linux': {
         'ps2': '$home/.config/PCSX2/memcards',
-        'pcsx2': '$home/.config/PCSX2/memcards',
-        'duckstation': '$home/.config/duckstation/memcards',
         'ppsspp': '$home/.config/ppsspp/PSP/SAVEDATA',
         'dolphin': '$home/.local/share/dolphin-emu',
         'citra': '$home/.local/share/citra-emu/sdmc/Nintendo 3DS',
@@ -140,91 +72,37 @@ class SystemPathService {
         'retroarch': '$home/.config/retroarch/saves',
       }
     };
-
     final platform = Platform.isWindows ? 'windows' : 'linux';
     String? path = desktopPaths[platform]?[key];
-    
     if (path != null && key == 'dolphin') {
       if (systemId == 'gc') path = '$path/GC';
       if (systemId == 'wii') path = '$path/Wii';
     }
-    
     return path;
   }
 
-  Future<Map<String, String>> getRetroArchPaths() async {
-    final List<String> configPaths = [];
-    
-    if (Platform.isAndroid) {
-      configPaths.addAll([
-        '/storage/emulated/0/Android/data/com.retroarch/files/retroarch.cfg',
-        '/storage/emulated/0/Android/data/com.retroarch.aarch64/files/retroarch.cfg',
-        '/storage/emulated/0/Android/data/com.retroarch.ra32/files/retroarch.cfg',
-        '/storage/emulated/0/RetroArch/retroarch.cfg',
-      ]);
-    } else if (Platform.isWindows) {
-      final winEmu = _getWindowsEmuRoot();
-      if (winEmu != null) {
-        configPaths.add('$winEmu\\retroarch\\retroarch.cfg');
-      }
-      configPaths.add('${_getDesktopConfigDir()}\\RetroArch\\retroarch.cfg');
-    } else if (Platform.isLinux) {
-      final emuDeck = _getEmuDeckRoot();
-      if (emuDeck != null) {
-        configPaths.add('$emuDeck/retroarch/retroarch.cfg');
-      }
-      configPaths.add('${_getDesktopHome()}/.config/retroarch/retroarch.cfg');
-    }
-
-    for (final path in configPaths) {
-      final file = File(path);
-      if (await file.exists()) {
-        try {
-          final lines = await file.readAsLines();
-          String? saves;
-          String? states;
-          for (final line in lines) {
-            if (line.startsWith('savefile_directory')) {
-              saves = line.split('=').last.replaceAll('"', '').trim();
-            } else if (line.startsWith('savestate_directory')) states = line.split('=').last.replaceAll('"', '').trim();
-          }
-          if (saves != null || states != null) {
-             final defaultSaves = Platform.isAndroid ? '/storage/emulated/0/RetroArch/saves' : '${_getDesktopHome()}/RetroArch/saves';
-             final defaultStates = Platform.isAndroid ? '/storage/emulated/0/RetroArch/states' : '${_getDesktopHome()}/RetroArch/states';
-             return {'saves': saves ?? defaultSaves, 'states': states ?? defaultStates};
-          }
-        } catch (_) {}
-      }
-    }
-    
-    final defaultSaves = Platform.isAndroid ? '/storage/emulated/0/RetroArch/saves' : '${_getDesktopHome()}/RetroArch/saves';
-    final defaultStates = Platform.isAndroid ? '/storage/emulated/0/RetroArch/states' : '${_getDesktopHome()}/RetroArch/states';
-    return {'saves': defaultSaves, 'states': defaultStates};
-  }
-
-  Future<String?> getLibraryPath() async {
+  Future<Map<String, String>> getAllSystemPaths() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('rom_library_path');
-  }
-
-  Future<void> setLibraryPath(String path) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('rom_library_path', path);
+    final keys = prefs.getKeys().where((k) => k.startsWith('system_path_'));
+    final Map<String, String> paths = {};
+    for (final key in keys) {
+      final systemId = key.replaceFirst('system_path_', '');
+      String val = prefs.getString(key)!;
+      if (val.startsWith('content://')) {
+        final posix = _convertToPosix(val);
+        if (!_isProtectedPath(posix)) {
+          val = posix;
+          await prefs.setString(key, val);
+        }
+      }
+      paths[systemId] = val;
+    }
+    return paths;
   }
 
   Future<String?> getSystemPath(String systemId) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('system_path_$systemId');
-  }
-
-  Future<void> clearAllSystems() async {
-    final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys().where((k) => k.startsWith('system_path_') || k.startsWith('system_emulator_'));
-    for (final key in keys) {
-      await prefs.remove(key);
-    }
-    await _incrementStorageVersion();
-    print('🧹 STORAGE: Cleared all system configurations');
   }
 
   Future<void> _incrementStorageVersion() async {
@@ -242,7 +120,6 @@ class SystemPathService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('system_path_$systemId', path);
     await _incrementStorageVersion();
-    print('💾 STORAGE: Saved path for $systemId -> $path');
   }
 
   Future<String?> getSystemEmulator(String systemId) async {
@@ -254,22 +131,18 @@ class SystemPathService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('system_emulator_$systemId', emulatorId);
     await _incrementStorageVersion();
-    print('💾 STORAGE: Saved emulator for $systemId -> $emulatorId');
   }
 
   String suggestSavePath(EmulatorInfo emulator, String systemId) {
     if (Platform.isWindows || Platform.isLinux) {
-      // Try to find a desktop default for this emulator
       for (final entry in standaloneDefaults.entries) {
         if (emulator.uniqueId.contains(entry.key)) {
           final desktopPath = _getDesktopDefault(entry.key, systemId);
           if (desktopPath != null) return desktopPath;
         }
       }
-      return _getDesktopDefault('retroarch', systemId) ?? '${_getDesktopHome()}/RetroArch/saves';
+      return '${_getDesktopHome()}/RetroArch/saves';
     }
-
-    // 1. First, check if this specific emulator matches one of our standalone defaults
     for (final entry in standaloneDefaults.entries) {
       if (emulator.uniqueId.contains(entry.key)) {
         String path = entry.value;
@@ -280,332 +153,186 @@ class SystemPathService {
         return path;
       }
     }
-
-    // 2. If no match, check if it's RetroArch
-    if (emulator.uniqueId.contains('.ra.') || emulator.uniqueId.contains('retroarch')) {
-      return '/storage/emulated/0/RetroArch/saves';
-    }
-
     return '/storage/emulated/0/RetroArch/saves';
   }
 
   String suggestSavePathById(String systemId) {
     final lowerId = systemId.toLowerCase();
-    
     if (Platform.isWindows || Platform.isLinux) {
-      // Try to find a desktop default for this emulator
       for (final entry in standaloneDefaults.entries) {
         if (lowerId.contains(entry.key) || entry.key.contains(lowerId)) {
           final desktopPath = _getDesktopDefault(entry.key, systemId);
           if (desktopPath != null) return desktopPath;
         }
       }
-      return _getDesktopDefault('retroarch', systemId) ?? '${_getDesktopHome()}/RetroArch/saves';
+      return '${_getDesktopHome()}/RetroArch/saves';
     }
-
-    // First, try matching based on our standalone defaults mapping
-    for (final entry in standaloneDefaults.entries) {
-      if (lowerId.contains(entry.key)) {
-        String path = entry.value;
-        if (entry.key == 'dolphin') {
-          if (lowerId == 'gc') path = '$path/GC';
-          if (lowerId == 'wii') path = '$path/Wii';
-        }
-        return path;
-      }
-    }
-
-    // Default fallback to RetroArch
-    return '/storage/emulated/0/RetroArch/saves';
+    return standaloneDefaults[lowerId] ?? '/storage/emulated/0/RetroArch/saves';
   }
 
-  Future<String?> getSwitchSavePathForGame(String systemId, String gameId) async {
-    final basePath = await getSystemPath(systemId);
-    if (basePath == null) return null;
-
-    // Eden/Yuzu structure: <base>/nand/user/save/0000000000000000/<USER_ID>/<TITLE_ID>/
-    final saveRoot = '$basePath/nand/user/save/0000000000000000';
-    
-    try {
-      final rootDir = Directory(saveRoot);
-      if (await rootDir.exists()) {
-        final List<FileSystemEntity> userFolders = await rootDir.list().toList();
-        for (final userFolder in userFolders) {
-          if (userFolder is Directory) {
-            final gamePath = '${userFolder.path}/$gameId';
-            if (await Directory(gamePath).exists()) {
-              return gamePath;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      print('⚠️ STORAGE: Error scanning Switch save path: $e');
-    }
-
-    // Fallback to the old fixed path if scanning fails or nothing is found
-    return '$saveRoot/$gameId';
-  }
-
-  Future<Map<String, String>> getAllSystemPaths() async {
+  Future<String?> getLibraryPath() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.reload(); // Force sync with disk on Android
-    final keys = prefs.getKeys().where((k) => k.startsWith('system_path_'));
-    final paths = <String, String>{};
-    for (final key in keys) {
-      final systemId = key.replaceFirst('system_path_', '');
-      final path = prefs.getString(key);
-      if (path != null) paths[systemId] = path;
+    String? path = prefs.getString('rom_library_path');
+    if (path != null && path.startsWith('content://')) {
+       final posix = _convertToPosix(path);
+       if (!_isProtectedPath(posix)) {
+          path = posix;
+          await prefs.setString('rom_library_path', path);
+       }
     }
-    print('📂 STORAGE: Reloaded and found ${paths.length} configured systems');
-    return paths;
+    return path;
+  }
+
+  Future<void> setLibraryPath(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('rom_library_path', path);
+  }
+
+  Future<String?> openDirectoryPicker({String? initialUri}) async {
+    try { return await _platform.invokeMethod('openSafDirectoryPicker', {'initialUri': initialUri}); }
+    on PlatformException catch (_) { return null; }
+  }
+
+  Future<int> _getAndroidVersion() async {
+    if (!Platform.isAndroid) return 0;
+    try { return await _platform.invokeMethod<int>('getAndroidVersion') ?? 0; }
+    catch (_) { return 0; }
   }
 
   Future<bool> ensureSafPermission(String path) async {
     if (!Platform.isAndroid) return true;
-    if (path.startsWith('shizuku://')) return true;
     
-    // If it's not a restricted path, no SAF needed for targetSDK 29
-    if (!path.contains('/Android/data/')) return true;
+    // 1. Shizuku Explicit Check
+    if (path.startsWith('shizuku://')) {
+       final shizuku = await _platform.invokeMethod<Map>('checkShizukuStatus');
+       if (shizuku == null || shizuku['running'] == false) {
+          throw Exception('Shizuku is not running. Please start it to access restricted folders.');
+       }
+       if (shizuku['authorized'] == false) {
+          throw Exception('Shizuku permission denied. Please authorize VaultSync in the Shizuku app.');
+       }
+       return true;
+    }
+
+    final androidVersion = await _getAndroidVersion();
+    if (androidVersion <= 33) return true;
+    if (!_isProtectedPath(path)) return true;
     
-    // Check if we already have a content:// URI for this path or if we have permission
     final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('use_shizuku') ?? false) {
+       throw Exception('Shizuku Bridge is enabled in Settings, but the path is not using it. Try re-scanning.');
+    }
+
+    // 2. SAF Persisted Permission Check
     final persistedUri = prefs.getString('saf_uri_$path');
-    
     if (persistedUri != null) {
       final hasPermission = await _platform.invokeMethod<bool>('checkSafPermission', {'uri': persistedUri});
       if (hasPermission == true) return true;
     }
-
-    // Generate initial URI hint for the picker
-    String? initialUri;
-    if (path.startsWith('/storage/emulated/0/')) {
-      String relPath = path.substring(20).replaceAll('/', '%2F');
-      
-      // SAF navigation to subfolders in Android/data is often restricted.
-      // We target the package root in Android/data, which is the deepest reliable hint.
-      if (path.contains('/Android/data/')) {
-        final parts = path.split('/Android/data/');
-        if (parts.length > 1) {
-          final packageName = parts[1].split('/').first;
-          relPath = 'Android%2Fdata%2F$packageName';
-        } else {
-          relPath = 'Android';
-        }
-      }
-      
-      // Use the 'tree' format for better reliability
-      initialUri = 'content://com.android.externalstorage.documents/tree/primary%3A$relPath';
-    }
-
-    // Trigger the picker for the restricted path
-    print('🔐 PERMISSION: Requesting SAF access for $path (Hint: $initialUri)');
-    final pickedUri = await openDirectoryPicker(initialUri: initialUri);
     
-    if (pickedUri != null) {
-      await prefs.setString('saf_uri_$path', pickedUri);
-      return true;
-    }
+    // 3. Request New SAF Permission
+    final pickedUri = await openDirectoryPicker();
+    if (pickedUri != null) { await prefs.setString('saf_uri_$path', pickedUri); return true; }
     
-    return false;
+    throw Exception('SAF Permission denied for restricted folder: $path');
   }
 
-  Future<String> getEffectivePath(String systemId) async {
-    final path = await getSystemPath(systemId);
-    if (path == null) return suggestSavePathById(systemId);
-    
-    if (path.startsWith('content://') || path.startsWith('shizuku://')) return path;
+  bool _isProtectedPath(String path) {
+     final lower = path.toLowerCase();
+     return lower.contains('android/data') || lower.contains('android/obb');
+  }
 
-    if (!Platform.isAndroid) return path;
-
-    final prefs = await SharedPreferences.getInstance();
-    
-    // Check if Shizuku is preferred for this path
-    final useShizuku = prefs.getBool('use_shizuku') ?? false;
-    if (useShizuku && path.contains('/Android/data/')) {
-      return 'shizuku://$path';
+  String _convertToPosix(String path) {
+    if (!path.startsWith('content://')) return path.replaceFirst('shizuku://', '');
+    final decoded = Uri.decodeComponent(path);
+    if (decoded.contains('/tree/')) {
+       final treePart = decoded.split('/tree/').last;
+       final parts = treePart.split(':');
+       if (parts.length >= 2) {
+          final volumeId = parts[0].split('/').last;
+          final relPath = parts.sublist(1).join(':');
+          if (volumeId == 'primary') return '/storage/emulated/0/$relPath';
+          return '/storage/$volumeId/$relPath';
+       }
     }
-
-    final persistedUri = prefs.getString('saf_uri_$path');
-    
-    if (persistedUri != null) {
-      final hasPermission = await _platform.invokeMethod<bool>('checkSafPermission', {'uri': persistedUri});
-      if (hasPermission == true) {
-        // We have permission for a parent folder (e.g. the package root).
-        // Build a specific sub-document URI for the intended path.
-        if (path.startsWith('/storage/emulated/0/')) {
-           final relPath = path.substring(20).replaceAll('/', '%2F');
-           // Combine the tree root with the specific document path
-           return '$persistedUri/document/primary%3A$relPath';
-        }
-        return persistedUri;
-      }
-    }
-    
     return path;
   }
 
-  Future<String?> openDirectoryPicker({String? initialUri}) async {
-    if (Platform.isWindows || Platform.isLinux) {
-      print('📂 PICKER: Requesting desktop directory picker');
-      return await FilePicker.platform.getDirectoryPath();
-    }
-
-    print('📂 PICKER: Requesting SAF with initialUri hint: $initialUri');
-    try { 
-      // Ensure the hint URI is properly encoded for the native side
-      final result = await _platform.invokeMethod('openSafDirectoryPicker', {
-        'initialUri': initialUri,
-      }); 
-      print('📂 PICKER: Result: $result');
-      return result;
-    } catch (e) { 
-      print('❌ PICKER: Error: $e');
-      return null; 
-    }
+  Future<String> _diveIntoSwitchSaves(String root) async {
+    final base = root.endsWith('/') ? root : '$root/';
+    final nandRel = 'nand/user/save/0000000000000000/';
+    final fullNandPath = '$base$nandRel';
+    try {
+      final listJson = await _platform.invokeMethod<String>('listSafDirectory', {'uri': fullNandPath});
+      if (listJson != null) {
+         final List list = jsonDecode(listJson);
+         final folders = list.where((i) => i['isDirectory'] == true).toList();
+         if (folders.isNotEmpty) return folders.first['uri'] as String;
+      }
+    } catch (e) { print('⚠️ DIVE: Native probe failed for $fullNandPath: $e'); }
+    return '${base}nand/user/save/0000000000000000/0000000000000001';
   }
 
-  Future<List<String>> scanLibrary(String rootPath) async {
-    print('🔍 SCAN: Initiating Library-First scan on $rootPath');
-    final systems = await _emulatorRepository.loadSystems();
-    final raPaths = await getRetroArchPaths();
-    final foundSystemIds = <String>[];
+  Future<String> getEffectivePath(String systemId) async {
+    final rawPath = await getSystemPath(systemId);
+    if (rawPath == null) return suggestSavePathById(systemId);
+    final androidVersion = await _getAndroidVersion();
     
-    List<Map<String, dynamic>> rootFolders = [];
-    if (rootPath.startsWith('content://')) {
-       try {
-         final String resultStr = await _platform.invokeMethod('listSafDirectory', {'uri': rootPath});
-         final List<dynamic> result = json.decode(resultStr);
-         rootFolders = result.map((e) => Map<String, dynamic>.from(e)).where((f) => f['isDirectory'] == true).toList();
-       } catch (e) { print('❌ SCAN: SAF failed: $e'); }
+    String path = rawPath;
+    if (androidVersion <= 33 || !_isProtectedPath(path)) {
+      path = _convertToPosix(rawPath);
     } else {
-       final dir = Directory(rootPath);
-       if (await dir.exists()) {
-          rootFolders = dir.listSync().whereType<Directory>().map((d) => {'name': d.path.split('/').last, 'uri': d.path}).toList();
-       }
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('use_shizuku') ?? false) { if (!path.startsWith('shizuku://')) path = 'shizuku://$path'; }
+      else {
+        final persistedUri = prefs.getString('saf_uri_$path');
+        if (persistedUri != null && await _platform.invokeMethod<bool>('checkSafPermission', {'uri': persistedUri}) == true) path = persistedUri;
+      }
     }
+    if (systemId.toLowerCase() == 'switch' || systemId.toLowerCase() == 'eden') {
+       final clean = _convertToPosix(path);
+       if (clean.endsWith('/files') || clean.endsWith('/files/')) return await _diveIntoSwitchSaves(path);
+    }
+    return path;
+  }
 
-    final Set<String> matchedFolderUris = {};
-    print('📂 SCAN: Found ${rootFolders.length} folders in library. Matching against systems...');
+  Future<bool> _hasValidFiles(Directory dir) async {
+    try {
+      final List<FileSystemEntity> list = await dir.list().toList();
+      if (list.isEmpty) return false;
+      return list.where((e) {
+        if (e is! File) return true;
+        final name = e.path.split('/').last.toLowerCase();
+        return !name.endsWith('.txt') && !name.startsWith('.');
+      }).isNotEmpty;
+    } catch (_) { return false; }
+  }
 
-    for (final folder in rootFolders) {
-      final folderName = folder['name'].toString().toLowerCase();
-      final folderUri = folder['uri'].toString();
-      
-      if (matchedFolderUris.contains(folderUri)) continue;
-
-      // SKIP: If the folder name is too generic, it must match EXACTLY to a system folders list
-      final genericFolders = {'roms', 'saves', 'states', 'data', 'games', 'game', 'media', 'files', 'configs', 'content'};
-      bool isGeneric = genericFolders.contains(folderName);
-
-      for (final systemConfig in systems) {
-        final system = systemConfig.system;
-        if (foundSystemIds.contains(system.id)) continue;
-
-        // MATCH CRITERIA:
-        // 1. If it's a specific system folder (e.g. "ps2", "snes") -> MATCH
-        // 2. If it's a generic folder -> ONLY MATCH if system ID matches folder name exactly
-        bool isPerfectMatch = folderName == system.id.toLowerCase() || 
-                              folderName == system.name.toLowerCase().replaceAll(' ', '');
-        
-        bool isAliasMatch = !isGeneric && system.folders.any((f) => f.toLowerCase() == folderName);
-
-        if (isPerfectMatch || isAliasMatch) {
-          // HARDENING: Only validate against "heavy" extensions (roms/saves), not metadata (png/txt)
-          final filteredExts = system.extensions.where((e) => !['png', 'txt', 'jpg', 'xml', 'json', 'pdf', 'htm', 'html', 'nomedia'].contains(e.toLowerCase())).toList();
-          
-          if (await _hasValidRoms(folderUri, filteredExts.isNotEmpty ? filteredExts : system.extensions)) {
-            print('✅ SCAN: System ${system.id} confirmed in "$folderName"');
-            matchedFolderUris.add(folderUri);
-            foundSystemIds.add(system.id);
-            
-            String? bestSavePath;
-            String? bestEmulatorId;
-
-            // 1. Prioritize the 'default' emulator from JSON config
-            final defaultEmu = systemConfig.emulators.where((e) => e.defaultEmulator).firstOrNull;
-            if (defaultEmu != null) {
-              for (final entry in standaloneDefaults.entries) {
-                if (defaultEmu.uniqueId.contains(entry.key)) {
-                  bestSavePath = entry.value;
-                  bestEmulatorId = entry.key;
-                  if (entry.key == 'dolphin') {
-                    if (system.id == 'gc') bestSavePath = '${entry.value}/GC';
-                    if (system.id == 'wii') bestSavePath = '${entry.value}/Wii';
-                  }
-                  break;
-                }
-              }
-            }
-
-            // 2. If no default match found, try other standalone emulators
-            if (bestSavePath == null) {
-              for (final entry in standaloneDefaults.entries) {
-                if (systemConfig.emulators.any((e) => e.uniqueId.contains(entry.key))) {
-                  bool exists = await _platform.invokeMethod<bool>('checkPathExists', {'path': entry.value}) ?? false;
-                  if (exists) {
-                    bestSavePath = entry.value;
-                    bestEmulatorId = entry.key;
-                    if (entry.key == 'dolphin') {
-                        if (system.id == 'gc') bestSavePath = '${entry.value}/GC';
-                        if (system.id == 'wii') bestSavePath = '${entry.value}/Wii';
-                    }
-                    break;
-                  }
-                }
-              }
-            }
-
-            // 3. Fallback to RetroArch
-            if (bestSavePath == null) {
-              final ra = await getRetroArchPaths();
-              bestSavePath = ra['saves'];
-              bestEmulatorId = 'retroarch';
-            }
-
-            if (bestSavePath != null) {
-              // QoL: Don't overwrite if the user has already configured this system manually
-              final existingPath = await getSystemPath(system.id);
-              if (existingPath == null) {
-                await setSystemPath(system.id, bestSavePath);
-                if (bestEmulatorId != null) await setSystemEmulator(system.id, bestEmulatorId);
-                print('💾 SCAN: Persisted new system ${system.id} to $bestSavePath');
-              } else {
-                print('⏭️ SCAN: Skipping configuration for ${system.id} (already exists)');
-              }
-              foundSystemIds.add(system.id);
-            }
-            break; // Stop looking for systems for this folder once a match is found
+  Future<List<Map<String, String>>> scanLibrary(String inputPath) async {
+    final results = <Map<String, String>>[];
+    try {
+      String path = _convertToPosix(inputPath);
+      final dir = Directory(path);
+      if (!await dir.exists()) return [];
+      final systems = await _emulatorRepository.loadSystems();
+      final List<FileSystemEntity> list = await dir.list().toList();
+      for (final system in systems) {
+        final matchingDirs = list.whereType<Directory>().where((d) {
+          final name = d.path.split('/').last.toLowerCase();
+          return name == system.system.id.toLowerCase() || name == system.system.name.toLowerCase();
+        });
+        for (final d in matchingDirs) {
+          if (await _hasValidFiles(d)) {
+            results.add({'systemId': system.system.id, 'path': d.path});
           }
         }
       }
-    }
-
-    print('🏁 SCAN: Library-First scan complete. Found ${foundSystemIds.length} systems.');
-    return foundSystemIds;
+    } catch (e) { print('⚠️ SCAN: Library scan failed: $e'); }
+    return results;
   }
 
-  Future<bool> _hasValidRoms(String path, List<String> extensions) async {
-    if (path.startsWith('content://')) {
-       return await _platform.invokeMethod<bool>('hasFilesWithExtensions', {
-         'uri': path,
-         'extensions': extensions
-       }) ?? false;
-    } else {
-      final lowerExts = extensions.map((e) => e.toLowerCase()).toSet();
-      lowerExts.removeAll(['txt', 'bak', 'nomedia', 'tmp']);
-      final dir = Directory(path);
-      if (await dir.exists()) {
-        try {
-          await for (final e in dir.list(recursive: true).take(100)) { 
-            if (e is File) {
-              final ext = e.path.split('.').last.toLowerCase();
-              if (lowerExts.contains(ext)) return true;
-            }
-          }
-        } catch (_) {}
-      }
-    }
-    return false;
+  Future<String?> getSwitchSavePathForGame(String systemId, String gameId) async => await getEffectivePath(systemId);
+  Future<Map<String, String>> getRetroArchPaths() async {
+    return {'saves': '/storage/emulated/0/RetroArch/saves', 'states': '/storage/emulated/0/RetroArch/states'};
   }
 }

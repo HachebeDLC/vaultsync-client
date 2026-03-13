@@ -17,7 +17,7 @@ class LibrarySetupScreen extends ConsumerStatefulWidget {
 class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
   final _pathController = TextEditingController();
   bool _isScanning = false;
-  List<String> _foundSystems = [];
+  List<Map<String, String>> _foundSystems = [];
   Map<String, String> _configuredPaths = {};
 
   @override
@@ -310,7 +310,8 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
                   future: ref.watch(systemsProvider.future),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                    final systems = snapshot.data!.where((s) => _foundSystems.contains(s.system.id)).toList();
+                    final foundIds = _foundSystems.map((e) => e['systemId']).toList();
+                    final systems = snapshot.data!.where((s) => foundIds.contains(s.system.id)).toList();
                     
                     return ListView.builder(
                       padding: const EdgeInsets.all(16),

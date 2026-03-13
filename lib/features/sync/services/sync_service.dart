@@ -39,15 +39,16 @@ class SyncService {
 
       onProgress?.call('Syncing $systemId...');
 
-      // Ensure SAF permission if needed
-      final hasPermission = await _pathService.ensureSafPermission(configPath);
+      final effectivePath = await _pathService.getEffectivePath(systemId);
+
+      // Ensure permission if needed (Shizuku paths return true immediately)
+      final hasPermission = await _pathService.ensureSafPermission(effectivePath);
       if (!hasPermission) {
         onProgress?.call('Permission denied for $systemId. Skipping.');
         onError?.call('Permission denied for $systemId');
         continue;
       }
 
-      final effectivePath = await _pathService.getEffectivePath(systemId);
       final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
       final ignoredFolders = systemConfig?.system.ignoredFolders;
 
