@@ -124,6 +124,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 result.success(true)
             }
             "openSafDirectoryPicker" -> openSafDirectoryPicker(call.argument<String>("initialUri"), result)
+            "findSwitchSaveRoot" -> result.success(fileScanner.findSwitchSaveRoot(Uri.parse(call.argument<String>("uri")!!)).toString())
             "scanRecursive" -> handleScanRecursive(call, result)
             "calculateHash" -> handleCalculateHash(call, result)
             "calculateBlockHashes" -> handleCalculateBlockHashes(call, result)

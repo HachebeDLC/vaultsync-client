@@ -11,14 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 class FileScanner(private val context: Context) {
     companion object {
-        /**
-         * Maximum recursion depth for extension scanning to prevent ANRs on large directories.
-         */
         const val MAX_EXTENSION_SCAN_DEPTH = 3
-        
-        /**
-         * Maximum recursion depth for full library scanning.
-         */
         const val MAX_SCAN_DEPTH = 15
     }
 
@@ -33,46 +26,41 @@ class FileScanner(private val context: Context) {
         val cacheKey = "${parent.uri}/$name"
         if (safDirectoryCache.containsKey(cacheKey)) return safDirectoryCache[cacheKey]
 
-        val docId = DocumentsContract.getDocumentId(parent.uri)
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parent.uri, docId)
+        val found = parent.listFiles().find { it.name == name }
+        if (found != null) {
+            safDirectoryCache[cacheKey] = found
+        }
+        return found
+    }
+
+    fun findSwitchSaveRoot(baseUri: Uri): Uri {
+        var current = DocumentFile.fromTreeUri(context, baseUri) ?: return baseUri
         
-        context.contentResolver.query(
-            childrenUri, 
-            arrayOf(
-                DocumentsContract.Document.COLUMN_DOCUMENT_ID, 
-                DocumentsContract.Document.COLUMN_DISPLAY_NAME, 
-                DocumentsContract.Document.COLUMN_MIME_TYPE
-            ), 
-            null, null, null
-        )?.use { cursor ->
-            while (cursor.moveToNext()) {
-                if (cursor.getString(1) == name) {
-                    val id = cursor.getString(0)
-                    val mime = cursor.getString(2)
-                    val itemUri = DocumentsContract.buildDocumentUriUsingTree(parent.uri, id)
-                    val found = if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-                        DocumentFile.fromTreeUri(context, itemUri)
-                    } else {
-                        DocumentFile.fromSingleUri(context, itemUri)
-                    }
-                    if (found != null) {
-                        safDirectoryCache[cacheKey] = found
-                        return found
-                    }
-                }
+        // Walk down to the base saves directory. The individual profile folders (32 hex chars) will be inside.
+        val segments = listOf("nand", "user", "save", "0000000000000000")
+        
+        // Eden sometimes nests everything inside a 'files' folder on Android
+        val filesDir = findFileStrict(current, "files")
+        if (filesDir != null) {
+            current = filesDir
+        }
+
+        for (segment in segments) {
+            val next = findFileStrict(current, segment)
+            if (next != null && next.isDirectory) {
+                current = next
+            } else {
+                break
             }
         }
-        return null
+        return current.uri
     }
 
     fun getOrCreateDirectory(parent: DocumentFile, name: String): DocumentFile {
         synchronized(safLock) {
             val existing = findFileStrict(parent, name)
             if (existing != null && existing.isDirectory) return existing
-            
-            val created = parent.createDirectory(name) 
-                ?: throw Exception("CreateDirectory failed for '$name'")
-            
+            val created = parent.createDirectory(name) ?: throw Exception("CreateDirectory failed for '$name'")
             safDirectoryCache["${parent.uri}/$name"] = created
             return created
         }
@@ -82,9 +70,7 @@ class FileScanner(private val context: Context) {
         synchronized(safLock) {
             val existing = findFileStrict(parent, name)
             if (existing != null && existing.isFile) return existing
-            
-            return parent.createFile(mime, name) 
-                ?: throw Exception("CreateFile failed for '$name'")
+            return parent.createFile(mime, name) ?: throw Exception("CreateFile failed for '$name'")
         }
     }
 
@@ -100,81 +86,60 @@ class FileScanner(private val context: Context) {
         val isSwitch = sid == "switch" || sid == "eden"
         val syncEverything = sid in setOf("switch", "ps2", "psx", "ps1", "duckstation", "aethersx2", "nethersx2", "pcsx2")
         
-        val startDocId = try { 
-            DocumentsContract.getTreeDocumentId(uri) 
-        } catch (e: Exception) { 
-            null 
-        }
+        val uriStr = uri.toString().lowercase()
+        val alreadyInZone = isSwitch && (uriStr.contains("nand%2fuser%2fsave") || uriStr.contains("nand/user/save"))
 
-        if (startDocId != null) {
-            fun walkSaf(currentDocId: String, currentRelPath: String, depth: Int) {
-                if (depth > MAX_SCAN_DEPTH) return
-                
-                val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(uri, currentDocId)
-                context.contentResolver.query(
-                    childrenUri, 
-                    arrayOf(
-                        DocumentsContract.Document.COLUMN_DOCUMENT_ID, 
-                        DocumentsContract.Document.COLUMN_DISPLAY_NAME, 
-                        DocumentsContract.Document.COLUMN_MIME_TYPE, 
-                        DocumentsContract.Document.COLUMN_SIZE, 
-                        DocumentsContract.Document.COLUMN_LAST_MODIFIED
-                    ), 
-                    null, null, null
-                )?.use { cursor ->
-                    while (cursor.moveToNext()) {
-                        val id = cursor.getString(0)
-                        val name = cursor.getString(1) ?: "unknown"
-                        val mime = cursor.getString(2)
-                        val relPath = if (currentRelPath.isEmpty()) name else "$currentRelPath/$name"
+        val rootDoc = DocumentFile.fromTreeUri(context, uri) ?: return results
 
-                        if (isIgnored(name, relPath, combinedIgnores, ignoredFoldersList)) continue
+        fun walkSaf(currentDoc: DocumentFile, currentRelPath: String, depth: Int) {
+            if (depth > MAX_SCAN_DEPTH) return
+            
+            currentDoc.listFiles().forEach { file ->
+                val name = file.name ?: "unknown"
+                val relPath = if (currentRelPath.isEmpty()) name else "$currentRelPath/$name"
 
-                        // Switch/Eden Optimization: Only descend into 'nand' or its subfolders
-                        if (isSwitch && !relPath.startsWith("nand") && relPath != "nand") continue
+                if (isIgnored(name, relPath, combinedIgnores, ignoredFoldersList)) return@forEach
 
-                        if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-                            results.put(JSONObject().apply {
-                                put("name", name)
-                                put("relPath", relPath)
-                                put("isDirectory", true)
-                                put("uri", DocumentsContract.buildDocumentUriUsingTree(uri, id).toString())
-                            })
-                            walkSaf(id, relPath, depth + 1)
-                        } else {
-                            var fSize = cursor.getLong(3)
-                            var fLast = cursor.getLong(4)
-                            val itemUri = DocumentsContract.buildDocumentUriUsingTree(uri, id)
-                            
-                            if (fSize <= 0) {
-                                val df = DocumentFile.fromSingleUri(context, itemUri)
-                                fSize = df?.length() ?: 0
-                                fLast = df?.lastModified() ?: 0
-                            }
+                // Scope Guard: If we are not in the zone yet, we must walk down the 'nand' path.
+                if (isSwitch && !alreadyInZone) {
+                    val inSavePath = relPath.contains("nand/user/save")
+                    if (!inSavePath && !relPath.startsWith("nand") && relPath != "nand") return@forEach
+                }
 
-                            // Switch specific: only sync files inside the actual save path
-                            val shouldSync = if (isSwitch) {
-                                relPath.contains("nand/user/save")
-                            } else {
-                                syncEverything || allowedExtensions.contains(name.split(".").last().lowercase())
-                            }
+                if (file.isDirectory) {
+                    results.put(JSONObject().apply {
+                        put("name", name)
+                        put("relPath", relPath)
+                        put("isDirectory", true)
+                        put("uri", file.uri.toString())
+                    })
+                    walkSaf(file, relPath, depth + 1)
+                } else {
+                    val fSize = file.length()
+                    val fLast = file.lastModified()
+                    val itemUri = file.uri
+                    
+                    val shouldSync = if (isSwitch) {
+                        relPath.contains("nand/user/save") || alreadyInZone
+                    } else {
+                        syncEverything || allowedExtensions.contains(name.split(".").last().lowercase())
+                    }
 
-                            if (shouldSync) {
-                                results.put(JSONObject().apply {
-                                    put("name", name)
-                                    put("relPath", relPath)
-                                    put("isDirectory", false)
-                                    put("size", fSize)
-                                    put("lastModified", fLast)
-                                    put("uri", itemUri.toString())
-                                })
-                            }
-                        }
+                    if (shouldSync) {
+                        results.put(JSONObject().apply {
+                            put("name", name)
+                            put("relPath", relPath)
+                            put("isDirectory", false)
+                            put("size", fSize)
+                            put("lastModified", fLast)
+                            put("uri", itemUri.toString())
+                        })
                     }
                 }
             }
-            walkSaf(startDocId, "", 0)
         }
+        
+        walkSaf(rootDoc, "", 0)
         return results
     }
 
@@ -190,6 +155,8 @@ class FileScanner(private val context: Context) {
         val sid = systemId.lowercase()
         val isSwitch = sid == "switch" || sid == "eden"
         val syncEverything = sid in setOf("switch", "ps2", "psx", "ps1", "duckstation", "aethersx2", "nethersx2", "pcsx2")
+        
+        val alreadyInZone = isSwitch && cleanBase.lowercase().contains("nand/user/save")
 
         fun walkShizuku(currentPath: String, currentRelPath: String, depth: Int) {
             if (depth > MAX_SCAN_DEPTH) return
@@ -201,8 +168,11 @@ class FileScanner(private val context: Context) {
                 
                 if (combinedIgnores.contains(name.lowercase()) || ignoredFoldersList.any { it.equals(relPath, true) }) continue
 
-                // Switch Optimization
-                if (isSwitch && !relPath.startsWith("nand") && relPath != "nand") continue
+                // Scope Optimization
+                if (isSwitch && !alreadyInZone) {
+                    val inSavePath = relPath.contains("nand/user/save")
+                    if (!inSavePath && !relPath.startsWith("nand") && relPath != "nand") continue
+                }
                 
                 val fullPath = if (currentPath.endsWith("/")) "$currentPath$name" else "$currentPath/$name"
                 if (f.getBoolean("isDirectory")) {
@@ -215,7 +185,7 @@ class FileScanner(private val context: Context) {
                     walkShizuku(fullPath, relPath, depth + 1)
                 } else {
                     val shouldSync = if (isSwitch) {
-                        relPath.contains("nand/user/save")
+                        relPath.contains("nand/user/save") || alreadyInZone
                     } else {
                         syncEverything || allowedExtensions.contains(name.split(".").last().lowercase())
                     }
@@ -248,15 +218,20 @@ class FileScanner(private val context: Context) {
         val sid = systemId.lowercase()
         val isSwitch = sid == "switch" || sid == "eden"
         val syncEverything = sid in setOf("switch", "ps2", "psx", "ps1", "duckstation", "aethersx2", "nethersx2", "pcsx2")
+        
+        val alreadyInZone = isSwitch && path.lowercase().contains("nand/user/save")
 
         fun walkLocal(dir: File, currentRelPath: String) {
             dir.listFiles()?.forEach { file ->
                 val relPath = if (currentRelPath.isEmpty()) file.name else "$currentRelPath/${file.name}"
                 if (combinedIgnores.contains(file.name.lowercase()) || ignoredFoldersList.any { it.equals(relPath, true) }) return@forEach
-
-                // Switch Optimization
-                if (isSwitch && !relPath.startsWith("nand") && relPath != "nand") return@forEach
                 
+                // Scope Optimization
+                if (isSwitch && !alreadyInZone) {
+                    val inSavePath = relPath.contains("nand/user/save")
+                    if (!inSavePath && !relPath.startsWith("nand") && relPath != "nand") return@forEach
+                }
+
                 if (file.isDirectory) {
                     results.put(JSONObject().apply {
                         put("name", file.name)
@@ -267,7 +242,7 @@ class FileScanner(private val context: Context) {
                     walkLocal(file, relPath)
                 } else {
                     val shouldSync = if (isSwitch) {
-                        relPath.contains("nand/user/save")
+                        relPath.contains("nand/user/save") || alreadyInZone
                     } else {
                         syncEverything || allowedExtensions.contains(file.name.split(".").last().lowercase())
                     }
@@ -291,37 +266,27 @@ class FileScanner(private val context: Context) {
 
     fun listSafDirectory(uri: Uri): JSONArray {
         val results = JSONArray()
-        val treeId = try { DocumentsContract.getTreeDocumentId(uri) } catch(e: Exception) { DocumentsContract.getDocumentId(uri) }
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(uri, treeId)
+        val rootDoc = DocumentFile.fromTreeUri(context, uri) ?: return results
         
-        context.contentResolver.query(
-            childrenUri, 
-            arrayOf(
-                DocumentsContract.Document.COLUMN_DOCUMENT_ID, 
-                DocumentsContract.Document.COLUMN_DISPLAY_NAME, 
-                DocumentsContract.Document.COLUMN_MIME_TYPE
-            ), 
-            null, null, null
-        )?.use { cursor ->
-            while (cursor.moveToNext()) {
-                val id = cursor.getString(0)
-                val name = cursor.getString(1)
-                val mime = cursor.getString(2)
-                val isDir = mime == DocumentsContract.Document.MIME_TYPE_DIR
-                val itemUri = DocumentsContract.buildDocumentUriUsingTree(uri, id)
-                results.put(JSONObject().apply {
-                    put("name", name)
-                    put("uri", itemUri.toString())
-                    put("isDirectory", isDir)
-                })
-            }
+        rootDoc.listFiles().forEach { file ->
+            results.put(JSONObject().apply {
+                put("name", file.name ?: "unknown")
+                put("uri", file.uri.toString())
+                put("isDirectory", file.isDirectory)
+            })
         }
         return results
     }
 
     fun checkSafExtensionsRecursive(rootUri: Uri, currentDocId: String, extensions: List<String>, depth: Int): Boolean {
         if (depth > MAX_EXTENSION_SCAN_DEPTH) return false
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(rootUri, currentDocId)
+        val treeUri = try {
+            val treeId = DocumentsContract.getTreeDocumentId(rootUri)
+            DocumentsContract.buildTreeDocumentUri(rootUri.authority, treeId)
+        } catch (e: Exception) {
+            rootUri
+        }
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, currentDocId)
         context.contentResolver.query(
             childrenUri, 
             arrayOf(
@@ -333,7 +298,7 @@ class FileScanner(private val context: Context) {
         )?.use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
-                val name = cursor.getString(1).lowercase()
+                val name = cursor.getString(1)?.lowercase() ?: continue
                 val mime = cursor.getString(2)
                 if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
                     if (checkSafExtensionsRecursive(rootUri, id, extensions, depth + 1)) return true

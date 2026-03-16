@@ -59,10 +59,21 @@ class SyncRepository {
   String _getCloudRelPath(String systemId, String localRelPath) {
     final sid = systemId.toLowerCase();
     if (sid == 'switch' || sid == 'eden') {
-      if (localRelPath.startsWith('nand/user/save/0000000000000000/')) {
-        final parts = localRelPath.split('/');
-        if (parts.length > 5) return parts.sublist(5).join('/');
+      String path = localRelPath;
+      if (path.startsWith('files/')) path = path.substring(6);
+      
+      // Pattern: nand/user/save/0000000000000000/[32-char-ID]/[16-char-TitleID]
+      final savePattern = 'nand/user/save/0000000000000000/';
+      if (path.startsWith(savePattern)) {
+          final afterBase = path.substring(savePattern.length);
+          final parts = afterBase.split('/');
+          // parts[0] is the User ID, parts[1] is the Title ID
+          if (parts.length >= 2) {
+              // Return everything from Title ID onwards
+              return parts.sublist(1).join('/');
+          }
       }
+      return ''; // Not a save file
     } else if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2' || sid == 'pcsx2' || sid == 'duckstation') {
       if (localRelPath.startsWith('files/memcards/')) return localRelPath.substring(15);
       if (localRelPath.startsWith('files/memcard/')) return localRelPath.substring(14);
@@ -84,31 +95,49 @@ class SyncRepository {
        return 'memcards/$cloudRelPath';
     }
     if (sid == 'switch' || sid == 'eden') {
-       return 'nand/user/save/0000000000000000/0000000000000001/$cloudRelPath';
+       // Cloud path is TitleID/file. 
+       // We must reconstruct the full local path: nand/user/save/0000000000000000/[ProfileID]/[cloudRelPath]
+       String profileId = '00000000000000000000000000000000'; // Default
+       
+       // Try to find an existing profile ID from local scanner results
+       final profileRegex = RegExp(r'^[0-9A-Fa-f]{16,32}$');
+       for (final f in localFiles.values) {
+           final path = f['originalRelPath'] as String;
+           final base = 'nand/user/save/0000000000000000/';
+           if (path.contains(base)) {
+               final id = path.split(base).last.split('/').first;
+               if (profileRegex.hasMatch(id)) {
+                   profileId = id;
+                   break;
+               }
+           }
+       }
+       
+       final prefix = hasFilesDir ? 'files/' : '';
+       return '${prefix}nand/user/save/0000000000000000/$profileId/$cloudRelPath';
     }
     return cloudRelPath;
   }
+Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynamic> localList) {
+  final Map<String, Map<String, dynamic>> localFiles = {};
+  final sid = systemId.toLowerCase();
+  final isSwitch = sid == 'switch' || sid == 'eden';
 
-  Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynamic> localList) {
-    final Map<String, Map<String, dynamic>> localFiles = {};
-    final sid = systemId.toLowerCase();
-    final isSwitch = sid == 'switch' || sid == 'eden';
-    
-    // Check if this is a package root (contains 'files/' folder)
-    final bool isPkgRoot = localList.any((f) => f['relPath'] == 'files' || f['relPath'].startsWith('files/'));
+  // Check if this is a package root (contains 'files/' folder)
+  final bool isPkgRoot = localList.any((f) => f['relPath'] == 'files' || f['relPath'].startsWith('files/'));
 
-    for (var f in localList) {
-      if (f['isDirectory'] == true) continue;
-      final String originalRelPath = f['relPath'];
-      
-      // Switch Strict Filtering: ONLY allow files inside 'nand/user/save'
-      if (isSwitch && !originalRelPath.contains('nand/user/save')) continue;
+  for (var f in localList) {
+    if (f['isDirectory'] == true) continue;
+    final String originalRelPath = f['relPath'];
 
-      // FILTER: If we are at package root, ignore any save files that aren't in the correct subfolders
-      if (isPkgRoot && !originalRelPath.contains('/')) {
+    // Switch Strict Filtering: ONLY allow files inside 'nand/user/save'
+    if (isSwitch && !originalRelPath.contains('nand/user/save')) continue;
+
+    // FILTER: If we are at package root, ignore any save files that aren't in the correct subfolders
+    if (isPkgRoot && !originalRelPath.contains('/')) {
          final ext = originalRelPath.split('.').last.toLowerCase();
          if (['ps2', 'srm', 'sav', 'save', 'state'].contains(ext)) continue;
-      }
+    }
 
       final String cloudRelPath = _getCloudRelPath(systemId, originalRelPath);
       if (cloudRelPath.isEmpty || cloudRelPath.endsWith('/')) continue;
@@ -140,7 +169,11 @@ class SyncRepository {
           final rel = path.startsWith('switch/') ? path.substring(7) : path;
           // Title IDs are 16 hex chars. Check if the first segment looks like one.
           final firstSegment = rel.split('/').first;
-          return RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(firstSegment);
+          // Standard Switch Title ID: 16 hex chars. 
+          // Also ignore common polluted folders like 'nand', 'config', 'files', 'gpu_drivers'
+          final isTitleId = RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(firstSegment);
+          final isSystemPath = ['nand', 'config', 'files', 'gpu_drivers'].contains(firstSegment.toLowerCase());
+          return isTitleId && !isSystemPath;
         }).toList()
       : allRemoteFiles;
 
@@ -207,6 +240,7 @@ class SyncRepository {
         final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
 
         for (final relPath in cloudRelPaths) {
+          if (relPath.isEmpty) continue; // Skip unmappable paths
           final remotePath = '$cloudPrefix/$relPath';
           if (filenameFilter != null && !remotePath.contains(filenameFilter)) continue;
           final localInfo = localFiles[relPath];

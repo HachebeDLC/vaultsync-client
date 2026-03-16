@@ -140,34 +140,44 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
   List<Widget> _buildHierarchy(String parentPath) {
     final List<Widget> children = [];
     
-    // Get immediate files and folders in this parentPath
-    final itemsInPath = _rawFiles!.where((f) {
+    // Get immediate files and dynamically generate folders in this parentPath
+    final Set<String> folderNames = {};
+    final List<Map<String, dynamic>> files = [];
+
+    for (final f in _rawFiles!) {
       final path = f['relPath'] as String;
-      if (parentPath.isEmpty) return !path.contains('/');
-      if (!path.startsWith('$parentPath/')) return false;
-      final subPath = path.substring(parentPath.length + 1);
-      return !subPath.contains('/');
-    }).toList();
-
-    // Sort: Folders first, then files
-    itemsInPath.sort((a, b) {
-       final aIsDir = a['isDirectory'] == true;
-       final bIsDir = b['isDirectory'] == true;
-       if (aIsDir != bIsDir) return aIsDir ? -1 : 1;
-       return (a['relPath'] as String).compareTo(b['relPath'] as String);
-    });
-
-    for (final item in itemsInPath) {
-      if (item['isDirectory'] == true) {
-        children.add(ExpansionTile(
-          leading: const Icon(Icons.folder, color: Colors.amber),
-          title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-          childrenPadding: const EdgeInsets.only(left: 16),
-          children: _buildHierarchy(item['relPath']),
-        ));
+      if (parentPath.isEmpty) {
+        if (!path.contains('/')) {
+          files.add(f);
+        } else {
+          folderNames.add(path.split('/').first);
+        }
       } else {
-        children.add(_buildFileTile(item));
+        if (path.startsWith('$parentPath/')) {
+          final subPath = path.substring(parentPath.length + 1);
+          if (!subPath.contains('/')) {
+            files.add(f);
+          } else {
+            folderNames.add(subPath.split('/').first);
+          }
+        }
       }
+    }
+
+    final sortedFolders = folderNames.toList()..sort();
+    for (final folder in sortedFolders) {
+      final currentPath = parentPath.isEmpty ? folder : '$parentPath/$folder';
+      children.add(ExpansionTile(
+        leading: const Icon(Icons.folder, color: Colors.amber),
+        title: Text(folder, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+        childrenPadding: const EdgeInsets.only(left: 16),
+        children: _buildHierarchy(currentPath),
+      ));
+    }
+
+    files.sort((a, b) => (a['relPath'] as String).compareTo(b['relPath'] as String));
+    for (final file in files) {
+      children.add(_buildFileTile(file));
     }
     
     return children;

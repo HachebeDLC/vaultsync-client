@@ -256,17 +256,50 @@ class SystemPathService {
 
   Future<String> _diveIntoSwitchSaves(String root) async {
     final base = root.endsWith('/') ? root : '$root/';
-    final nandRel = 'nand/user/save/0000000000000000/';
-    final fullNandPath = '$base$nandRel';
-    try {
-      final listJson = await _platform.invokeMethod<String>('listSafDirectory', {'uri': fullNandPath});
-      if (listJson != null) {
-         final List list = jsonDecode(listJson);
-         final folders = list.where((i) => i['isDirectory'] == true).toList();
-         if (folders.isNotEmpty) return folders.first['uri'] as String;
-      }
-    } catch (e) { print('⚠️ DIVE: Native probe failed for $fullNandPath: $e'); }
-    return '${base}nand/user/save/0000000000000000/0000000000000001';
+    
+    // Switch Standard: Path to saves is highly standardized.
+    // Even if picked at root, we walk down to the 0000...0001 folder.
+    final pathSegments = [
+      'nand', 'user', 'save', '0000000000000000', '0000000000000001'
+    ];
+
+    String currentUri = root;
+    
+    // Attempt to walk down the segments
+    for (final segment in pathSegments) {
+       try {
+         final listJson = await _platform.invokeMethod<String>('listSafDirectory', {'uri': currentUri});
+         if (listJson != null) {
+            final List list = jsonDecode(listJson);
+            final match = list.where((i) => i['name'].toString().toLowerCase() == segment.toLowerCase()).firstOrNull;
+            if (match != null) {
+               currentUri = match['uri'];
+               continue;
+            }
+         }
+       } catch (e) { break; }
+       
+       // If we reach here, a segment was missing or listing failed.
+       // Try common 'files/' nested variant
+       if (segment == 'nand' && !currentUri.contains('/nand')) {
+          try {
+             final listJson = await _platform.invokeMethod<String>('listSafDirectory', {'uri': currentUri});
+             final List list = jsonDecode(listJson ?? '[]');
+             final filesMatch = list.where((i) => i['name'].toString().toLowerCase() == 'files').firstOrNull;
+             if (filesMatch != null) {
+                currentUri = filesMatch['uri'];
+                // Restart search from currentUri with same segment
+                final subListJson = await _platform.invokeMethod<String>('listSafDirectory', {'uri': currentUri});
+                final subList = jsonDecode(subListJson ?? '[]');
+                final subMatch = subList.where((i) => i['name'].toString().toLowerCase() == segment.toLowerCase()).firstOrNull;
+                if (subMatch != null) { currentUri = subMatch['uri']; continue; }
+             }
+          } catch (_) {}
+       }
+       break;
+    }
+
+    return currentUri;
   }
 
   /// Resolves the effective local save path for a system, handling 
@@ -289,11 +322,7 @@ class SystemPathService {
     if (_isProtectedPath(rawPath)) {
        final persistedUri = prefs.getString('saf_uri_$rawPath');
        if (persistedUri != null) {
-          String path = persistedUri;
-          if (systemId.toLowerCase() == 'switch' || systemId.toLowerCase() == 'eden') {
-             if (path.endsWith('/files') || path.endsWith('/files/')) path = await _diveIntoSwitchSaves(path);
-          }
-          return path;
+          return persistedUri;
        }
     }
 
