@@ -91,7 +91,7 @@ class SyncRepository {
 
   Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynamic> localList) {
     final Map<String, Map<String, dynamic>> localFiles = {};
-    final sid = systemId.lowercase();
+    final sid = systemId.toLowerCase();
     final isSwitch = sid == 'switch' || sid == 'eden';
     
     // Check if this is a package root (contains 'files/' folder)
