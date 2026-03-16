@@ -1,4 +1,4 @@
-package com.vaultsync.app
+package com.vaultsync.launcher
 
 import org.json.JSONObject
 import java.io.OutputStream

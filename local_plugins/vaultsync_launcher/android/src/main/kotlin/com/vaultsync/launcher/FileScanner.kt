@@ -1,4 +1,4 @@
-package com.vaultsync.app
+package com.vaultsync.launcher
 
 import android.content.Context
 import android.net.Uri

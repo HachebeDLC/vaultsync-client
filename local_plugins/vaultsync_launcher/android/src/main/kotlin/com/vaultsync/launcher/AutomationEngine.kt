@@ -1,4 +1,4 @@
-package com.vaultsync.app
+package com.vaultsync.launcher
 
 import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager

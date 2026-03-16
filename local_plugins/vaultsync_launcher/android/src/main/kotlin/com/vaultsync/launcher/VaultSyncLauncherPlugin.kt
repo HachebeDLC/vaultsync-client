@@ -1,4 +1,4 @@
-package com.vaultsync.app
+package com.vaultsync.launcher
 
 import android.app.Activity
 import android.content.Context
@@ -28,7 +28,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.util.concurrent.ConcurrentHashMap
 
-class SyncPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
+class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
     companion object {
         private const val CHANNEL_NAME = "com.vaultsync.app/launcher"
         private const val PICK_DIRECTORY_REQUEST_CODE = 9999

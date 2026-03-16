@@ -36,6 +36,9 @@ dependencies:
   system_tray: ^2.0.2
   ffi: ^2.1.2
 
+  vaultsync_launcher:
+    path: local_plugins/vaultsync_launcher
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,4 +1,4 @@
-package com.vaultsync.app
+package com.vaultsync.launcher
 
 import java.security.MessageDigest
 import javax.crypto.Cipher
