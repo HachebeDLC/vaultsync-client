@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:workmanager/workmanager.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/services/api_client_provider.dart';
 import 'features/auth/domain/auth_provider.dart';
@@ -15,9 +16,46 @@ import 'features/settings/presentation/settings_screen.dart';
 import 'features/settings/presentation/diagnostics_screen.dart';
 import 'features/sync/presentation/system_detail_screen.dart';
 import 'features/sync/presentation/conflict_screen.dart';
+import 'features/sync/presentation/sync_history_screen.dart';
+import 'features/sync/services/sync_service.dart';
 
-void main() {
+@pragma('vm:entry-point')
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    print("🕒 WORKER: Executing background task: $task");
+    
+    // Initialize a temporary container for background sync
+    final container = ProviderContainer();
+    try {
+      final syncService = container.read(syncServiceProvider);
+      
+      // Perform a Fast Sync (timestamp based) for all systems
+      await syncService.runSync(
+        fastSync: true,
+        isBackground: true,
+        onProgress: (msg) => print("🕒 WORKER: $msg"),
+      );
+      
+      // Wait for any final log writes to complete
+      await Future.delayed(const Duration(seconds: 1));
+      return true;
+    } catch (e) {
+      print("❌ WORKER FAILED: $e");
+      return false;
+    } finally {
+      container.dispose();
+    }
+  });
+}
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  await Workmanager().initialize(
+    callbackDispatcher,
+    isInDebugMode: true,
+  );
+
   runApp(const ProviderScope(child: VaultSyncApp()));
 }
 
@@ -64,23 +102,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isLoggingIn = state.matchedLocation == '/auth';
       final isOnRecovery = state.matchedLocation.startsWith('/auth/recovery');
       
-      // 1. Initial Boot Screen
       if (isBooting) return null;
-
-      // 2. FORCE SETUP: If no URL is configured, force /setup
-      if ((baseUrl == null || baseUrl.isEmpty) && !isSettingUp) {
-        return '/setup';
-      }
-
-      // 3. AUTH GUARD: If logged out and not on auth/recovery/setup, force /auth
-      if (authState == null && !isLoggingIn && !isOnRecovery && !isSettingUp) {
-        return '/auth';
-      }
-      
-      // 4. LOGGED IN: If logged in and trying to go to auth or setup, skip to dashboard
-      if (authState != null && (isLoggingIn || isSettingUp)) {
-        return '/dashboard';
-      }
+      if ((baseUrl == null || baseUrl.isEmpty) && !isSettingUp) return '/setup';
+      if (authState == null && !isLoggingIn && !isOnRecovery && !isSettingUp) return '/auth';
+      if (authState != null && (isLoggingIn || isSettingUp)) return '/dashboard';
 
       return null;
     },
@@ -95,7 +120,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: 'recovery', builder: (context, state) => const RecoveryScreen()),
         ],
       ),
-      
       GoRoute(path: '/dashboard', builder: (context, state) => const DashboardScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/library-setup', builder: (context, state) => const LibrarySetupScreen()),
@@ -105,6 +129,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/diagnostics', builder: (context, state) => const DiagnosticsScreen()),
       GoRoute(path: '/conflicts', builder: (context, state) => const ConflictScreen()),
+      GoRoute(path: '/history', builder: (context, state) => const SyncHistoryScreen()),
     ],
   );
 });

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/sync_provider.dart';
+import 'package:intl/intl.dart';
 
 class ConflictScreen extends ConsumerWidget {
   const ConflictScreen({super.key});
@@ -11,116 +12,159 @@ class ConflictScreen extends ConsumerWidget {
     final conflicts = syncState.conflicts;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Sync Conflicts')),
+      appBar: AppBar(title: const Text('Resolve Conflicts')),
       body: conflicts.isEmpty
-          ? const Center(child: Text('No active conflicts.'))
+          ? _buildEmptyState()
           : ListView.builder(
+              padding: const EdgeInsets.all(12),
               itemCount: conflicts.length,
               itemBuilder: (context, index) {
                 final conflict = conflicts[index];
-                final String path = conflict['path'] ?? 'Unknown path';
-                final String deviceName = conflict['device_name'] ?? 'Unknown Device';
-                
-                // Parse timestamp from filename: ...sync-conflict-YYYYMMDD-HHMMSS-DeviceSlug.ext
-                String displayDate = 'Unknown date';
-                if (path.contains('.sync-conflict-')) {
-                   try {
-                     final parts = path.split('.sync-conflict-')[1].split('-');
-                     final datePart = parts[0];
-                     // 20260225
-                     final year = datePart.substring(0, 4);
-                     final month = datePart.substring(4, 6);
-                     final day = datePart.substring(6, 8);
-                     
-                     String timeDisplay = 'Unknown time';
-                     if (parts.length > 1) {
-                        final rawTime = parts[1];
-                        if (rawTime.length >= 6) {
-                           timeDisplay = "${rawTime.substring(0,2)}:${rawTime.substring(2,4)}:${rawTime.substring(4,6)}";
-                        }
-                     }
-                     
-                     displayDate = '$year-$month-$day $timeDisplay';
-                   } catch (_) {}
-                }
-
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                path.split('/').last.split('.sync-conflict-').first,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(Icons.devices, size: 14, color: Colors.blue),
-                            const SizedBox(width: 4),
-                            Text('Device: $deviceName', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.access_time, size: 14, color: Colors.grey),
-                            const SizedBox(width: 4),
-                            Text('Conflict created on: $displayDate', style: const TextStyle(fontSize: 13)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text('Cloud Path: $path', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                        const Divider(height: 24),
-                        const Text(
-                          'A discrepancy was found. Which version do you want to keep as the primary save?',
-                          style: TextStyle(fontSize: 14),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () => _resolve(context, ref, conflict, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue, 
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                child: const Text('Keep Local'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () => _resolve(context, ref, conflict, false),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green, 
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                child: const Text('Keep Cloud'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
+                return _buildConflictCard(context, ref, conflict);
               },
             ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.check_circle_outline, size: 64, color: Colors.green.shade200),
+          const SizedBox(height: 16),
+          const Text('All files are in sync!', style: TextStyle(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConflictCard(BuildContext context, WidgetRef ref, Map<String, dynamic> conflict) {
+    final String path = conflict['path'] ?? 'Unknown';
+    final String fileName = path.split('/').last.split('.sync-conflict-').first;
+    
+    // Cloud Side Metadata
+    final String cloudDevice = conflict['device_name'] ?? 'Remote Device';
+    DateTime cloudDate = DateTime.now();
+    if (path.contains('.sync-conflict-')) {
+       try {
+         final datePart = path.split('.sync-conflict-')[1].split('-')[0];
+         cloudDate = DateTime.parse(datePart); // Simple parse for now
+       } catch (e) {
+         print('⚠️ UI: Conflict date parse failed: $e');
+       }
+    }
+
+    // Local Side Metadata (Mocked for now until repo passes actual localInfo)
+    const String localDevice = 'Thor (This Device)';
+    final DateTime localDate = DateTime.now().subtract(const Duration(hours: 1));
+
+    final bool isCloudNewer = cloudDate.isAfter(localDate);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.orange.withOpacity(0.1),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text(fileName, style: const TextStyle(fontWeight: FontWeight.bold))),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                _buildVersionPanel(
+                  context, 
+                  title: 'LOCAL VERSION',
+                  device: localDevice,
+                  date: localDate,
+                  icon: Icons.smartphone,
+                  isNewer: !isCloudNewer,
+                  onSelect: () => _resolve(context, ref, conflict, true),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(Icons.compare_arrows, color: Colors.grey),
+                ),
+                _buildVersionPanel(
+                  context, 
+                  title: 'CLOUD VERSION',
+                  device: cloudDevice,
+                  date: cloudDate,
+                  icon: Icons.cloud_outlined,
+                  isNewer: isCloudNewer,
+                  onSelect: () => _resolve(context, ref, conflict, false),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVersionPanel(
+    BuildContext context, {
+    required String title,
+    required String device,
+    required DateTime date,
+    required IconData icon,
+    required bool isNewer,
+    required VoidCallback onSelect,
+  }) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(title, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(color: isNewer ? Colors.green : Colors.grey.shade300, width: isNewer ? 2 : 1),
+              borderRadius: BorderRadius.circular(8),
+              color: isNewer ? Colors.green.withOpacity(0.05) : null,
+            ),
+            child: Column(
+              children: [
+                if (isNewer)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(4)),
+                    child: const Text('NEWER', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                  ),
+                Icon(icon, color: isNewer ? Colors.green : Colors.grey),
+                const SizedBox(height: 8),
+                Text(device, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                const SizedBox(height: 4),
+                Text(DateFormat('MMM d, HH:mm').format(date), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: onSelect,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isNewer ? Colors.green : Colors.blue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)
+                    ),
+                    child: const Text('KEEP THIS'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

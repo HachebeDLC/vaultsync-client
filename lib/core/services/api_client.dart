@@ -42,14 +42,30 @@ class ApiClient {
     return url != null && url.isNotEmpty;
   }
 
-  Future<Map<String, dynamic>> get(String endpoint) async {
+  Future<Uri> _buildUri(String endpoint) async {
     final baseUrl = await getBaseUrl();
+    if (baseUrl == null || baseUrl.isEmpty) {
+      throw StateError('VaultSync Server URL is not configured. Please complete setup.');
+    }
+    return Uri.parse('$baseUrl$endpoint');
+  }
+
+  Future<Map<String, String>> _getHeaders({bool includeJson = true}) async {
     final token = await getToken();
+    return {
+      if (includeJson) 'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  Future<Map<String, dynamic>> get(String endpoint, {Map<String, String>? queryParams}) async {
+    var uri = await _buildUri(endpoint);
+    if (queryParams != null) {
+      uri = uri.replace(queryParameters: queryParams);
+    }
     final response = await http.get(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: {
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
+      uri,
+      headers: await _getHeaders(includeJson: false),
     );
     if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode}: ${response.body.length > 100 ? response.body.substring(0, 100) : response.body}');
@@ -58,14 +74,9 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> post(String endpoint, {Map<String, dynamic>? body}) async {
-    final baseUrl = await getBaseUrl();
-    final token = await getToken();
     final response = await http.post(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
+      await _buildUri(endpoint),
+      headers: await _getHeaders(),
       body: json.encode(body),
     );
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -75,14 +86,9 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> delete(String endpoint, {Map<String, dynamic>? body}) async {
-    final baseUrl = await getBaseUrl();
-    final token = await getToken();
     final response = await http.delete(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
+      await _buildUri(endpoint),
+      headers: await _getHeaders(),
       body: body != null ? json.encode(body) : null,
     );
     if (response.statusCode != 200) {
@@ -92,34 +98,24 @@ class ApiClient {
   }
 
   Future<http.Response> postRaw(String endpoint, {dynamic body}) async {
-    final baseUrl = await getBaseUrl();
-    final token = await getToken();
     return await http.post(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: {
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
+      await _buildUri(endpoint),
+      headers: await _getHeaders(includeJson: false),
       body: body,
     );
   }
 
   Future<http.Response> postJsonRaw(String endpoint, Map<String, dynamic> body) async {
-    final baseUrl = await getBaseUrl();
-    final token = await getToken();
     return await http.post(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
+      await _buildUri(endpoint),
+      headers: await _getHeaders(),
       body: json.encode(body),
     );
   }
 
   Future<http.Response> postForm(String endpoint, Map<String, String> fields) async {
-    final baseUrl = await getBaseUrl();
+    var request = http.MultipartRequest('POST', await _buildUri(endpoint));
     final token = await getToken();
-    var request = http.MultipartRequest('POST', Uri.parse('$baseUrl$endpoint'));
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     request.fields.addAll(fields);
     final streamedResponse = await request.send();
@@ -127,10 +123,8 @@ class ApiClient {
   }
 
   Future<void> postMultipart(String endpoint, String filePath, String remotePath, {int? updatedAt, bool? force, String? deviceName, String? hash}) async {
-    final baseUrl = await getBaseUrl();
+    var request = http.MultipartRequest('POST', await _buildUri(endpoint));
     final token = await getToken();
-    var request = http.MultipartRequest('POST', Uri.parse('$baseUrl$endpoint'));
-    
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     
     request.fields['path'] = remotePath;
@@ -142,6 +136,7 @@ class ApiClient {
     request.files.add(await http.MultipartFile.fromPath('file', filePath));
     await request.send();
   }
+
 
   Future<void> deriveAndSaveMasterKey(String password, String salt) async {
     // Zero-Knowledge: The server never sees this derivation.

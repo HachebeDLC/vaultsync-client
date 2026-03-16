@@ -1,273 +1,292 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../data/sync_repository.dart';
+import '../domain/sync_log_provider.dart';
 import 'system_path_service.dart';
 
 final syncServiceProvider = Provider<SyncService>((ref) {
   final repository = ref.watch(syncRepositoryProvider);
   final pathService = ref.watch(systemPathServiceProvider);
-  return SyncService(repository, pathService);
+  return SyncService(repository, pathService, ref);
 });
 
 class SyncService {
   final SyncRepository _repository;
   final SystemPathService _pathService;
+  final ProviderRef _ref;
+  final _notifications = FlutterLocalNotificationsPlugin();
+  static const _platform = MethodChannel('com.vaultsync.app/launcher');
 
-  SyncService(this._repository, this._pathService);
+  SyncService(this._repository, this._pathService, this._ref) {
+    _initNotifications();
+  }
 
-  /// General manual sync for all systems
-  Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false}) async {
-    final paths = await _pathService.getAllSystemPaths();
-    final allSystems = await _pathService.getEmulatorRepository().loadSystems();
-    
-    if (paths.isEmpty) {
-      onProgress?.call('No paths configured.');
-      return;
-    }
+  Future<void> _initNotifications() async {
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    await _notifications.initialize(const InitializationSettings(android: android));
+  }
 
-    final Set<String> syncedRetroArchPaths = {};
+  Future<void> _showNotification(String title, String body) async {
+    const android = AndroidNotificationDetails(
+      'sync_status', 'Sync Status',
+      channelDescription: 'Shows progress of background save sync',
+      importance: Importance.low, priority: Priority.low, showWhen: false, onlyAlertOnce: true,
+    );
+    await _notifications.show(999, title, body, const NotificationDetails(android: android));
+  }
 
-    for (final entry in paths.entries) {
-      if (isCancelled?.call() == true) {
-        onProgress?.call('Sync Cancelled');
-        return;
-      }
+  Future<void> _clearNotification() async { await _notifications.cancel(999); }
 
-      final systemId = entry.key;
-      final configPath = entry.value;
-
-      onProgress?.call('Syncing $systemId...');
-
-      final effectivePath = await _pathService.getEffectivePath(systemId);
-
-      // Ensure permission if needed (Shizuku paths return true immediately)
-      final hasPermission = await _pathService.ensureSafPermission(effectivePath);
-      if (!hasPermission) {
-        onProgress?.call('Permission denied for $systemId. Skipping.');
-        onError?.call('Permission denied for $systemId');
-        continue;
-      }
-
-      final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
-      final ignoredFolders = systemConfig?.system.ignoredFolders;
-
-      // Check if it's a RetroArch path
-      if (effectivePath.toLowerCase().contains('retroarch')) {
-        final raPaths = await _pathService.getRetroArchPaths();
-        final raSaves = raPaths['saves'] ?? effectivePath;
-        final raStates = raPaths['states'];
-
-        // Only sync the saves folder once
-        if (!syncedRetroArchPaths.contains(raSaves)) {
-          await _repository.syncSystem('RetroArch', raSaves, ignoredFolders: ignoredFolders, onProgress: onProgress, onError: onError, fastSync: fastSync);
-          syncedRetroArchPaths.add(raSaves);
-        }
-
-        if (isCancelled?.call() == true) {
-          onProgress?.call('Sync Cancelled');
-          return;
-        }
-
-        // Only sync the states folder once (if different)
-        if (raStates != null && !syncedRetroArchPaths.contains(raStates)) {
-          await _repository.syncSystem('RetroArch', raStates, ignoredFolders: ignoredFolders, onProgress: onProgress, onError: onError, fastSync: fastSync);
-          syncedRetroArchPaths.add(raStates);
-        }
-      } else {
-        // Standalone system
-        await _repository.syncSystem(systemId, effectivePath, ignoredFolders: ignoredFolders, onProgress: onProgress, onError: onError, fastSync: fastSync);
-      }
+  /// Runs a full synchronization for all configured systems.
+  Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false, bool isBackground = false}) async {
+    if (isBackground) {
+      await _showNotification('VaultSync', 'Performing background maintenance...');
+      await _platform.invokeMethod('acquirePowerLock');
     }
     
-    if (isCancelled?.call() == true) {
-       onProgress?.call('Sync Cancelled');
-    } else {
-       onProgress?.call('Sync Complete!');
+    try {
+      final paths = await _pathService.getAllSystemPaths();
+      final allSystems = await _pathService.getEmulatorRepository().loadSystems();
+      if (paths.isEmpty) { 
+        onProgress?.call('No paths configured.'); 
+        return; 
+      }
+      
+      final Set<String> syncedPaths = {};
+      
+      for (final entry in paths.entries) {
+        if (isCancelled?.call() == true) { 
+          onProgress?.call('Sync Cancelled'); 
+          return; 
+        }
+        final systemId = entry.key;
+        if (isBackground) await _showNotification('VaultSync', 'Syncing $systemId...');
+        onProgress?.call('Syncing $systemId...');
+        
+        final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
+        final ignoredFolders = systemConfig?.system.ignoredFolders;
+        
+        final effectivePaths = await _resolveEffectivePaths(systemId);
+        
+        for (final path in effectivePaths) {
+          if (syncedPaths.contains(path)) continue;
+          
+          final hasPermission = await _pathService.ensureSafPermission(path);
+          if (!hasPermission) { 
+            onProgress?.call('Permission denied for $path. Skipping.'); 
+            onError?.call('Permission denied for $path'); 
+            continue; 
+          }
+          
+          await _repository.syncSystem(
+            path.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId, 
+            path, 
+            ignoredFolders: ignoredFolders, 
+            onProgress: onProgress, 
+            onError: onError, 
+            fastSync: fastSync
+          );
+          syncedPaths.add(path);
+        }
+        _ref.read(syncLogProvider.notifier).addLog(systemId, 'Synchronized');
+      }
+      onProgress?.call('Sync Complete!');
+    } catch(e) {
+      _ref.read(syncLogProvider.notifier).addLog('All', 'Sync Failed: $e', isError: true);
+      onError?.call('Sync failed: $e');
+    } finally { 
+      if (isBackground) {
+        await _clearNotification();
+        await _platform.invokeMethod('releasePowerLock');
+      }
     }
   }
 
-  /// Syncs a single specific system immediately
-  Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false}) async {
-    // Ensure SAF permission if needed
-    final hasPermission = await _pathService.ensureSafPermission(localPath);
-    if (!hasPermission) {
-      onProgress?.call('Permission denied for $systemId.');
-      onError?.call('Permission denied for $systemId');
-      return;
+  /// Synchronizes a specific system path.
+  Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false, bool isBackground = false}) async {
+    if (isBackground) {
+      await _showNotification('VaultSync', 'Syncing $systemId...');
+      await _platform.invokeMethod('acquirePowerLock');
     }
+    try {
+      final effectivePaths = await _resolveEffectivePaths(systemId);
+      for (final path in effectivePaths) {
+        final hasPermission = await _pathService.ensureSafPermission(path);
+        if (!hasPermission) continue;
+        
+        await _repository.syncSystem(
+          path.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId, 
+          path, 
+          ignoredFolders: ignoredFolders, 
+          onProgress: onProgress, 
+          onError: onError, 
+          fastSync: fastSync
+        );
+      }
+      _ref.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Success');
+    } catch(e) {
+      _ref.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Failed: $e', isError: true);
+      onError?.call('Auto-sync failed: $e');
+    } finally { 
+      if (isBackground) {
+        await _clearNotification();
+        await _platform.invokeMethod('releasePowerLock');
+      }
+    }
+  }
 
+  /// Resolves the effective local save path(s) for [systemId].
+  /// Returns multiple paths for RetroArch (saves + states directories).
+  Future<List<String>> _resolveEffectivePaths(String systemId) async {
     final effectivePath = await _pathService.getEffectivePath(systemId);
-    
-    // Check if it's a RetroArch path
     if (effectivePath.toLowerCase().contains('retroarch')) {
       final raPaths = await _pathService.getRetroArchPaths();
-      final raSaves = raPaths['saves'] ?? effectivePath;
-      await _repository.syncSystem('RetroArch', raSaves, ignoredFolders: ignoredFolders, onProgress: onProgress, onError: onError, fastSync: fastSync);
-    } else {
-      await _repository.syncSystem(systemId, effectivePath, ignoredFolders: ignoredFolders, onProgress: onProgress, onError: onError, fastSync: fastSync);
+      final List<String> paths = [];
+      if (raPaths['saves'] != null) paths.add(raPaths['saves']!);
+      if (raPaths['states'] != null) paths.add(raPaths['states']!);
+      // Fallback if both null (unlikely but safe)
+      if (paths.isEmpty) paths.add(effectivePath);
+      return paths;
     }
+    return [effectivePath];
   }
 
-  /// Original Logic: Called right before an emulator is launched to ensure saves are downloaded
+  /// Synchronizes cloud saves for a specific game before launching the emulator.
   Future<void> syncGameBeforeLaunch(String systemId, String gameId, {Function(String)? onProgress, Function(String)? onError}) async {
     onProgress?.call('Checking cloud saves for $gameId...');
     final basePath = await getSystemBasePath(systemId, gameId: gameId);
-    if (basePath == null) {
-      onError?.call('Could not determine base path for $systemId');
-      return;
-    }
-
+    if (basePath == null) return;
     final allSystems = await _pathService.getEmulatorRepository().loadSystems();
     final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
-    final ignoredFolders = systemConfig?.system.ignoredFolders;
-
-    // Checks remote changes and downloads them
     final filter = getFilterForGame(systemId, gameId);
-    final cloudId = getCloudId(systemId, gameId: gameId);
-    
-    await _repository.syncSystem(cloudId, basePath, ignoredFolders: ignoredFolders, onProgress: onProgress, onError: onError, filenameFilter: filter);
+    final cloudId = (systemId.toLowerCase() == 'switch') ? 'switch' : systemId;
+    await _repository.syncSystem(cloudId, basePath, ignoredFolders: systemConfig?.system.ignoredFolders, onProgress: onProgress, onError: onError, filenameFilter: filter);
   }
 
-  /// Helper to map local system IDs to their cloud paths, 
-  /// abstracting away device-specific paths like Switch User IDs.
-  String getCloudId(String systemId, {String? gameId}) {
-    final lowerId = systemId.toLowerCase();
-    if (lowerId == 'switch' && gameId != null) {
-      // Abstract cloud path: switch/<TITLE_ID>/
-      return 'switch/$gameId';
-    }
-    return systemId;
-  }
-
-  /// Original Logic: Called right after an emulator process stops
-  Future<void> syncGameAfterClose(String systemId, String gameId, {Function(String)? onProgress}) async {
-    onProgress?.call('Queueing background sync for $gameId...');
-    
+  /// Registers a one-off background task to upload saves after an emulator is closed.
+  Future<void> syncGameAfterClose(String systemId, String gameId) async {
     await Workmanager().registerOneOffTask(
       "upload-${DateTime.now().millisecondsSinceEpoch}", 
       "uploadTask",
-      inputData: {
-        'systemId': systemId,
-        'gameId': gameId,
-      },
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
+      inputData: {'systemId': systemId, 'gameId': gameId},
+      constraints: Constraints(networkType: NetworkType.connected),
     );
-    onProgress?.call('Sync task queued.');
   }
 
+  /// Returns a filename filter for a specific game, used to narrow down sync scope.
   String? getFilterForGame(String systemId, String gameId) {
-    // Shared memory card systems shouldn't use game-specific filters
-    final sharedSystems = {'ps2', 'dc', 'dreamcast', 'ngc', 'gc', 'dolphin'};
-    if (sharedSystems.contains(systemId.toLowerCase())) {
-      return null;
-    }
-
-    // Strip extension from gameId (e.g., "Pokemon.gba" -> "Pokemon")
-    if (gameId.contains('.')) {
-      return gameId.substring(0, gameId.lastIndexOf('.'));
-    }
-    return gameId;
+    if ({'ps2', 'dc', 'dreamcast', 'ngc', 'gc', 'dolphin'}.contains(systemId.toLowerCase())) return null;
+    return gameId.contains('.') ? gameId.substring(0, gameId.lastIndexOf('.')) : gameId;
   }
 
+  /// Returns the base directory where saves for [systemId] are located.
   Future<String?> getSystemBasePath(String systemId, {String? gameId}) async {
-    final paths = await _pathService.getAllSystemPaths();
-    var path = paths[systemId];
-    
-    path ??= _pathService.suggestSavePathById(systemId);
-    
-    if (path.toLowerCase().contains('retroarch')) {
-        final raPaths = await _pathService.getRetroArchPaths();
-        return raPaths['saves'];
-    }
-
-    // Surgical Switch Save Detection
     if (systemId.toLowerCase() == 'switch' && gameId != null) {
-      final surgicalPath = await _pathService.getSwitchSavePathForGame(systemId, gameId);
-      if (surgicalPath != null) return surgicalPath;
+      return await _pathService.getSwitchSavePathForGame(systemId, gameId);
     }
-
-    return path;
+    final effectivePaths = await _resolveEffectivePaths(systemId);
+    return effectivePaths.isNotEmpty ? effectivePaths.first : null;
   }
 
-  Future<List<Map<String, dynamic>>> getConflicts() async {
-    return await _repository.getAllRemoteConflicts();
-  }
+  /// Fetches all active sync conflicts from the repository.
+  Future<List<Map<String, dynamic>>> getConflicts() async => await _repository.getAllRemoteConflicts();
 
+  /// Resolves a sync conflict by either keeping the local version or downloading the remote one.
   Future<void> resolveConflict(Map<String, dynamic> conflict, bool keepLocal) async {
     final String conflictPath = conflict['path'];
+    final info = await _parseConflictInfo(conflictPath);
     
-    // Improved originalPath reconstruction:
-    String originalPath = conflictPath;
-    if (conflictPath.contains('.sync-conflict-')) {
-       final parts = conflictPath.split('.sync-conflict-');
-       final pathBeforeConflict = parts[0];
-       final afterConflict = parts[1];
-       final extIndex = afterConflict.lastIndexOf('.');
-       final ext = extIndex != -1 ? afterConflict.substring(extIndex) : '';
-       if (pathBeforeConflict.toLowerCase().endsWith(ext.toLowerCase())) {
-          originalPath = pathBeforeConflict;
-       } else {
-          originalPath = "$pathBeforeConflict$ext";
-       }
+    if (info == null) { 
+      await _repository.deleteRemoteFile(conflictPath); 
+      return; 
     }
 
-    // Identify system and local path
-    final paths = await _pathService.getAllSystemPaths();
-    final raPaths = await _pathService.getRetroArchPaths();
-    
-    String? localRoot;
-    String? localRelPath;
-    String? systemId;
+    final localRoot = info.localRoot;
+    final localRelPath = info.localRelPath;
+    final systemId = info.systemId;
+    final originalPath = info.originalPath;
 
-    final lowerOriginal = originalPath.toLowerCase();
-    for (final entry in paths.entries) {
-      final prefix = '${entry.key.toLowerCase()}/';
-      if (lowerOriginal.startsWith(prefix)) {
-        systemId = entry.key;
-        localRoot = entry.value;
-        localRelPath = originalPath.substring(prefix.length);
-        break;
-      }
-    }
-
-    if (localRoot == null && lowerOriginal.startsWith('retroarch/')) {
-      systemId = 'RetroArch';
-      final relPath = originalPath.substring(10);
-      final lowerRel = relPath.toLowerCase();
-      if (lowerRel.contains('.state') || lowerRel.endsWith('.png')) { localRoot = raPaths['states']; } 
-      else { localRoot = raPaths['saves']; }
-      localRelPath = relPath;
-    }
-
-    if (localRoot == null || localRelPath == null || systemId == null) {
-      print('⚠️ CONFLICT CLEANUP: Path "$originalPath" does not match any local system. Deleting orphaned conflict from server.');
-      await _repository.deleteRemoteFile(conflictPath);
-      return;
-    }
+    final prefs = await SharedPreferences.getInstance();
 
     if (keepLocal) {
       if (localRoot.startsWith('content://')) {
-         final localFiles = await _repository.scanLocalFiles(localRoot, systemId);
-         if (localFiles.containsKey(localRelPath)) {
-            await _repository.uploadFile(localFiles[localRelPath]!.path, originalPath, systemId: systemId, relPath: localRelPath, force: true);
+         final files = await _repository.scanLocalFiles(localRoot, systemId);
+         if (files.containsKey(localRelPath)) {
+           await _repository.uploadFile(files[localRelPath]!['uri'], originalPath, systemId: systemId, relPath: localRelPath, force: true, prefs: prefs);
          }
       } else {
          final file = File('$localRoot/$localRelPath');
          if (await file.exists()) {
-            await _repository.uploadFile(file, originalPath, systemId: systemId, relPath: localRelPath, force: true);
+           await _repository.uploadFile(file, originalPath, systemId: systemId, relPath: localRelPath, force: true, prefs: prefs);
          }
       }
-    } else {
-      await _repository.downloadFile(originalPath, localRoot, localRelPath, systemId: systemId);
+    } else { 
+      await _repository.downloadFile(originalPath, localRoot, localRelPath, systemId: systemId, prefs: prefs); 
     }
-
     await _repository.deleteRemoteFile(conflictPath);
   }
 
-  Future<void> deleteSystemCloudData(String systemId) async {
-    await _repository.deleteSystemCloudData(systemId);
+  Future<_ConflictInfo?> _parseConflictInfo(String conflictPath) async {
+    String originalPath = conflictPath;
+    if (conflictPath.contains('.sync-conflict-')) {
+       final parts = conflictPath.split('.sync-conflict-');
+       final pathBefore = parts[0]; final after = parts[1];
+       final ext = after.contains('.') ? after.substring(after.lastIndexOf('.')) : '';
+       originalPath = pathBefore.toLowerCase().endsWith(ext.toLowerCase()) ? pathBefore : "$pathBefore$ext";
+    }
+
+    final paths = await _pathService.getAllSystemPaths();
+    String? localRoot; 
+    String? localRelPath; 
+    String? systemId;
+
+    for (final entry in paths.entries) {
+      final prefix = '${entry.key.toLowerCase()}/';
+      if (originalPath.toLowerCase().startsWith(prefix)) { 
+        systemId = entry.key; 
+        localRoot = entry.value; 
+        localRelPath = originalPath.substring(prefix.length); 
+        break; 
+      }
+    }
+
+    if (localRoot == null && originalPath.toLowerCase().startsWith('retroarch/')) {
+      systemId = 'RetroArch'; 
+      final rel = originalPath.substring(10);
+      final raPaths = await _pathService.getRetroArchPaths();
+      localRoot = (rel.toLowerCase().contains('.state') || rel.toLowerCase().endsWith('.png')) 
+          ? raPaths['states'] 
+          : raPaths['saves'];
+      localRelPath = rel;
+    }
+
+    if (systemId == null || localRoot == null || localRelPath == null) return null;
+
+    return _ConflictInfo(
+      systemId: systemId,
+      localRoot: localRoot,
+      localRelPath: localRelPath,
+      originalPath: originalPath,
+    );
   }
+}
+
+/// Parsed representation of a sync conflict path.
+/// Holds the resolved system, roots, and canonical path for use in conflict resolution.
+class _ConflictInfo {
+  final String systemId;
+  final String localRoot;
+  final String localRelPath;
+  final String originalPath;
+
+  _ConflictInfo({
+    required this.systemId,
+    required this.localRoot,
+    required this.localRelPath,
+    required this.originalPath,
+  });
 }

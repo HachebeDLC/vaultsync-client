@@ -63,7 +63,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         final decoded = Uri.decodeComponent(path);
         if (decoded.contains('primary:')) return '/storage/emulated/0/${decoded.split('primary:').last}';
         return decoded.split('/').last;
-      } catch (_) {}
+      } catch (e) {
+        print('⚠️ UI: Path formatting failed: $e');
+      }
     }
     return path;
   }

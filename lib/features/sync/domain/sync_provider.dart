@@ -145,9 +145,7 @@ class SyncNotifier extends StateNotifier<SyncState> {
     state = state.copyWith(isSyncing: true, status: 'Uploading saves...', progress: 0.0);
 
     try {
-      await _syncService.syncGameAfterClose(systemId, gameId, onProgress: (msg) {
-        state = state.copyWith(status: msg);
-      });
+      await _syncService.syncGameAfterClose(systemId, gameId);
       state = state.copyWith(status: 'Sync Complete!', progress: 1.0, isSyncing: false);
     } catch (e) {
       state = state.copyWith(status: 'Error: $e', isSyncing: false);

@@ -59,6 +59,8 @@ class ShizukuService {
   Future<void> openApp() async {
     try {
       await _platform.invokeMethod('openShizukuApp');
-    } catch (_) {}
+    } catch (e) {
+      print('⚠️ SHIZUKU: Could not open app: $e');
+    }
   }
 }

@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/services.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../emulation/data/emulator_repository.dart';
@@ -21,6 +20,7 @@ final systemPathsProvider = FutureProvider<Map<String, String>>((ref) async {
 class SystemPathService {
   final EmulatorRepository _emulatorRepository;
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
+  Map<String, String>? _cachedPaths;
 
   SystemPathService(this._emulatorRepository);
 
@@ -81,7 +81,10 @@ class SystemPathService {
     return path;
   }
 
+  /// Returns all configured system IDs and their corresponding local base paths.
   Future<Map<String, String>> getAllSystemPaths() async {
+    if (_cachedPaths != null) return _cachedPaths!;
+
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs.getKeys().where((k) => k.startsWith('system_path_'));
     final Map<String, String> paths = {};
@@ -89,36 +92,43 @@ class SystemPathService {
       final systemId = key.replaceFirst('system_path_', '');
       paths[systemId] = prefs.getString(key)!;
     }
+    _cachedPaths = paths;
     return paths;
   }
 
+  /// Returns the base path configured for a specific system ID.
   Future<String?> getSystemPath(String systemId) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('system_path_$systemId');
+    final paths = await getAllSystemPaths();
+    return paths[systemId];
   }
 
   Future<void> _incrementStorageVersion() async {
+    _cachedPaths = null;
     final prefs = await SharedPreferences.getInstance();
     final current = prefs.getInt('storage_version') ?? 0;
     await prefs.setInt('storage_version', current + 1);
   }
 
+  /// Returns the current storage version, used to trigger UI refreshes when paths change.
   Future<int> getStorageVersion() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt('storage_version') ?? 0;
   }
 
+  /// Saves the base path for a specific system ID.
   Future<void> setSystemPath(String systemId, String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('system_path_$systemId', path);
     await _incrementStorageVersion();
   }
 
+  /// Returns the preferred emulator ID for a specific system.
   Future<String?> getSystemEmulator(String systemId) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('system_emulator_$systemId');
   }
 
+  /// Saves the preferred emulator ID for a specific system.
   Future<void> setSystemEmulator(String systemId, String emulatorId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('system_emulator_$systemId', emulatorId);
@@ -148,6 +158,7 @@ class SystemPathService {
     return '/storage/emulated/0/RetroArch/saves';
   }
 
+  /// Returns a suggested save path for a system ID based on platform defaults.
   String suggestSavePathById(String systemId) {
     final lowerId = systemId.toLowerCase();
     if (Platform.isWindows || Platform.isLinux) {
@@ -162,16 +173,20 @@ class SystemPathService {
     return standaloneDefaults[lowerId] ?? '/storage/emulated/0/RetroArch/saves';
   }
 
+  /// Returns the configured library folder path.
   Future<String?> getLibraryPath() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('rom_library_path');
   }
 
+  /// Saves the library folder path.
   Future<void> setLibraryPath(String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('rom_library_path', path);
   }
 
+  /// Opens the native directory picker (SAF on Android, platform picker on Desktop) 
+  /// and returns the picked URI or absolute path.
   Future<String?> openDirectoryPicker({String? initialUri}) async {
     try { return await _platform.invokeMethod('openSafDirectoryPicker', {'initialUri': initialUri}); }
     on PlatformException catch (_) { return null; }
@@ -183,6 +198,8 @@ class SystemPathService {
     catch (_) { return 0; }
   }
 
+  /// Ensures that the app has persistent SAF permissions for the given restricted path.
+  /// Handles Shizuku fallback for Android 14+ if configured.
   Future<bool> ensureSafPermission(String path) async {
     if (!Platform.isAndroid) return true;
     
@@ -252,6 +269,8 @@ class SystemPathService {
     return '${base}nand/user/save/0000000000000000/0000000000000001';
   }
 
+  /// Resolves the effective local save path for a system, handling 
+  /// Shizuku, SAF content URIs, and standard local filesystem variants.
   Future<String> getEffectivePath(String systemId) async {
     final rawPath = await getSystemPath(systemId);
     if (rawPath == null) return suggestSavePathById(systemId);
@@ -294,6 +313,8 @@ class SystemPathService {
     } catch (_) { return false; }
   }
 
+  /// Scans a library folder recursively to detect supported emulation systems 
+  /// by matching directory names against known system IDs and verifying file content.
   Future<List<Map<String, String>>> scanLibrary(String inputPath) async {
     final results = <Map<String, String>>[];
     try {
@@ -317,8 +338,14 @@ class SystemPathService {
     return results;
   }
 
+  /// Resolves the effective local path for Switch game-specific saves.
   Future<String?> getSwitchSavePathForGame(String systemId, String gameId) async => await getEffectivePath(systemId);
+  
+  /// Resolves standard RetroArch paths for saves and states.
   Future<Map<String, String>> getRetroArchPaths() async {
-    return {'saves': '/storage/emulated/0/RetroArch/saves', 'states': '/storage/emulated/0/RetroArch/states'};
+    return {
+      'saves': '/storage/emulated/0/RetroArch/saves', 
+      'states': '/storage/emulated/0/RetroArch/states'
+    };
   }
 }

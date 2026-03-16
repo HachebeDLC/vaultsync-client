@@ -1,27 +1,66 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:workmanager/workmanager.dart';
+import 'sync_service.dart';
+import 'system_path_service.dart';
 
 final backgroundSyncServiceProvider = Provider<BackgroundSyncService>((ref) {
-  return BackgroundSyncService(Workmanager());
+  final syncService = ref.watch(syncServiceProvider);
+  final pathService = ref.watch(systemPathServiceProvider);
+  return BackgroundSyncService(syncService, pathService);
 });
 
 class BackgroundSyncService {
-  final Workmanager _workmanager;
+  final SyncService _syncService;
+  final SystemPathService _pathService;
+  static const _platform = MethodChannel('com.vaultsync.app/launcher');
 
-  BackgroundSyncService(this._workmanager);
-
-  Future<void> enableAutoSync() async {
-    await _workmanager.registerPeriodicTask(
-      'periodicSync',
-      'periodicSync',
-      frequency: const Duration(minutes: 15),
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
-    );
+  BackgroundSyncService(this._syncService, this._pathService) {
+    _platform.setMethodCallHandler(_handleMethodCall);
   }
 
-  Future<void> disableAutoSync() async {
-    await _workmanager.cancelByUniqueName('periodicSync');
+  static const Map<String, String> _packageToSystem = {
+    'xyz.aethersx2.android': 'ps2',
+    'xyz.nethersx2.android': 'ps2',
+    'org.yuzu.yuzu_emu': 'switch',
+    'dev.eden.eden_emulator': 'switch',
+    'com.github.stenzek.duckstation': 'ps1',
+    'org.dolphinemu.dolphinemu': 'wii',
+    'me.magnum.melonds': 'ds',
+  };
+
+  Future<void> _handleMethodCall(MethodCall call) async {
+    if (call.method == 'onEmulatorClosed') {
+      final String package = call.arguments;
+      final systemId = _packageToSystem[package];
+      
+      print('🕒 BACKGROUND: Emulator closed ($package). Auto-syncing $systemId...');
+      
+      if (systemId != null) {
+        final path = await _pathService.getEffectivePath(systemId);
+        final systems = await _pathService.getEmulatorRepository().loadSystems();
+        final config = systems.where((s) => s.system.id == systemId).firstOrNull;
+        
+        try {
+          await _syncService.syncSpecificSystem(
+            systemId, 
+            path, 
+            ignoredFolders: config?.system.ignoredFolders,
+            onProgress: (msg) => print('🕒 BACKGROUND: $msg'),
+          );
+        } catch (e) {
+          print('❌ BACKGROUND SYNC FAILED: $e');
+        }
+      }
+    }
+  }
+
+  Future<void> startMonitoring() async {
+    await _platform.invokeMethod('startMonitoring', {
+      'packages': _packageToSystem.keys.toList(),
+    });
+  }
+
+  Future<void> stopMonitoring() async {
+    await _platform.invokeMethod('stopMonitoring');
   }
 }

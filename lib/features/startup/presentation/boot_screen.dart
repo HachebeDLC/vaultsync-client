@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/api_client_provider.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../../sync/services/system_path_service.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../sync/services/background_sync_service.dart';
 
 class BootScreen extends ConsumerStatefulWidget {
   const BootScreen({super.key});
@@ -21,14 +25,9 @@ class _BootScreenState extends ConsumerState<BootScreen> {
 
   Future<void> _loadData() async {
     final client = ref.read(apiClientProvider);
-    final isConfigured = await client.isConfigured();
     
-    if (!mounted) return;
-
-    if (!isConfigured) {
-      context.go('/setup');
-      return;
-    }
+    // Add a small artificial delay so the user can actually see the loading screen
+    await Future.delayed(const Duration(milliseconds: 800));
 
     try {
       final baseUrl = await client.getBaseUrl();
@@ -54,17 +53,17 @@ class _BootScreenState extends ConsumerState<BootScreen> {
           context.go('/dashboard');
         }
       } else {
-        // Not authenticated, but server might be unreachable due to device lock.
-        // We go to /auth anyway; the login/register screen can handle retries.
         context.go('/auth');
       }
+    } on SocketException catch (e) {
+      print('🌐 BOOT: Network unreachable ($e). Likely device lock or no signal.');
+      if (mounted) context.go('/auth');
+    } on FormatException catch (e) {
+      print('❌ BOOT: Malformed server response ($e). URL configuration might be invalid.');
+      if (mounted) context.go('/setup');
     } catch (e) {
-      print('ℹ️ BOOT: Network restricted (likely device lock). Proceeding to Auth screen.');
-      if (mounted) {
-        // If we have a URL but just couldn't reach it, don't force setup.
-        // Let the user land on Auth where they can manually retry or wait for signal.
-        context.go('/auth');
-      }
+      print('❌ BOOT: Unexpected error during startup: $e');
+      if (mounted) context.go('/auth');
     }
   }
 

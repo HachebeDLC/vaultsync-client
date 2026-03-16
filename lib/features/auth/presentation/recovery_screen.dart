@@ -49,7 +49,9 @@ class _RecoveryScreenState extends ConsumerState<RecoveryScreen> {
           final metadataJson = utf8.decode(base64Url.decode(parts[0]));
           final metadata = json.decode(metadataJson);
           indices = List<int>.from(metadata['q']);
-        } catch (_) {}
+        } catch (e) {
+          print('⚠️ RECOVERY: Metadata parse failed: $e');
+        }
       }
 
       setState(() {
