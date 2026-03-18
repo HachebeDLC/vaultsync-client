@@ -16,7 +16,7 @@ class FileCache {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE cache(
@@ -26,6 +26,12 @@ class FileCache {
             hash TEXT
           )
         ''');
+        await db.execute('CREATE INDEX idx_cache_lookup ON cache (path, size, lastModified)');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('CREATE INDEX idx_cache_lookup ON cache (path, size, lastModified)');
+        }
       },
     );
   }

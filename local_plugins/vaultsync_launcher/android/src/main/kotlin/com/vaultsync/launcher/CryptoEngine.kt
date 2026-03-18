@@ -6,6 +6,17 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import java.nio.charset.Charset
 
+private val hexArray = "0123456789abcdef".toCharArray()
+fun ByteArray.toHex(): String {
+    val hexChars = CharArray(size * 2)
+    for (j in indices) {
+        val v = this[j].toInt() and 0xFF
+        hexChars[j * 2] = hexArray[v ushr 4]
+        hexChars[j * 2 + 1] = hexArray[v and 0x0F]
+    }
+    return String(hexChars)
+}
+
 class CryptoEngine {
     companion object {
         const val MAGIC_HEADER = "NEOSYNC"
@@ -18,7 +29,6 @@ class CryptoEngine {
 
     private val utf8 = Charsets.UTF_8
     private val magicBytes = MAGIC_HEADER.toByteArray(utf8)
-    private val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
     private val md5Digest = MessageDigest.getInstance("MD5")
     private val sha256Digest = MessageDigest.getInstance("SHA-256")
 
@@ -26,7 +36,7 @@ class CryptoEngine {
         synchronized(sha256Digest) {
             sha256Digest.reset()
             sha256Digest.update(data, 0, length)
-            return sha256Digest.digest().joinToString("") { "%02x".format(it) }
+            return sha256Digest.digest().toHex()
         }
     }
 
@@ -50,15 +60,14 @@ class CryptoEngine {
         val iv = calculateMd5(blockData, dataLength)
         val ivSpec = IvParameterSpec(iv)
         
-        synchronized(cipher) {
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec)
-            
-            System.arraycopy(magicBytes, 0, output, 0, 7)
-            System.arraycopy(iv, 0, output, 7, IV_SIZE)
-            
-            val encryptedLength = cipher.doFinal(blockData, 0, dataLength, output, 7 + IV_SIZE)
-            return 7 + IV_SIZE + encryptedLength
-        }
+        val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec)
+        
+        System.arraycopy(magicBytes, 0, output, 0, 7)
+        System.arraycopy(iv, 0, output, 7, IV_SIZE)
+        
+        val encryptedLength = cipher.doFinal(blockData, 0, dataLength, output, 7 + IV_SIZE)
+        return 7 + IV_SIZE + encryptedLength
     }
 
     /**
@@ -75,9 +84,8 @@ class CryptoEngine {
         val iv = encryptedBlock.sliceArray(7 until 7 + IV_SIZE)
         val ivSpec = IvParameterSpec(iv)
         
-        synchronized(cipher) {
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
-            return cipher.doFinal(encryptedBlock, 7 + IV_SIZE, encryptedLength - (7 + IV_SIZE), output, 0)
-        }
+        val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
+        return cipher.doFinal(encryptedBlock, 7 + IV_SIZE, encryptedLength - (7 + IV_SIZE), output, 0)
     }
 }

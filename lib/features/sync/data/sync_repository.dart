@@ -24,6 +24,7 @@ class SyncRepository {
   final _syncLock = Mutex();
 
   String? _cachedDeviceName;
+  List<dynamic> _lastScanList = [];
 
   SyncRepository(this._apiClient, this._pathService, this._fileCache);
 
@@ -59,19 +60,14 @@ class SyncRepository {
   String _getCloudRelPath(String systemId, String localRelPath) {
     final sid = systemId.toLowerCase();
     if (sid == 'switch' || sid == 'eden') {
-      String path = localRelPath;
-      if (path.startsWith('files/')) path = path.substring(6);
+      final parts = localRelPath.split('/');
+      // Title IDs are exactly 16 hex chars and ALWAYS start with 0100 on the Switch. 
+      // We look for the FIRST segment that matches this pattern to avoid hitting the 0000000000000000 system folder.
+      final titleIdx = parts.indexWhere((p) => RegExp(r'^0100[0-9A-Fa-f]{12}$').hasMatch(p));
       
-      // Pattern: nand/user/save/0000000000000000/[32-char-ID]/[16-char-TitleID]
-      final savePattern = 'nand/user/save/0000000000000000/';
-      if (path.startsWith(savePattern)) {
-          final afterBase = path.substring(savePattern.length);
-          final parts = afterBase.split('/');
-          // parts[0] is the User ID, parts[1] is the Title ID
-          if (parts.length >= 2) {
-              // Return everything from Title ID onwards
-              return parts.sublist(1).join('/');
-          }
+      if (titleIdx != -1) {
+          // Flatten: 'some/long/local/path/TitleID/file.dat' -> 'TitleID/file.dat'
+          return parts.sublist(titleIdx).join('/');
       }
       return ''; // Not a save file
     } else if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2' || sid == 'pcsx2' || sid == 'duckstation') {
@@ -95,22 +91,33 @@ class SyncRepository {
        return 'memcards/$cloudRelPath';
     }
     if (sid == 'switch' || sid == 'eden') {
-       // Cloud path is TitleID/file. 
-       // We must reconstruct the full local path: nand/user/save/0000000000000000/[ProfileID]/[cloudRelPath]
-       String profileId = '00000000000000000000000000000000'; // Default
+       final cloudTitleId = cloudRelPath.split('/').first;
        
-       // Try to find an existing profile ID from local scanner results
-       final profileRegex = RegExp(r'^[0-9A-Fa-f]{16,32}$');
+       // 1. Try to find where this TitleID ALREADY lives locally
        for (final f in localFiles.values) {
-           final path = f['originalRelPath'] as String;
-           final base = 'nand/user/save/0000000000000000/';
-           if (path.contains(base)) {
-               final id = path.split(base).last.split('/').first;
-               if (profileRegex.hasMatch(id)) {
-                   profileId = id;
+           final localPath = f['originalRelPath'] as String;
+           if (localPath.contains(cloudTitleId)) {
+               final localParts = localPath.split('/');
+               final idx = localParts.indexOf(cloudTitleId);
+               final base = localParts.sublist(0, idx).join('/');
+               return base.isEmpty ? cloudRelPath : '$base/$cloudRelPath';
+           }
+       }
+       
+       // 2. Fallback: Find the FIRST valid 32-char Profile ID on the device (from directory scanner)
+       String profileId = '00000000000000000000000000000000';
+       final profileRegex = RegExp(r'^[0-9A-Fa-f]{32}$');
+       
+       // We'll search both files AND directories in the raw scan list
+       for (final f in _lastScanList) {
+           final path = f['relPath'] as String;
+           for (final segment in path.split('/')) {
+               if (profileRegex.hasMatch(segment) && segment != '00000000000000000000000000000000') {
+                   profileId = segment;
                    break;
                }
            }
+           if (profileId != '00000000000000000000000000000000') break;
        }
        
        final prefix = hasFilesDir ? 'files/' : '';
@@ -130,15 +137,11 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     if (f['isDirectory'] == true) continue;
     final String originalRelPath = f['relPath'];
 
-    // Switch Strict Filtering: ONLY allow files inside 'nand/user/save'
-    if (isSwitch && !originalRelPath.contains('nand/user/save')) continue;
-
     // FILTER: If we are at package root, ignore any save files that aren't in the correct subfolders
     if (isPkgRoot && !originalRelPath.contains('/')) {
          final ext = originalRelPath.split('.').last.toLowerCase();
          if (['ps2', 'srm', 'sav', 'save', 'state'].contains(ext)) continue;
     }
-
       final String cloudRelPath = _getCloudRelPath(systemId, originalRelPath);
       if (cloudRelPath.isEmpty || cloudRelPath.endsWith('/')) continue;
       
@@ -235,6 +238,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
         
         final String jsonResult = await _platform.invokeMethod('scanRecursive', { 'path': effectivePath, 'systemId': systemId, 'ignoredFolders': ignoredFolders ?? [] });
         final List<dynamic> localList = json.decode(jsonResult);
+        _lastScanList = localList;
         final localFiles = _processLocalFiles(systemId, localList);
 
         final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
@@ -314,7 +318,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
   }
 
   /// Downloads and decrypts a file (or specific blocks) from the server.
-  Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
+  Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
     final baseUrl = await _apiClient.getBaseUrl();
     final token = await _apiClient.getToken();
     final masterKey = await _getMasterKey();
@@ -330,9 +334,9 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     final downloadUrl = (patchIndices != null) ? '$baseUrl/api/v1/blocks/download' : '$baseUrl/api/v1/download';
     await _platform.invokeMethod('downloadFileNative', { 'url': downloadUrl, 'token': token, 'masterKey': masterKey, 'remoteFilename': remotePath, 'uri': localBasePath, 'localFilename': relPath, 'updatedAt': updatedAt, 'patchIndices': patchIndices });
     
-    final effectiveLocalUri = (localUri != null) ? localUri : '$localBasePath/$relPath'.replaceAll('//', '/');
-    final String finalHash = await _platform.invokeMethod<String>('calculateHash', {'path': effectiveLocalUri}) ?? '';
-    await _recordSyncSuccess(prefs, systemId, relPath, finalHash);
+    if (remoteHash != null) {
+      await _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
+    }
   }
 
   /// Deletes a file from the server.

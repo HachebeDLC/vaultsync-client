@@ -13,28 +13,38 @@ class ApiClient {
       encryptedSharedPreferences: true,
     ),
   );
+  
+  String? _cachedBaseUrl;
+  String? _cachedToken;
 
   Future<String?> getBaseUrl() async {
+    if (_cachedBaseUrl != null) return _cachedBaseUrl;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('api_base_url');
+    _cachedBaseUrl = prefs.getString('api_base_url');
+    return _cachedBaseUrl;
   }
 
   Future<void> setBaseUrl(String url) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('api_base_url', url);
+    _cachedBaseUrl = url;
   }
 
   Future<String?> getToken() async {
-    return await _secureStorage.read(key: 'auth_token');
+    if (_cachedToken != null) return _cachedToken;
+    _cachedToken = await _secureStorage.read(key: 'auth_token');
+    return _cachedToken;
   }
 
   Future<void> setToken(String token) async {
     await _secureStorage.write(key: 'auth_token', value: token);
+    _cachedToken = token;
   }
 
   Future<void> clearToken() async {
     await _secureStorage.delete(key: 'auth_token');
     await _secureStorage.delete(key: 'master_key');
+    _cachedToken = null;
   }
 
   Future<bool> isConfigured() async {

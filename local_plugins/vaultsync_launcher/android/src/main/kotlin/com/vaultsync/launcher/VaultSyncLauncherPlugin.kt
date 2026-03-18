@@ -16,6 +16,7 @@ import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.PluginRegistry
 import rikka.shizuku.Shizuku
 import android.content.pm.PackageManager
 import android.content.ComponentName
@@ -28,7 +29,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.util.concurrent.ConcurrentHashMap
 
-class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware {
+class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware, PluginRegistry.ActivityResultListener {
     companion object {
         private const val CHANNEL_NAME = "com.vaultsync.app/launcher"
         private const val PICK_DIRECTORY_REQUEST_CODE = 9999
@@ -78,15 +79,37 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         }
     }
 
+    private val executor = java.util.concurrent.Executors.newCachedThreadPool()
+
     private fun getShizukuServiceSync(): IShizukuService {
         val current = shizukuService
         if (current != null) return current
         if (!isBinding) bindShizukuService()
-        var retries = 30
-        while (shizukuService == null && retries > 0) {
-            Thread.sleep(100)
-            retries--
+        
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val tempConnection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                shizukuService = IShizukuService.Stub.asInterface(service)
+                isBinding = false
+                latch.countDown()
+            }
+            override fun onServiceDisconnected(name: ComponentName?) {
+                shizukuService = null
+                isBinding = false
+                latch.countDown()
+            }
         }
+        
+        try {
+            val userServiceArgs = Shizuku.UserServiceArgs(ComponentName(context!!.packageName, ShizukuService::class.java.name))
+                .daemon(false).processNameSuffix("shizuku").debuggable(true).version(4)
+            isBinding = true
+            Shizuku.bindUserService(userServiceArgs, tempConnection)
+            latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            isBinding = false
+        }
+        
         return shizukuService ?: throw Exception("Shizuku connection timeout.")
     }
 
@@ -169,7 +192,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         val systemId = call.argument<String>("systemId")!!
         val ignoredFoldersList = call.argument<List<String>>("ignoredFolders") ?: emptyList()
         
-        Thread {
+        executor.execute {
             try {
                 fileScanner.clearCache()
                 val allowedExtensions = setOf("srm", "save", "sav", "state", "ps2", "mcd", "dat", "nvmem", "eep", "vms", "vmu", "png", "bin", "db", "sfo", "bak", "bra", "brp", "brps", "brs", "brss", "vfs")
@@ -190,18 +213,18 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             } catch (e: Exception) {
                 mainHandler.post { result.error("SCAN_ERROR", e.message, null) }
             }
-        }.start()
+        }
     }
 
     private fun handleCalculateHash(call: MethodCall, result: MethodChannel.Result) {
         val path = call.argument<String>("path")!!
-        Thread {
+        executor.execute {
             try {
                 val cleanPath = getCleanPath(path)
                 if (isShizukuPath(path)) {
                     val hash = getShizukuServiceSync().calculateHash(cleanPath)
                     mainHandler.post { result.success(hash) }
-                    return@Thread
+                    return@execute
                 }
                 
                 val input = when {
@@ -216,24 +239,24 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                     while (stream.read(buffer).also { read = it } != -1) {
                         digest.update(buffer, 0, read)
                     }
-                    val hash = digest.digest().joinToString("") { "%02x".format(it) }
+                    val hash = digest.digest().toHex()
                     mainHandler.post { result.success(hash) }
                 }
             } catch (e: Exception) {
                 mainHandler.post { result.error("HASH_ERROR", e.message, null) }
             }
-        }.start()
+        }
     }
 
     private fun handleCalculateBlockHashes(call: MethodCall, result: MethodChannel.Result) {
         val path = call.argument<String>("path")!!
-        Thread {
+        executor.execute {
             try {
                 val cleanPath = getCleanPath(path)
                 if (isShizukuPath(path)) {
                     val hashes = getShizukuServiceSync().calculateBlockHashes(cleanPath, CryptoEngine.BLOCK_SIZE)
                     mainHandler.post { result.success(JSONArray(hashes).toString()) }
-                    return@Thread
+                    return@execute
                 }
                 
                 val input = when {
@@ -243,20 +266,21 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 
                 val blockHashes = JSONArray()
                 val buffer = ByteArray(CryptoEngine.BLOCK_SIZE)
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
                 input?.use { stream ->
                     while (true) {
                         val read = stream.read(buffer)
                         if (read == -1) break
-                        val digest = java.security.MessageDigest.getInstance("SHA-256")
+                        digest.reset()
                         digest.update(buffer, 0, read)
-                        blockHashes.put(digest.digest().joinToString("") { "%02x".format(it) })
+                        blockHashes.put(digest.digest().toHex())
                     }
                 }
                 mainHandler.post { result.success(blockHashes.toString()) }
             } catch (e: Exception) {
                 mainHandler.post { result.error("BLOCK_HASH_ERROR", e.message, null) }
             }
-        }.start()
+        }
     }
 
     private fun handleUploadFile(call: MethodCall, result: MethodChannel.Result) {
@@ -270,7 +294,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong() ?: 0L
         val dirtyIndices = call.argument<List<Int>>("dirtyIndices")
 
-        Thread {
+        executor.execute {
             try {
                 val secretKey = masterKey?.let { 
                     val keyBytes = android.util.Base64.decode(it, android.util.Base64.URL_SAFE).sliceArray(0 until 32)
@@ -314,7 +338,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 android.util.Log.e("VaultSync", "Upload failed: ${e.message}", e)
                 mainHandler.post { result.error("UPLOAD_ERROR", e.message, null) }
             }
-        }.start()
+        }
     }
 
     private fun processUploadBlocks(fileChannel: FileChannel, fileSize: Long, dirtyIndices: List<Int>?, secretKey: javax.crypto.spec.SecretKeySpec?, url: String, token: String?, remotePath: String) {
@@ -335,7 +359,13 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 val readBuffer = ByteBuffer.allocate(CryptoEngine.BLOCK_SIZE)
                 val bytesRead = synchronized(fileChannel) {
                     fileChannel.position(offset)
-                    fileChannel.read(readBuffer)
+                    var totalRead = 0
+                    while (totalRead < CryptoEngine.BLOCK_SIZE) {
+                        val r = fileChannel.read(readBuffer)
+                        if (r == -1) break
+                        totalRead += r
+                    }
+                    if (totalRead == 0) -1 else totalRead
                 }
                 
                 if (bytesRead == -1 && index != 0) return@submit
@@ -394,7 +424,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         val updatedAt = (call.argument<Number>("updatedAt"))?.toLong()
         val patchIndices = call.argument<List<Int>>("patchIndices")
 
-        Thread {
+        executor.execute {
             try {
                 if (localFilename.contains("..")) throw Exception("Invalid path")
                 
@@ -476,9 +506,15 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                     }
                     safTmp != null -> {
                         val finalName = localFilename.split("/").last()
+                        val existingFile = fileScanner.findFileStrict(parentDir!!, finalName)
+                        
+                        // CRITICAL: Delete the existing file explicitly first.
+                        // Android's DocumentFile.renameTo() will sometimes create [Name] (1).dat
+                        // if we don't clear the path first.
+                        existingFile?.delete()
+                        
                         if (!safTmp.renameTo(finalName)) {
-                            val existing = fileScanner.findFileStrict(parentDir!!, finalName)
-                            existing?.delete()
+                            // If rename still fails, do a manual bit-copy
                             val newFinal = parentDir.createFile("application/octet-stream", finalName) ?: throw Exception("Final rename failed")
                             context!!.contentResolver.openInputStream(safTmp.uri)?.use { input ->
                                 context!!.contentResolver.openOutputStream(newFinal.uri)?.use { out -> input.copyTo(out) }
@@ -499,7 +535,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 android.util.Log.e("VaultSync", "Download failed", e)
                 mainHandler.post { result.error("DOWNLOAD_ERROR", e.message, null) }
             }
-        }.start()
+        }
     }
 
     private fun processDownloadStream(inputStream: InputStream, output: FileChannel, secretKey: javax.crypto.spec.SecretKeySpec?, patchIndices: List<Int>?) {
@@ -522,7 +558,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 
                 // Process accumulated data until we have a complete block
                 while (ringBuffer.remaining() >= expectedBlockSize) {
-                    ringBuffer.get(block)
+                    ringBuffer.get(block, 0, expectedBlockSize)
                     
                     val decryptedLength = if (secretKey != null) {
                         cryptoEngine.decryptBlock(block, expectedBlockSize, secretKey, decryptedBuffer)
@@ -548,6 +584,30 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 
                 ringBuffer.compact() // Prepare for writing more data, keeping any remainder
             }
+            
+            // Process any remaining partial block at EOF
+            ringBuffer.flip()
+            val remaining = ringBuffer.remaining()
+            if (remaining > 0) {
+                ringBuffer.get(block, 0, remaining)
+                val decryptedLength = if (secretKey != null) {
+                    cryptoEngine.decryptBlock(block, remaining, secretKey, decryptedBuffer)
+                } else {
+                    System.arraycopy(block, 0, decryptedBuffer, 0, remaining)
+                    remaining
+                }
+                
+                val blockIndex = if (patchIndices != null) {
+                    if (currentIdx >= patchIndices.size) throw Exception("Index out of bounds for patchIndices")
+                    patchIndices[currentIdx].toLong()
+                } else {
+                    currentIdx.toLong()
+                }
+                
+                val offset = blockIndex * CryptoEngine.BLOCK_SIZE
+                output.position(offset)
+                output.write(ByteBuffer.wrap(decryptedBuffer, 0, decryptedLength))
+            }
         }
         if (Build.VERSION.SDK_INT >= 30) try { output.force(true) } catch(e: Exception) {}
     }
@@ -555,10 +615,10 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     private fun handleSetFileTimestamp(call: MethodCall, result: MethodChannel.Result) {
         val path = call.argument<String>("path")!!
         val updatedAt = call.argument<Number>("updatedAt")!!.toLong()
-        Thread {
+        executor.execute {
             val success = setFileTimestampInternal(path, updatedAt)
             mainHandler.post { result.success(success) }
-        }.start()
+        }
     }
 
     private fun setFileTimestampInternal(path: String, updatedAt: Long): Boolean {
@@ -579,7 +639,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
 
     private fun handleGetFileInfo(call: MethodCall, result: MethodChannel.Result) {
         val uriStr = call.argument<String>("uri")!!
-        Thread {
+        executor.execute {
             try {
                 if (isShizukuPath(uriStr)) {
                     val path = getCleanPath(uriStr)
@@ -601,7 +661,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             } catch (e: Exception) {
                 mainHandler.post { result.error("INFO_ERROR", e.message, null) }
             }
-        }.start()
+        }
     }
 
     private fun checkPathExists(path: String?): Boolean {
@@ -624,7 +684,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
 
     private fun handleListSafDirectory(call: MethodCall, result: MethodChannel.Result) {
         val uriStr = call.argument<String>("uri")!!
-        Thread {
+        executor.execute {
             try {
                 val results: String = when {
                     uriStr.startsWith("content://") -> {
@@ -661,13 +721,13 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             } catch (e: Exception) {
                 mainHandler.post { result.error("LIST_ERROR", e.message, null) }
             }
-        }.start()
+        }
     }
 
     private fun handleHasFilesWithExtensions(call: MethodCall, result: MethodChannel.Result) {
         val uriStr = call.argument<String>("uri")!!
         val extensions = call.argument<List<String>>("extensions")!!
-        Thread {
+        executor.execute {
             try {
                 val success = when {
                     uriStr.startsWith("content://") -> {
@@ -681,7 +741,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             } catch (e: Exception) {
                 mainHandler.post { result.error("SCAN_ERROR", e.message, null) }
             }
-        }.start()
+        }
     }
 
     private fun checkShizukuStatus(): Map<String, Any> {
@@ -759,23 +819,29 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
-        binding.addActivityResultListener { requestCode, resultCode, data -> 
-            if (requestCode == PICK_DIRECTORY_REQUEST_CODE) {
-                if (resultCode == Activity.RESULT_OK) {
-                    data?.data?.let { uri -> 
-                        context!!.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                        pendingResult?.success(uri.toString()) 
-                    } ?: pendingResult?.success(null)
-                } else {
-                    pendingResult?.success(null)
-                }
-                pendingResult = null
-                true
-            } else false
+        binding.addActivityResultListener(this)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        if (requestCode == PICK_DIRECTORY_REQUEST_CODE) {
+            if (resultCode == Activity.RESULT_OK) {
+                data?.data?.let { uri -> 
+                    context!!.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    pendingResult?.success(uri.toString()) 
+                } ?: pendingResult?.success(null)
+            } else {
+                pendingResult?.success(null)
+            }
+            pendingResult = null
+            return true
         }
+        return false
     }
 
     override fun onDetachedFromActivityForConfigChanges() { activity = null }
-    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) { activity = binding.activity }
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) { 
+        activity = binding.activity 
+        binding.addActivityResultListener(this)
+    }
     override fun onDetachedFromActivity() { activity = null }
 }

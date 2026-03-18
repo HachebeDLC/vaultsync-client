@@ -117,20 +117,21 @@ class ShizukuService : IShizukuService.Stub() {
                 digest.update(buffer, 0, read) 
             }
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return digest.digest().toHex()
     }
 
     override fun calculateBlockHashes(path: String, blockSize: Int): List<String> {
         val file = File(path)
         if (!file.exists()) return emptyList()
         val results = mutableListOf<String>()
+        val digest = MessageDigest.getInstance("SHA-256")
         FileInputStream(file).use { input ->
             val buffer = ByteArray(blockSize)
             var read: Int
             while (input.read(buffer).also { read = it } != -1) {
-                val digest = MessageDigest.getInstance("SHA-256")
+                digest.reset()
                 digest.update(buffer, 0, read)
-                results.add(digest.digest().joinToString("") { "%02x".format(it) })
+                results.add(digest.digest().toHex())
             }
         }
         return results

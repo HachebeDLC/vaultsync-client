@@ -227,10 +227,20 @@ class SystemPathService {
     }
     
     // 3. Request New SAF Permission
-    final pickedUri = await openDirectoryPicker();
+    final pickedUri = await openDirectoryPicker(initialUri: _buildInitialUri(path));
     if (pickedUri != null) { await prefs.setString('saf_uri_$path', pickedUri); return true; }
     
     throw Exception('SAF Permission required for restricted folder: $path');
+  }
+
+  String? _buildInitialUri(String path) {
+    if (path.startsWith('content://')) return path;
+    if (path.startsWith('/storage/emulated/0/')) {
+      final relPath = path.replaceFirst('/storage/emulated/0/', '');
+      final encoded = Uri.encodeComponent(relPath);
+      return 'content://com.android.externalstorage.documents/document/primary%3A$encoded';
+    }
+    return null;
   }
 
   bool _isProtectedPath(String path) {

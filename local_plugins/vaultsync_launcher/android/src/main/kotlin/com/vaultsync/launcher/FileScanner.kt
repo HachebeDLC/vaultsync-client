@@ -22,6 +22,34 @@ class FileScanner(private val context: Context) {
         safDirectoryCache.clear()
     }
 
+    private fun getTreeUri(uri: Uri): Uri {
+        return try {
+            val treeId = DocumentsContract.getTreeDocumentId(uri)
+            DocumentsContract.buildTreeDocumentUri(uri.authority, treeId)
+        } catch (e: Exception) {
+            uri
+        }
+    }
+
+    private fun getDocIdSafely(uri: Uri): String {
+        return try {
+            if (DocumentsContract.isDocumentUri(context, uri)) {
+                DocumentsContract.getDocumentId(uri)
+            } else {
+                DocumentsContract.getTreeDocumentId(uri)
+            }
+        } catch (e: Exception) {
+            val paths = uri.pathSegments
+            if (paths.size >= 4 && paths[0] == "tree" && paths[2] == "document") {
+                paths[3]
+            } else if (paths.size >= 2 && paths[0] == "tree") {
+                paths[1]
+            } else {
+                uri.lastPathSegment ?: ""
+            }
+        }
+    }
+
     fun findFileStrict(parent: DocumentFile, name: String): DocumentFile? {
         val cacheKey = "${parent.uri}/$name"
         if (safDirectoryCache.containsKey(cacheKey)) return safDirectoryCache[cacheKey]
@@ -89,57 +117,79 @@ class FileScanner(private val context: Context) {
         val uriStr = uri.toString().lowercase()
         val alreadyInZone = isSwitch && (uriStr.contains("nand%2fuser%2fsave") || uriStr.contains("nand/user/save"))
 
-        val rootDoc = DocumentFile.fromTreeUri(context, uri) ?: return results
+        val treeUri = getTreeUri(uri)
+        val startDocId = getDocIdSafely(uri)
 
-        fun walkSaf(currentDoc: DocumentFile, currentRelPath: String, depth: Int) {
+        fun walkSaf(currentDocId: String, currentRelPath: String, depth: Int) {
             if (depth > MAX_SCAN_DEPTH) return
             
-            currentDoc.listFiles().forEach { file ->
-                val name = file.name ?: "unknown"
-                val relPath = if (currentRelPath.isEmpty()) name else "$currentRelPath/$name"
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, currentDocId)
+            context.contentResolver.query(
+                childrenUri, 
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID, 
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME, 
+                    DocumentsContract.Document.COLUMN_MIME_TYPE, 
+                    DocumentsContract.Document.COLUMN_SIZE, 
+                    DocumentsContract.Document.COLUMN_LAST_MODIFIED
+                ), 
+                null, null, null
+            )?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val id = cursor.getString(0)
+                    val name = cursor.getString(1) ?: "unknown"
+                    val mime = cursor.getString(2)
+                    val relPath = if (currentRelPath.isEmpty()) name else "$currentRelPath/$name"
 
-                if (isIgnored(name, relPath, combinedIgnores, ignoredFoldersList)) return@forEach
+                    if (isIgnored(name, relPath, combinedIgnores, ignoredFoldersList)) continue
 
-                // Scope Guard: If we are not in the zone yet, we must walk down the 'nand' path.
-                if (isSwitch && !alreadyInZone) {
-                    val inSavePath = relPath.contains("nand/user/save")
-                    if (!inSavePath && !relPath.startsWith("nand") && relPath != "nand") return@forEach
-                }
-
-                if (file.isDirectory) {
-                    results.put(JSONObject().apply {
-                        put("name", name)
-                        put("relPath", relPath)
-                        put("isDirectory", true)
-                        put("uri", file.uri.toString())
-                    })
-                    walkSaf(file, relPath, depth + 1)
-                } else {
-                    val fSize = file.length()
-                    val fLast = file.lastModified()
-                    val itemUri = file.uri
-                    
-                    val shouldSync = if (isSwitch) {
-                        relPath.contains("nand/user/save") || alreadyInZone
-                    } else {
-                        syncEverything || allowedExtensions.contains(name.split(".").last().lowercase())
+                    // Scope Guard: If we are not in the zone yet, we must walk down the 'nand' path.
+                    if (isSwitch && !alreadyInZone) {
+                        val inSavePath = relPath.contains("nand/user/save")
+                        if (!inSavePath && !relPath.startsWith("nand") && relPath != "nand") continue
                     }
 
-                    if (shouldSync) {
+                    if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
                         results.put(JSONObject().apply {
                             put("name", name)
                             put("relPath", relPath)
-                            put("isDirectory", false)
-                            put("size", fSize)
-                            put("lastModified", fLast)
-                            put("uri", itemUri.toString())
+                            put("isDirectory", true)
+                            put("uri", DocumentsContract.buildDocumentUriUsingTree(treeUri, id).toString())
                         })
+                        walkSaf(id, relPath, depth + 1)
+                    } else {
+                        var fSize = cursor.getLong(3)
+                        var fLast = cursor.getLong(4)
+                        val itemUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
+                        
+                        if (fSize <= 0) {
+                            val df = DocumentFile.fromSingleUri(context, itemUri)
+                            fSize = df?.length() ?: 0
+                            fLast = df?.lastModified() ?: 0
+                        }
+
+                        val shouldSync = if (isSwitch) {
+                            relPath.contains("nand/user/save") || alreadyInZone
+                        } else {
+                            syncEverything || allowedExtensions.contains(name.split(".").last().lowercase())
+                        }
+
+                        if (shouldSync) {
+                            results.put(JSONObject().apply {
+                                put("name", name)
+                                put("relPath", relPath)
+                                put("isDirectory", false)
+                                put("size", fSize)
+                                put("lastModified", fLast)
+                                put("uri", itemUri.toString())
+                            })
+                        }
                     }
                 }
             }
         }
         
-        walkSaf(rootDoc, "", 0)
+        walkSaf(startDocId, "", 0)
         return results
     }
 
