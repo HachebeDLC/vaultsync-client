@@ -71,6 +71,10 @@ jobs:
         if: matrix.target == 'Linux'
         run: |
           cd build/linux/x64/release/bundle
+          # Bundle dynamically linked libraries for portability
+          cp /usr/lib/x86_64-linux-gnu/libayatana-appindicator3.so.1 lib/ || true
+          cp /usr/lib/x86_64-linux-gnu/libayatana-indicator3.so.7 lib/ || true
+          cp /usr/lib/x86_64-linux-gnu/libido3-0.1.so.0 lib/ || true
           zip -r ../../../../../VaultSync-Linux.zip *
 
       - name: Create Release
