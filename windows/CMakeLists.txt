@@ -53,7 +53,7 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 add_subdirectory("runner")
 
 # Add native sync sources to the binary directly
-target_sources(${BINARY_NAME} PRIVATE "../src/native_sync.cpp")
+# target_sources(${BINARY_NAME} PRIVATE "../src/native_sync.cpp")
 
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.

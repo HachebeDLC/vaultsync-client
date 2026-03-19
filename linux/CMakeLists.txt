@@ -58,7 +58,7 @@ pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
 add_subdirectory("runner")
 
 # Add native sync sources to the binary directly
-target_sources(${BINARY_NAME} PRIVATE "../src/native_sync.cpp")
+# target_sources(${BINARY_NAME} PRIVATE "../src/native_sync.cpp")
 
 # Run the Flutter tool portions of the build. This must not be removed.
 add_dependencies(${BINARY_NAME} flutter_assemble)
