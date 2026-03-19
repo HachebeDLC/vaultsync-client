@@ -17,11 +17,11 @@ final syncServiceProvider = Provider<SyncService>((ref) {
 class SyncService {
   final SyncRepository _repository;
   final SystemPathService _pathService;
-  final ProviderRef _ref;
+  final ProviderRef? _ref;
   final _notifications = FlutterLocalNotificationsPlugin();
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
 
-  SyncService(this._repository, this._pathService, this._ref) {
+  SyncService(this._repository, this._pathService, [this._ref]) {
     _initNotifications();
   }
 
@@ -73,7 +73,9 @@ class SyncService {
         final effectivePaths = await _resolveEffectivePaths(systemId);
         
         for (final path in effectivePaths) {
-          if (syncedPaths.contains(path)) continue;
+          // Use a system-aware key to allow shared directories (like Dolphin) to sync for both Wii and GC
+          final syncKey = '${systemId}_$path';
+          if (syncedPaths.contains(syncKey)) continue;
           
           final hasPermission = await _pathService.ensureSafPermission(path);
           if (!hasPermission) { 
@@ -90,13 +92,13 @@ class SyncService {
             onError: onError, 
             fastSync: fastSync
           );
-          syncedPaths.add(path);
+          syncedPaths.add(syncKey);
         }
-        _ref.read(syncLogProvider.notifier).addLog(systemId, 'Synchronized');
+        _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Synchronized');
       }
       onProgress?.call('Sync Complete!');
     } catch(e) {
-      _ref.read(syncLogProvider.notifier).addLog('All', 'Sync Failed: $e', isError: true);
+      _ref?.read(syncLogProvider.notifier).addLog('All', 'Sync Failed: $e', isError: true);
       onError?.call('Sync failed: $e');
     } finally { 
       if (isBackground) {
@@ -127,9 +129,9 @@ class SyncService {
           fastSync: fastSync
         );
       }
-      _ref.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Success');
+      _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Success');
     } catch(e) {
-      _ref.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Failed: $e', isError: true);
+      _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Failed: $e', isError: true);
       onError?.call('Auto-sync failed: $e');
     } finally { 
       if (isBackground) {

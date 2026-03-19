@@ -35,6 +35,8 @@ class SystemPathService {
     'duckstation': '/storage/emulated/0/Android/data/com.github.stenzek.duckstation/files/memcards',
     'duckstation_legacy': '/storage/emulated/0/DuckStation/memcards',
     'dolphin': '/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files',
+    'wii': '/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files',
+    'gc': '/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files',
     'citra': '/storage/emulated/0/Citra',
     'yuzu': '/storage/emulated/0/Android/data/org.yuzu.yuzu_emu/files',
     'eden': '/storage/emulated/0/Android/data/dev.eden.eden_emulator/files',
@@ -382,9 +384,13 @@ class SystemPathService {
   
   /// Resolves standard RetroArch paths for saves and states.
   Future<Map<String, String>> getRetroArchPaths() async {
+    final saves = await getSystemPath('retroarch') ?? suggestSavePathById('retroarch');
+    final states = saves.endsWith('/saves') 
+        ? saves.substring(0, saves.length - 6) + '/states' 
+        : '$saves/states'; // Fallback if the configured path doesn't end in /saves
+
     return {
-      'saves': '/storage/emulated/0/RetroArch/saves', 
-      'states': '/storage/emulated/0/RetroArch/states'
+      'saves': saves,
+      'states': states
     };
-  }
-}
+  }}

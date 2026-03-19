@@ -49,34 +49,80 @@ class SyncRepository {
     return _cachedDeviceName ?? 'Unknown Device';
   }
 
-  Future<void> _recordSyncSuccess(SharedPreferences prefs, String systemId, String relPath, String hash) async {
-    await prefs.setString('journal_${systemId}_$relPath', hash);
+  final Map<String, String> _pendingJournal = {};
+
+  void _recordSyncSuccess(SharedPreferences prefs, String systemId, String relPath, String hash) {
+    _pendingJournal['journal_${systemId}_$relPath'] = hash;
+  }
+
+  Future<void> _commitSyncJournal(SharedPreferences prefs) async {
+    if (_pendingJournal.isEmpty) return;
+    await Future.wait(_pendingJournal.entries.map((e) => prefs.setString(e.key, e.value)));
+    _pendingJournal.clear();
   }
 
   bool _isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash) {
-    return prefs.getString('journal_${systemId}_$relPath') == remoteHash;
+    final key = 'journal_${systemId}_$relPath';
+    if (_pendingJournal.containsKey(key)) return _pendingJournal[key] == remoteHash;
+    return prefs.getString(key) == remoteHash;
   }
 
   String _getCloudRelPath(String systemId, String localRelPath) {
     final sid = systemId.toLowerCase();
+    final parts = localRelPath.split('/');
+    
+    // 1. Switch / Eden Logic (Flattened)
     if (sid == 'switch' || sid == 'eden') {
-      final parts = localRelPath.split('/');
-      // Title IDs are exactly 16 hex chars and ALWAYS start with 0100 on the Switch. 
-      // We look for the FIRST segment that matches this pattern to avoid hitting the 0000000000000000 system folder.
       final titleIdx = parts.indexWhere((p) => RegExp(r'^0100[0-9A-Fa-f]{12}$').hasMatch(p));
-      
-      if (titleIdx != -1) {
-          // Flatten: 'some/long/local/path/TitleID/file.dat' -> 'TitleID/file.dat'
-          return parts.sublist(titleIdx).join('/');
-      }
-      return ''; // Not a save file
-    } else if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2' || sid == 'pcsx2' || sid == 'duckstation') {
-      if (localRelPath.startsWith('files/memcards/')) return localRelPath.substring(15);
-      if (localRelPath.startsWith('files/memcard/')) return localRelPath.substring(14);
-      if (localRelPath.startsWith('memcards/')) return localRelPath.substring(9);
-      if (localRelPath.startsWith('memcard/')) return localRelPath.substring(8);
-      if (localRelPath.startsWith('files/')) return localRelPath.substring(6);
+      if (titleIdx != -1) return parts.sublist(titleIdx).join('/');
+      return '';
+    } 
+    
+    // 2. PS2 / DuckStation Logic (Anchor on memcards)
+    if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2' || sid == 'pcsx2' || sid == 'duckstation') {
+      final anchorIdx = parts.indexWhere((p) => ['memcards', 'memcard', 'sstates', 'gamesettings'].contains(p.toLowerCase()));
+      if (anchorIdx != -1) return parts.sublist(anchorIdx).join('/');
+      return '';
     }
+
+    // 3. Wii Logic (Surgical Flattening)
+    if (sid == 'wii') {
+      final anchorIdx = parts.indexOf('00010000');
+      if (anchorIdx != -1 && anchorIdx < parts.length - 1) {
+        return parts.sublist(anchorIdx + 1).join('/'); // Produces 'GameID/data/...'
+      }
+      return ''; // Strictly ignore everything NOT in the game saves folder
+    }
+
+    // 4. GameCube Logic (Preserve GC/ prefix)
+    if (sid == 'gc') {
+      final gcIdx = parts.indexWhere((p) => p.toLowerCase() == 'gc');
+      if (gcIdx != -1) {
+        return parts.sublist(gcIdx).join('/'); // Produces 'GC/...'
+      }
+      return ''; // Strictly ignore everything NOT in the GC folder
+    }
+
+    // 5. Dolphin (Generic) - Handle both if the system name is just 'dolphin'
+    if (sid == 'dolphin') {
+      if (localRelPath.toLowerCase().contains('/wii/title/00010000/')) {
+         final idx = parts.indexOf('00010000');
+         return 'Wii/' + parts.sublist(idx + 1).join('/');
+      }
+      if (localRelPath.toLowerCase().contains('/gc/')) {
+         final idx = parts.indexWhere((p) => p.toLowerCase() == 'gc');
+         return parts.sublist(idx).join('/');
+      }
+      return '';
+    }
+
+    // 6. 3DS (Azahar / Citra) Logic
+    if (sid == '3ds' || sid == 'citra' || sid == 'azahar') {
+       final anchorIdx = parts.indexWhere((p) => ['nand', 'sdmc', 'sysdata'].contains(p.toLowerCase()));
+       if (anchorIdx != -1) return parts.sublist(anchorIdx).join('/');
+       return '';
+    }
+
     return localRelPath;
   }
 
@@ -87,9 +133,33 @@ class SyncRepository {
     final hasFilesDir = localFiles.values.any((f) => (f['relPath'] as String).startsWith('files/'));
 
     if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2' || sid == 'pcsx2' || sid == 'duckstation') {
-       if (hasFilesDir) return 'files/memcards/$cloudRelPath';
-       return 'memcards/$cloudRelPath';
+       final prefix = hasFilesDir ? 'files/' : '';
+       if (!cloudRelPath.startsWith('memcards') && !cloudRelPath.startsWith('sstates')) {
+          return '${prefix}memcards/$cloudRelPath';
+       }
+       return '$prefix$cloudRelPath';
     }
+
+    if (sid == 'wii') {
+       final prefix = hasFilesDir ? 'files/' : '';
+       return '${prefix}Wii/title/00010000/$cloudRelPath';
+    }
+
+    if (sid == 'gc') {
+       final prefix = hasFilesDir ? 'files/' : '';
+       return '$prefix$cloudRelPath';
+    }
+
+    if (sid == 'dolphin') {
+       final prefix = hasFilesDir ? 'files/' : '';
+       return '$prefix$cloudRelPath';
+    }
+
+    if (sid == '3ds' || sid == 'citra' || sid == 'azahar') {
+       // Azahar root usually doesn't have 'files/'
+       return cloudRelPath;
+    }
+
     if (sid == 'switch' || sid == 'eden') {
        final cloudTitleId = cloudRelPath.split('/').first;
        
@@ -154,6 +224,23 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     return localFiles;
   }
 
+  final Map<String, (List<dynamic>, DateTime)> _scanCache = {};
+  static const _scanCacheTTL = Duration(seconds: 30);
+
+  Future<List<dynamic>> _getCachedOrNewScan(String systemId, String effectivePath, List<String>? ignoredFolders) async {
+    final cached = _scanCache[systemId];
+    if (cached != null && DateTime.now().difference(cached.$2) < _scanCacheTTL) {
+       _lastScanList = cached.$1;
+       return _lastScanList;
+    }
+    
+    final String jsonResult = await _platform.invokeMethod('scanRecursive', { 'path': effectivePath, 'systemId': systemId, 'ignoredFolders': ignoredFolders ?? [] });
+    final List<dynamic> result = json.decode(jsonResult);
+    _lastScanList = result;
+    _scanCache[systemId] = (result, DateTime.now());
+    return result;
+  }
+
   /// Calculates the difference between local and remote files for a given system.
   /// Returns a list of file status maps (Synced, Modified, Local Only, Remote Only).
   Future<List<Map<String, dynamic>>> diffSystem(String systemId, String localPath, {List<String>? ignoredFolders}) async {
@@ -184,8 +271,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     final String cloudPrefix = isSwitch ? 'switch' : (isRetroArch ? 'RetroArch' : systemId);
     final remoteFiles = { for (var f in remoteFilesList) f['path']: f };
     
-    final String jsonResult = await _platform.invokeMethod('scanRecursive', { 'path': effectivePath, 'systemId': systemId, 'ignoredFolders': ignoredFolders ?? [] });
-    final List<dynamic> localList = json.decode(jsonResult);
+    final List<dynamic> localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
     final localFiles = _processLocalFiles(systemId, localList);
 
     final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
@@ -236,9 +322,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
         final List<dynamic> fileList = response['files'] ?? [];
         final remoteFiles = { for (var f in fileList) f['path']: f };
         
-        final String jsonResult = await _platform.invokeMethod('scanRecursive', { 'path': effectivePath, 'systemId': systemId, 'ignoredFolders': ignoredFolders ?? [] });
-        final List<dynamic> localList = json.decode(jsonResult);
-        _lastScanList = localList;
+        final List<dynamic> localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
         final localFiles = _processLocalFiles(systemId, localList);
 
         final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
@@ -265,7 +349,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
             final int localSize = (localInfo['size'] as num).toInt();
             
             if (localSize == remoteInfo['size'] && (localTs ~/ 1000) == (remoteInfo['updated_at'] as num).toInt() ~/ 1000) {
-              await _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
+              _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
               continue;
             }
 
@@ -276,7 +360,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
                 if (localHash != null) await _fileCache.updateCache(localInfo['uri'], localSize, localTs, localHash);
             }
 
-            if (localHash == remoteHash) { await _recordSyncSuccess(prefs, systemId, relPath, remoteHash); continue; }
+            if (localHash == remoteHash) { _recordSyncSuccess(prefs, systemId, relPath, remoteHash); continue; }
             if (localTs > (remoteInfo['updated_at'] as num)) {
               onProgress?.call('Patching $relPath (Local Newer)...');
               await uploadFile(localInfo['uri'], remotePath, systemId: systemId, relPath: relPath, plainHash: localHash, prefs: prefs);
@@ -286,6 +370,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
             }
           }
         }
+        await _commitSyncJournal(prefs);
       } catch (e) { print('❌ SYNC ERROR: $e'); onError?.call(e.toString()); } 
     });
   }
@@ -308,17 +393,17 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
       try {
         final checkResult = await _apiClient.post('/api/v1/blocks/check', body: {'path': remotePath, 'blocks': json.decode(blockHashesJson)});
         final List missing = checkResult['missing'] ?? [];
-        if (missing.isEmpty && !force) { await _recordSyncSuccess(prefs, systemId, relPath, hash); return; }
+        if (missing.isEmpty && !force) { _recordSyncSuccess(prefs, systemId, relPath, hash); return; }
         dirtyIndices = List<int>.from(missing);
       } catch (e) { print('⚠️ Delta check failed: $e'); }
     }
 
     await _platform.invokeMethod('uploadFileNative', { 'url': '$baseUrl/api/v1/upload', 'token': token, 'masterKey': masterKey, 'remotePath': remotePath, 'uri': path, 'hash': hash, 'deviceName': await _getDeviceName(), 'updatedAt': updatedAt, 'dirtyIndices': dirtyIndices });
-    await _recordSyncSuccess(prefs, systemId, relPath, hash);
-  }
+    _recordSyncSuccess(prefs, systemId, relPath, hash);
+    }
 
-  /// Downloads and decrypts a file (or specific blocks) from the server.
-  Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
+    /// Downloads and decrypts a file (or specific blocks) from the server.
+    Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
     final baseUrl = await _apiClient.getBaseUrl();
     final token = await _apiClient.getToken();
     final masterKey = await _getMasterKey();
@@ -333,11 +418,10 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     }
     final downloadUrl = (patchIndices != null) ? '$baseUrl/api/v1/blocks/download' : '$baseUrl/api/v1/download';
     await _platform.invokeMethod('downloadFileNative', { 'url': downloadUrl, 'token': token, 'masterKey': masterKey, 'remoteFilename': remotePath, 'uri': localBasePath, 'localFilename': relPath, 'updatedAt': updatedAt, 'patchIndices': patchIndices });
-    
+
     if (remoteHash != null) {
-      await _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
-    }
-  }
+      _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
+    }  }
 
   /// Deletes a file from the server.
   Future<void> deleteRemoteFile(String path) async { 

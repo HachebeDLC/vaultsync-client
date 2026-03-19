@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/services/api_client_provider.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../../sync/services/system_path_service.dart';
+import '../../sync/services/desktop_tray_service.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../sync/services/background_sync_service.dart';
@@ -25,6 +26,11 @@ class _BootScreenState extends ConsumerState<BootScreen> {
 
   Future<void> _loadData() async {
     final client = ref.read(apiClientProvider);
+    
+    // Initialize Desktop Tray if applicable
+    if (Platform.isWindows || Platform.isLinux) {
+      await ref.read(desktopTrayServiceProvider).initTray();
+    }
     
     // Add a small artificial delay so the user can actually see the loading screen
     await Future.delayed(const Duration(milliseconds: 800));

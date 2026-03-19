@@ -3,6 +3,7 @@ import '../../../core/services/api_client.dart';
 import '../../../core/services/notification_service.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../emulation/data/emulator_repository.dart';
+import '../data/file_cache.dart';
 import '../data/sync_repository.dart';
 import '../services/sync_service.dart';
 import '../services/system_path_service.dart';
@@ -17,9 +18,12 @@ void callbackDispatcher() {
 
     final apiClient = ApiClient();
     final authRepository = AuthRepository(apiClient);
-    final syncRepository = SyncRepository(apiClient);
+    final fileCache = FileCache();
+    await fileCache.init();
+    
     final emulatorRepository = EmulatorRepository();
     final pathService = SystemPathService(emulatorRepository);
+    final syncRepository = SyncRepository(apiClient, pathService, fileCache);
     final syncService = SyncService(syncRepository, pathService);
 
     try {

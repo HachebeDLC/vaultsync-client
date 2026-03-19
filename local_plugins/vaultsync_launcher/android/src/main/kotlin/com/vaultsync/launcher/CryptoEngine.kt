@@ -29,38 +29,45 @@ class CryptoEngine {
 
     private val utf8 = Charsets.UTF_8
     private val magicBytes = MAGIC_HEADER.toByteArray(utf8)
-    private val md5Digest = MessageDigest.getInstance("MD5")
-    private val sha256Digest = MessageDigest.getInstance("SHA-256")
+    
+    // Performance: Use ThreadLocal to allow lock-free parallel hashing
+    private val md5ThreadLocal = object : ThreadLocal<MessageDigest>() {
+        override fun initialValue() = MessageDigest.getInstance("MD5")
+    }
+    private val sha256ThreadLocal = object : ThreadLocal<MessageDigest>() {
+        override fun initialValue() = MessageDigest.getInstance("SHA-256")
+    }
 
     fun calculateHash(data: ByteArray, length: Int): String {
-        synchronized(sha256Digest) {
-            sha256Digest.reset()
-            sha256Digest.update(data, 0, length)
-            return sha256Digest.digest().toHex()
-        }
+        val digest = sha256ThreadLocal.get()!!
+        digest.reset()
+        digest.update(data, 0, length)
+        return digest.digest().toHex()
     }
 
     fun calculateMd5(data: ByteArray, length: Int): ByteArray {
-        synchronized(md5Digest) {
-            md5Digest.reset()
-            md5Digest.update(data, 0, length)
-            return md5Digest.digest()
-        }
+        val digest = md5ThreadLocal.get()!!
+        digest.reset()
+        digest.update(data, 0, length)
+        return digest.digest()
+    }
+
+    private val encryptCipherThreadLocal = object : ThreadLocal<Cipher>() {
+        override fun initialValue() = Cipher.getInstance("AES/CBC/PKCS7Padding")
+    }
+
+    private val decryptCipherThreadLocal = object : ThreadLocal<Cipher>() {
+        override fun initialValue() = Cipher.getInstance("AES/CBC/PKCS7Padding")
     }
 
     /**
      * Encrypts a data block using AES-256-CBC into a pre-allocated buffer.
-     * 
-     * Convergent encryption: IV is derived from the block's plaintext (MD5) so that
-     * identical blocks produce identical ciphertext, enabling server-side deduplication.
-     * 
-     * @return Total bytes written to the output buffer.
      */
     fun encryptBlock(blockData: ByteArray, dataLength: Int, secretKey: SecretKeySpec, output: ByteArray): Int {
         val iv = calculateMd5(blockData, dataLength)
         val ivSpec = IvParameterSpec(iv)
         
-        val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
+        val cipher = encryptCipherThreadLocal.get()!!
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec)
         
         System.arraycopy(magicBytes, 0, output, 0, 7)
@@ -72,19 +79,32 @@ class CryptoEngine {
 
     /**
      * Decrypts an encrypted block into a pre-allocated buffer.
-     * @return Total bytes written to the output buffer.
      */
     fun decryptBlock(encryptedBlock: ByteArray, encryptedLength: Int, secretKey: SecretKeySpec, output: ByteArray): Int {
-        if (encryptedLength < 7 || !encryptedBlock.sliceArray(0 until 7).contentEquals(magicBytes)) {
-            // Not encrypted or missing magic, copy as-is
+        if (encryptedLength < 7) {
             System.arraycopy(encryptedBlock, 0, output, 0, encryptedLength)
             return encryptedLength
         }
         
-        val iv = encryptedBlock.sliceArray(7 until 7 + IV_SIZE)
+        // Zero-allocation magic check
+        var match = true
+        for (i in 0 until 7) {
+            if (encryptedBlock[i] != magicBytes[i]) {
+                match = false
+                break
+            }
+        }
+        
+        if (!match) {
+            System.arraycopy(encryptedBlock, 0, output, 0, encryptedLength)
+            return encryptedLength
+        }
+        
+        val iv = ByteArray(IV_SIZE)
+        System.arraycopy(encryptedBlock, 7, iv, 0, IV_SIZE)
         val ivSpec = IvParameterSpec(iv)
         
-        val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
+        val cipher = decryptCipherThreadLocal.get()!!
         cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
         return cipher.doFinal(encryptedBlock, 7 + IV_SIZE, encryptedLength - (7 + IV_SIZE), output, 0)
     }

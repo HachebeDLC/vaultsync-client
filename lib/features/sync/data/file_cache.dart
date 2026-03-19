@@ -4,6 +4,10 @@ import 'package:path/path.dart' as p;
 class FileCache {
   static Database? _database;
 
+  Future<void> init() async {
+    await database;
+  }
+
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();

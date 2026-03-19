@@ -24,7 +24,6 @@ class AutomationEngine(private val context: Context, private val channel: Method
         
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val time = System.currentTimeMillis()
-        // Query the last 15 seconds to ensure we don't miss an event between 10s polls
         val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 15000, time)
         
         val currentApp = stats?.filter { it.lastTimeUsed > time - 15000 }
@@ -40,9 +39,9 @@ class AutomationEngine(private val context: Context, private val channel: Method
         }
     }
 
-    fun startMonitoring(packages: List<String>) {
+    fun startMonitoring(packages: List<String>, intervalMs: Long) {
         monitoredPackages = packages
-        pollingExecutor.scheduleAtFixedRate(::checkAppClosure, 0, 10, TimeUnit.SECONDS)
+        pollingExecutor.scheduleAtFixedRate(::checkAppClosure, 0, intervalMs, TimeUnit.MILLISECONDS)
     }
 
     fun stopMonitoring() {

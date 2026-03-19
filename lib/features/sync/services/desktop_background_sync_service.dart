@@ -32,6 +32,10 @@ class DesktopBackgroundSyncService {
     _syncTimer = null;
   }
 
+  Future<void> sync() async {
+    await _triggerSync();
+  }
+
   Future<void> _triggerSync() async {
     print('🔄 DESKTOP: Triggering background sync...');
     try {

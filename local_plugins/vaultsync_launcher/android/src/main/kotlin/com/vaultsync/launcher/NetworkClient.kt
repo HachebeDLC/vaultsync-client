@@ -1,63 +1,83 @@
 package com.vaultsync.launcher
 
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.io.OutputStream
-import java.net.HttpURLConnection
-import java.net.URL
+import java.io.InputStream
+import java.util.concurrent.TimeUnit
 
 /**
- * Handles synchronous HTTP networking for file uploads and downloads.
+ * Handles optimized HTTP networking using OkHttp with connection pooling.
  */
 class NetworkClient {
-    
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+        .build()
+
     /**
-     * Performs a POST request with a raw byte array body (or subset of it).
+     * Performs a POST request with a raw byte array body.
      */
     fun postRaw(url: String, token: String?, headers: Map<String, String>, data: ByteArray, offset: Int, length: Int): Int {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            setFixedLengthStreamingMode(length.toLong())
-            setRequestProperty("Content-Type", "application/octet-stream")
-            token?.let { setRequestProperty("Authorization", "Bearer $it") }
-            headers.forEach { (k, v) -> setRequestProperty(k, v) }
-            connectTimeout = 10000
-            readTimeout = 30000
-        }
+        val mediaType = "application/octet-stream".toMediaType()
+        val body = data.toRequestBody(mediaType, offset, length)
         
-        connection.outputStream.use { it.write(data, offset, length) }
-        return connection.responseCode
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .post(body)
+        
+        token?.let { requestBuilder.addHeader("Authorization", "Bearer $it") }
+        headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
+        
+        client.newCall(requestBuilder.build()).execute().use { response ->
+            return response.code
+        }
     }
 
     /**
      * Performs a POST request with a JSON body.
      */
     fun postJson(url: String, token: String?, body: JSONObject): Int {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            token?.let { setRequestProperty("Authorization", "Bearer $it") }
-            connectTimeout = 10000
-            readTimeout = 30000
-        }
+        val mediaType = "application/json".toMediaType()
+        val requestBody = body.toString().toRequestBody(mediaType)
         
-        connection.outputStream.use { it.write(body.toString().toByteArray()) }
-        return connection.responseCode
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .post(requestBody)
+        
+        token?.let { requestBuilder.addHeader("Authorization", "Bearer $it") }
+        
+        client.newCall(requestBuilder.build()).execute().use { response ->
+            return response.code
+        }
     }
 
     /**
-     * Opens a connection for downloading, returning the connection object for stream management.
+     * Wrapper for a download response to maintain API compatibility.
      */
-    fun openDownloadConnection(url: String, token: String?, body: JSONObject): HttpURLConnection {
-        return (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            token?.let { setRequestProperty("Authorization", "Bearer $it") }
-            connectTimeout = 10000
-            readTimeout = 30000
-            outputStream.use { it.write(body.toString().toByteArray()) }
+    class DownloadConnection(val responseCode: Int, val inputStream: InputStream, private val response: Response) : AutoCloseable {
+        override fun close() {
+            response.close()
         }
+    }
+
+    /**
+     * Opens a connection for downloading.
+     */
+    fun openDownloadConnection(url: String, token: String?, body: JSONObject): DownloadConnection {
+        val mediaType = "application/json".toMediaType()
+        val requestBody = body.toString().toRequestBody(mediaType)
+        
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .post(requestBody)
+        
+        token?.let { requestBuilder.addHeader("Authorization", "Bearer $it") }
+        
+        val response = client.newCall(requestBuilder.build()).execute()
+        return DownloadConnection(response.code, response.body?.byteStream() ?: "".byteInputStream(), response)
     }
 }

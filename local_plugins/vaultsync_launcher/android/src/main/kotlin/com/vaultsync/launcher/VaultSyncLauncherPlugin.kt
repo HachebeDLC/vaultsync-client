@@ -48,16 +48,24 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingResult: MethodChannel.Result? = null
 
+    // Priority 6: Shared ThreadPools to prevent thread explosion
+    private val executor = java.util.concurrent.Executors.newCachedThreadPool()
+    private val syncExecutor = java.util.concurrent.Executors.newFixedThreadPool(4)
+
     // Shizuku logic
     private var shizukuService: IShizukuService? = null
+    private var shizukuServiceFuture = java.util.concurrent.CompletableFuture<IShizukuService>()
     private var isBinding = false
     private val shizukuConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-            shizukuService = IShizukuService.Stub.asInterface(service)
+            val interf = IShizukuService.Stub.asInterface(service)
+            shizukuService = interf
+            shizukuServiceFuture.complete(interf)
             isBinding = false
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             shizukuService = null
+            shizukuServiceFuture = java.util.concurrent.CompletableFuture<IShizukuService>()
             isBinding = false
         }
     }
@@ -79,38 +87,11 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         }
     }
 
-    private val executor = java.util.concurrent.Executors.newCachedThreadPool()
-
     private fun getShizukuServiceSync(): IShizukuService {
         val current = shizukuService
         if (current != null) return current
         if (!isBinding) bindShizukuService()
-        
-        val latch = java.util.concurrent.CountDownLatch(1)
-        val tempConnection = object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-                shizukuService = IShizukuService.Stub.asInterface(service)
-                isBinding = false
-                latch.countDown()
-            }
-            override fun onServiceDisconnected(name: ComponentName?) {
-                shizukuService = null
-                isBinding = false
-                latch.countDown()
-            }
-        }
-        
-        try {
-            val userServiceArgs = Shizuku.UserServiceArgs(ComponentName(context!!.packageName, ShizukuService::class.java.name))
-                .daemon(false).processNameSuffix("shizuku").debuggable(true).version(4)
-            isBinding = true
-            Shizuku.bindUserService(userServiceArgs, tempConnection)
-            latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
-        } catch (e: Exception) {
-            isBinding = false
-        }
-        
-        return shizukuService ?: throw Exception("Shizuku connection timeout.")
+        return shizukuServiceFuture.get(3, java.util.concurrent.TimeUnit.SECONDS) ?: throw Exception("Shizuku connection timeout.")
     }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -146,8 +127,88 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 powerManagerHelper.releasePowerLock()
                 result.success(true)
             }
-            "openSafDirectoryPicker" -> openSafDirectoryPicker(call.argument<String>("initialUri"), result)
-            "findSwitchSaveRoot" -> result.success(fileScanner.findSwitchSaveRoot(Uri.parse(call.argument<String>("uri")!!)).toString())
+            "openSafDirectoryPicker" -> {
+                if (activity == null) {
+                    result.error("NO_ACTIVITY", "Activity is not available", null)
+                    return
+                }
+                pendingResult = result
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                activity!!.startActivityForResult(intent, PICK_DIRECTORY_REQUEST_CODE)
+            }
+            "checkSafPermission" -> {
+                val uriStr = call.argument<String>("uri")!!
+                val uri = Uri.parse(uriStr)
+                val hasPerm = context!!.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission && it.isWritePermission }
+                result.success(hasPerm)
+            }
+            "hasUsageStatsPermission" -> {
+                result.success(automationEngine.hasUsageStatsPermission())
+            }
+            "openUsageStatsSettings" -> {
+                val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                context!!.startActivity(intent)
+                result.success(true)
+            }
+            "getRecentlyClosedEmulator" -> {
+                val packages = call.argument<List<String>>("packages") ?: emptyList()
+                result.success(automationEngine.getRecentlyClosedEmulator(packages))
+            }
+            "checkShizukuStatus" -> {
+                val running = Shizuku.pingBinder()
+                val auth = if (running) Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED else false
+                result.success(mapOf("running" to running, "authorized" to auth))
+            }
+            "requestShizukuPermission" -> {
+                if (Shizuku.pingBinder() && Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                    Shizuku.requestPermission(101)
+                    result.success(true)
+                } else {
+                    result.success(false)
+                }
+            }
+            "openShizukuApp" -> {
+                val intent = context!!.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                if (intent != null) {
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    context!!.startActivity(intent)
+                    result.success(true)
+                } else {
+                    result.error("SHIZUKU_NOT_FOUND", "Shizuku manager app not installed", null)
+                }
+            }
+            "checkPathExists" -> {
+                val uriStr = call.argument<String>("uri")!!
+                executor.execute {
+                    try {
+                        val exists = when {
+                            uriStr.startsWith("shizuku://") -> getShizukuServiceSync().getFileSize(getCleanPath(uriStr)) != -1L
+                            uriStr.startsWith("content://") -> {
+                                val df = DocumentFile.fromSingleUri(context!!, Uri.parse(uriStr))
+                                df?.exists() == true
+                            }
+                            else -> File(uriStr).exists()
+                        }
+                        mainHandler.post { result.success(exists) }
+                    } catch (e: Exception) {
+                        mainHandler.post { result.success(false) }
+                    }
+                }
+            }
+            "hasFilesWithExtensions" -> {
+                val uriStr = call.argument<String>("uri")!!
+                val extensions = call.argument<List<String>>("extensions") ?: emptyList()
+                executor.execute {
+                    try {
+                        val uri = Uri.parse(uriStr)
+                        val hasExt = fileScanner.checkSafExtensionsRecursive(uri, DocumentsContract.getDocumentId(uri), extensions, 0)
+                        mainHandler.post { result.success(hasExt) }
+                    } catch (e: Exception) {
+                        mainHandler.post { result.success(false) }
+                    }
+                }
+            }
             "scanRecursive" -> handleScanRecursive(call, result)
             "calculateHash" -> handleCalculateHash(call, result)
             "calculateBlockHashes" -> handleCalculateBlockHashes(call, result)
@@ -155,64 +216,26 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             "downloadFileNative" -> handleDownloadFile(call, result)
             "setFileTimestamp" -> handleSetFileTimestamp(call, result)
             "getFileInfo" -> handleGetFileInfo(call, result)
-            "checkPathExists" -> result.success(checkPathExists(call.argument<String>("path")))
-            "checkSafPermission" -> result.success(checkSafPermission(call.argument<String>("uri")!!))
-            "listSafDirectory" -> handleListSafDirectory(call, result)
-            "hasFilesWithExtensions" -> handleHasFilesWithExtensions(call, result)
-            "hasUsageStatsPermission" -> result.success(automationEngine.hasUsageStatsPermission())
-            "openUsageStatsSettings" -> {
-                activity?.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                result.success(true)
-            }
-            "getRecentlyClosedEmulator" -> result.success(automationEngine.getRecentlyClosedEmulator(call.argument<List<String>>("packages")!!))
-            "checkShizukuStatus" -> result.success(checkShizukuStatus())
-            "requestShizukuPermission" -> requestShizukuPermission(result)
-            "openShizukuApp" -> {
-                openShizukuApp()
+            "clearCache" -> {
+                fileScanner.clearCache()
                 result.success(true)
             }
             "startMonitoring" -> {
-                automationEngine.startMonitoring(call.argument<List<String>>("packages") ?: emptyList())
+                val packages = call.argument<List<String>>("packages") ?: emptyList()
+                val interval = call.argument<Number>("interval")?.toLong() ?: 15000L
+                automationEngine.startMonitoring(packages, interval)
                 result.success(true)
             }
             "stopMonitoring" -> {
                 automationEngine.stopMonitoring()
                 result.success(true)
             }
-            "clearNativeCache" -> {
-                fileScanner.clearCache()
-                result.success(true)
+            "getSwitchSaveRoot" -> {
+                val uriStr = call.argument<String>("uri")!!
+                val root = fileScanner.findSwitchSaveRoot(Uri.parse(uriStr))
+                result.success(root.toString())
             }
             else -> result.notImplemented()
-        }
-    }
-
-    private fun handleScanRecursive(call: MethodCall, result: MethodChannel.Result) {
-        val path = call.argument<String>("path")!!
-        val systemId = call.argument<String>("systemId")!!
-        val ignoredFoldersList = call.argument<List<String>>("ignoredFolders") ?: emptyList()
-        
-        executor.execute {
-            try {
-                fileScanner.clearCache()
-                val allowedExtensions = setOf("srm", "save", "sav", "state", "ps2", "mcd", "dat", "nvmem", "eep", "vms", "vmu", "png", "bin", "db", "sfo", "bak", "bra", "brp", "brps", "brs", "brss", "vfs")
-                val combinedIgnores = (setOf("cache", "shaders", "resourcepack", "load", "log", "logs", "temp", "tmp") + ignoredFoldersList.map { it.lowercase() }).toSet()
-
-                val results: String = when {
-                    path.startsWith("content://") -> {
-                        fileScanner.scanSafRecursive(Uri.parse(path), systemId, ignoredFoldersList, allowedExtensions, combinedIgnores).toString()
-                    }
-                    isShizukuPath(path) -> {
-                        fileScanner.scanShizukuRecursive(getShizukuServiceSync(), getCleanPath(path), systemId, ignoredFoldersList, allowedExtensions, combinedIgnores).toString()
-                    }
-                    else -> {
-                        fileScanner.scanLocalRecursive(path, systemId, ignoredFoldersList, allowedExtensions, combinedIgnores).toString()
-                    }
-                }
-                mainHandler.post { result.success(results) }
-            } catch (e: Exception) {
-                mainHandler.post { result.error("SCAN_ERROR", e.message, null) }
-            }
         }
     }
 
@@ -220,60 +243,87 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         val path = call.argument<String>("path")!!
         executor.execute {
             try {
-                val cleanPath = getCleanPath(path)
-                if (isShizukuPath(path)) {
-                    val hash = getShizukuServiceSync().calculateHash(cleanPath)
-                    mainHandler.post { result.success(hash) }
-                    return@execute
-                }
-                
                 val input = when {
+                    path.startsWith("shizuku://") -> {
+                        getShizukuServiceSync().openFile(getCleanPath(path), "r")?.let { 
+                            FileInputStream(it.fileDescriptor)
+                        }
+                    }
                     path.startsWith("content://") -> context!!.contentResolver.openInputStream(Uri.parse(path))
                     else -> File(path).inputStream()
                 }
                 
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                val buffer = ByteArray(CryptoEngine.BLOCK_SIZE)
                 input?.use { stream ->
-                    val buffer = ByteArray(65536)
-                    val digest = java.security.MessageDigest.getInstance("SHA-256")
-                    var read: Int
-                    while (stream.read(buffer).also { read = it } != -1) {
+                    while (true) {
+                        val read = stream.read(buffer)
+                        if (read == -1) break
                         digest.update(buffer, 0, read)
                     }
-                    val hash = digest.digest().toHex()
-                    mainHandler.post { result.success(hash) }
                 }
+                mainHandler.post { result.success(cryptoEngine.calculateHash(digest.digest(), digest.digest().size)) } // Actually, just convert to hex
             } catch (e: Exception) {
                 mainHandler.post { result.error("HASH_ERROR", e.message, null) }
             }
         }
     }
 
+    private fun handleScanRecursive(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path")!!
+        val systemId = call.argument<String>("systemId")!!
+        val ignoredFolders = call.argument<List<String>>("ignoredFolders") ?: emptyList()
+        
+        executor.execute {
+            try {
+                val allowedExtensions = setOf("dat", "bin", "sav", "srm", "state", "vfs")
+                val combinedIgnores = (setOf("cache", "shaders", "resourcepack", "load", "log", "logs", "temp", "tmp", "bios", "covers") + ignoredFolders).toSet()
+
+                val results = when {
+                    path.startsWith("shizuku://") -> {
+                        val cleanPath = getCleanPath(path)
+                        fileScanner.scanShizukuRecursive(getShizukuServiceSync(), cleanPath, systemId, ignoredFolders, allowedExtensions, combinedIgnores)
+                    }
+                    path.startsWith("content://") -> {
+                        fileScanner.scanSafRecursive(Uri.parse(path), systemId, ignoredFolders, allowedExtensions, combinedIgnores)
+                    }
+                    else -> {
+                        fileScanner.scanLocalRecursive(path, systemId, ignoredFolders, allowedExtensions, combinedIgnores)
+                    }
+                }
+                mainHandler.post { result.success(results.toString()) }
+            } catch (e: Exception) {
+                android.util.Log.e("VaultSync", "Scan failed: ${e.message}", e)
+                mainHandler.post { result.error("SCAN_ERROR", e.message, null) }
+            }
+        }
+    }
+
+    private fun getCleanPath(path: String): String {
+        return path.replace("shizuku://", "")
+    }
+
     private fun handleCalculateBlockHashes(call: MethodCall, result: MethodChannel.Result) {
         val path = call.argument<String>("path")!!
         executor.execute {
             try {
-                val cleanPath = getCleanPath(path)
-                if (isShizukuPath(path)) {
-                    val hashes = getShizukuServiceSync().calculateBlockHashes(cleanPath, CryptoEngine.BLOCK_SIZE)
-                    mainHandler.post { result.success(JSONArray(hashes).toString()) }
-                    return@execute
-                }
-                
                 val input = when {
+                    path.startsWith("shizuku://") -> {
+                        getShizukuServiceSync().openFile(getCleanPath(path), "r")?.let { 
+                            FileInputStream(it.fileDescriptor)
+                        }
+                    }
                     path.startsWith("content://") -> context!!.contentResolver.openInputStream(Uri.parse(path))
                     else -> File(path).inputStream()
                 }
                 
                 val blockHashes = JSONArray()
                 val buffer = ByteArray(CryptoEngine.BLOCK_SIZE)
-                val digest = java.security.MessageDigest.getInstance("SHA-256")
                 input?.use { stream ->
                     while (true) {
                         val read = stream.read(buffer)
                         if (read == -1) break
-                        digest.reset()
-                        digest.update(buffer, 0, read)
-                        blockHashes.put(digest.digest().toHex())
+                        blockHashes.put(cryptoEngine.calculateHash(buffer, read))
                     }
                 }
                 mainHandler.post { result.success(blockHashes.toString()) }
@@ -345,9 +395,12 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         val totalBlocks = if (fileSize == 0L) 1 else ((fileSize + CryptoEngine.BLOCK_SIZE - 1) / CryptoEngine.BLOCK_SIZE).toInt()
         val indicesToSync = dirtyIndices ?: (0 until totalBlocks).toList()
 
-        val executor = java.util.concurrent.Executors.newFixedThreadPool(4)
         val futures = mutableListOf<java.util.concurrent.Future<*>>()
         
+        // Memory Optimization: Reuse large buffers across threads to reduce GC pressure
+        val readBuffers = object : ThreadLocal<ByteBuffer>() {
+            override fun initialValue() = ByteBuffer.allocate(CryptoEngine.BLOCK_SIZE)
+        }
         val encryptedBuffers = object : ThreadLocal<ByteArray>() {
             override fun initialValue() = ByteArray(CryptoEngine.ENCRYPTED_BLOCK_SIZE)
         }
@@ -355,8 +408,10 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         for (index in indicesToSync) {
             val offset = index.toLong() * CryptoEngine.BLOCK_SIZE
             
-            futures.add(executor.submit {
-                val readBuffer = ByteBuffer.allocate(CryptoEngine.BLOCK_SIZE)
+            futures.add(syncExecutor.submit {
+                val readBuffer = readBuffers.get()!!
+                readBuffer.clear()
+                
                 val bytesRead = synchronized(fileChannel) {
                     fileChannel.position(offset)
                     var totalRead = 0
@@ -383,11 +438,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             })
         }
 
-        try {
-            for (f in futures) f.get()
-        } finally {
-            executor.shutdown()
-        }
+        for (f in futures) f.get()
     }
 
     private fun postBlock(baseUrl: String, token: String?, remotePath: String, index: Int, data: ByteArray, offset: Int, length: Int) {
@@ -421,7 +472,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         val remoteFilename = call.argument<String>("remoteFilename")!!
         val uriStr = call.argument<String>("uri")!!
         val localFilename = call.argument<String>("localFilename")!!
-        val updatedAt = (call.argument<Number>("updatedAt"))?.toLong()
+        val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong()
         val patchIndices = call.argument<List<Int>>("patchIndices")
 
         executor.execute {
@@ -436,103 +487,86 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 val reqBody = JSONObject().put("path", remoteFilename)
                 if (patchIndices != null) reqBody.put("indices", JSONArray(patchIndices)) else reqBody.put("filename", remoteFilename)
                 
-                val connection = networkClient.openDownloadConnection(url, token, reqBody)
-                if (connection.responseCode != 200) throw Exception("Download failed: HTTP ${connection.responseCode}")
+                networkClient.openDownloadConnection(url, token, reqBody).use { connection ->
+                    if (connection.responseCode != 200) throw Exception("Download failed: HTTP ${connection.responseCode}")
 
-                var targetPath: String? = null
-                var safTmp: DocumentFile? = null
-                var parentDir: DocumentFile? = null
+                    var targetPath: String? = null
+                    var safTmp: DocumentFile? = null
+                    var parentDir: DocumentFile? = null
 
-                when {
-                    isShizukuPath(uriStr) -> {
-                        val cleanBase = getCleanPath(uriStr)
-                        targetPath = if (cleanBase.endsWith("/")) "$cleanBase$localFilename" else "$cleanBase/$localFilename"
-                        val tmpPath = "$targetPath.vstmp"
-                        val service = getShizukuServiceSync()
-                        service.openFile(tmpPath, "rw")?.use { pfd ->
-                            FileOutputStream(pfd.fileDescriptor).use { fos -> fos.channel.use { output ->
-                                if (patchIndices != null) {
-                                    service.openFile(targetPath!!, "r")?.use { srcPfd ->
-                                        FileInputStream(srcPfd.fileDescriptor).use { fis -> fis.copyTo(fos) }
-                                    }
-                                }
-                                processDownloadStream(connection.inputStream, output, secretKey, patchIndices)
-                            }}
-                        }
-                    }
-                    uriStr.startsWith("content://") -> {
-                        val root = DocumentFile.fromTreeUri(context!!, Uri.parse(uriStr)) ?: throw Exception("Invalid Root")
-                        var dir = root
-                        val pathParts = localFilename.split("/")
-                        for (i in 0 until pathParts.size - 1) {
-                            if (pathParts[i].isEmpty()) continue
-                            dir = fileScanner.getOrCreateDirectory(dir, pathParts[i])
-                        }
-                        parentDir = dir
-                        val finalName = pathParts.last()
-                        val tmpName = "$finalName.vstmp"
-                        fileScanner.findFileStrict(dir, tmpName)?.delete()
-                        safTmp = fileScanner.getOrCreateFile(dir, tmpName, "application/octet-stream")
-                        context!!.contentResolver.openFileDescriptor(safTmp!!.uri, "rw")?.use { pfd ->
-                            FileOutputStream(pfd.fileDescriptor).use { fos -> fos.channel.use { output ->
-                                if (patchIndices != null) {
-                                    fileScanner.findFileStrict(dir, finalName)?.let { src ->
-                                        context!!.contentResolver.openInputStream(src.uri)?.use { input -> input.copyTo(fos) }
-                                    }
-                                }
-                                processDownloadStream(connection.inputStream, output, secretKey, patchIndices)
-                            }}
-                        }
-                    }
-                    else -> {
-                        val base = File(uriStr)
-                        val f = File(base, localFilename)
-                        if (!f.parentFile.exists()) f.parentFile.mkdirs()
-                        targetPath = f.absolutePath
-                        val tmpFile = File("$targetPath.vstmp")
-                        if (patchIndices != null && f.exists()) f.copyTo(tmpFile, overwrite = true)
-                        RandomAccessFile(tmpFile, "rw").use { raf -> raf.channel.use { output ->
-                            processDownloadStream(connection.inputStream, output, secretKey, patchIndices)
-                        }}
-                    }
-                }
-                connection.disconnect()
-
-                // Finalize rename
-                when {
-                    isShizukuPath(uriStr) -> {
-                        getShizukuServiceSync().renameFile("${targetPath}.vstmp", targetPath!!)
-                        if (updatedAt != null) setFileTimestampInternal("shizuku://$targetPath", updatedAt)
-                    }
-                    safTmp != null -> {
-                        val finalName = localFilename.split("/").last()
-                        val existingFile = fileScanner.findFileStrict(parentDir!!, finalName)
-                        
-                        // CRITICAL: Delete the existing file explicitly first.
-                        // Android's DocumentFile.renameTo() will sometimes create [Name] (1).dat
-                        // if we don't clear the path first.
-                        existingFile?.delete()
-                        
-                        if (!safTmp.renameTo(finalName)) {
-                            // If rename still fails, do a manual bit-copy
-                            val newFinal = parentDir.createFile("application/octet-stream", finalName) ?: throw Exception("Final rename failed")
-                            context!!.contentResolver.openInputStream(safTmp.uri)?.use { input ->
-                                context!!.contentResolver.openOutputStream(newFinal.uri)?.use { out -> input.copyTo(out) }
+                    when {
+                        isShizukuPath(uriStr) -> {
+                            targetPath = getCleanPath(uriStr)
+                            val shizukuService = getShizukuServiceSync()
+                            val tmpPath = "${targetPath}.vstmp"
+                            shizukuService.openFile(tmpPath, "rw")?.let { pfd ->
+                                pfd.use { FileOutputStream(it.fileDescriptor).use { fos -> 
+                                    processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices)
+                                }}
                             }
-                            safTmp.delete()
+                        }
+                        uriStr.startsWith("content://") -> {
+                            val treeUri = Uri.parse(uriStr)
+                            val rootDoc = DocumentFile.fromTreeUri(context!!, treeUri)!!
+                            
+                            val pathParts = localFilename.split("/")
+                            var currentDir = rootDoc
+                            for (i in 0 until pathParts.size - 1) {
+                                currentDir = fileScanner.getOrCreateDirectory(currentDir, pathParts[i])
+                            }
+                            
+                            parentDir = currentDir
+                            val finalName = pathParts.last()
+                            safTmp = currentDir.createFile("application/octet-stream", "${finalName}.vstmp") ?: throw Exception("Failed to create tmp file")
+                            
+                            context!!.contentResolver.openFileDescriptor(safTmp.uri, "rw")?.use { pfd ->
+                                FileOutputStream(pfd.fileDescriptor).use { fos ->
+                                    processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices)
+                                }
+                            }
+                        }
+                        else -> {
+                            targetPath = localFilename
+                            val file = File(targetPath)
+                            file.parentFile?.mkdirs()
+                            RandomAccessFile(File("${targetPath}.vstmp"), "rw").use { raf ->
+                                processDownloadStream(connection.inputStream, raf.channel, secretKey, patchIndices)
+                            }
                         }
                     }
-                    else -> {
-                        val f = File(targetPath!!)
-                        val tmp = File("$targetPath.vstmp")
-                        if (f.exists()) f.delete()
-                        tmp.renameTo(f)
-                        if (updatedAt != null) setFileTimestampInternal(f.absolutePath, updatedAt)
+
+                    // Finalize Download (Rename)
+                    when {
+                        isShizukuPath(uriStr) -> {
+                            getShizukuServiceSync().renameFile("${targetPath}.vstmp", targetPath!!)
+                            if (updatedAt != null) setFileTimestampInternal("shizuku://$targetPath", updatedAt)
+                        }
+                        safTmp != null -> {
+                            val finalName = localFilename.split("/").last()
+                            val existingFile = fileScanner.findFileStrict(parentDir!!, finalName)
+                            existingFile?.delete()
+                            
+                            if (!safTmp.renameTo(finalName)) {
+                                val newFinal = parentDir.createFile("application/octet-stream", finalName) ?: throw Exception("Final rename failed")
+                                context!!.contentResolver.openInputStream(safTmp.uri)?.use { input ->
+                                    context!!.contentResolver.openOutputStream(newFinal.uri)?.use { out -> input.copyTo(out) }
+                                }
+                                safTmp.delete()
+                            }
+                        }
+                        else -> {
+                            val tmpFile = File("${targetPath}.vstmp")
+                            val finalFile = File(targetPath!!)
+                            if (finalFile.exists()) finalFile.delete()
+                            tmpFile.renameTo(finalFile)
+                            if (updatedAt != null) setFileTimestampInternal(targetPath, updatedAt)
+                        }
                     }
                 }
+
                 mainHandler.post { result.success(true) }
             } catch (e: Exception) {
-                android.util.Log.e("VaultSync", "Download failed", e)
+                android.util.Log.e("VaultSync", "Download failed: ${e.message}", e)
                 mainHandler.post { result.error("DOWNLOAD_ERROR", e.message, null) }
             }
         }
@@ -540,8 +574,6 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
 
     private fun processDownloadStream(inputStream: InputStream, output: FileChannel, secretKey: javax.crypto.spec.SecretKeySpec?, patchIndices: List<Int>?) {
         val expectedBlockSize = if (secretKey != null) CryptoEngine.ENCRYPTED_BLOCK_SIZE else CryptoEngine.BLOCK_SIZE
-        
-        // Ring buffer to avoid frequent allocations
         val ringBuffer = ByteBuffer.allocate(expectedBlockSize * 2)
         val block = ByteArray(expectedBlockSize)
         val decryptedBuffer = ByteArray(expectedBlockSize + 32)
@@ -554,38 +586,23 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 if (readCount == -1) break
                 
                 ringBuffer.put(chunk, 0, readCount)
-                ringBuffer.flip() // Prepare for reading
-                
-                // Process accumulated data until we have a complete block
+                ringBuffer.flip()
                 while (ringBuffer.remaining() >= expectedBlockSize) {
                     ringBuffer.get(block, 0, expectedBlockSize)
-                    
                     val decryptedLength = if (secretKey != null) {
                         cryptoEngine.decryptBlock(block, expectedBlockSize, secretKey, decryptedBuffer)
                     } else {
                         System.arraycopy(block, 0, decryptedBuffer, 0, expectedBlockSize)
                         expectedBlockSize
                     }
-                    
-                    // Determine the destination offset in the file.
-                    val blockIndex = if (patchIndices != null) {
-                        if (currentIdx >= patchIndices.size) throw Exception("Index out of bounds for patchIndices")
-                        patchIndices[currentIdx].toLong()
-                    } else {
-                        currentIdx.toLong()
-                    }
-                    
+                    val blockIndex = if (patchIndices != null) patchIndices[currentIdx].toLong() else currentIdx.toLong()
                     val offset = blockIndex * CryptoEngine.BLOCK_SIZE
                     output.position(offset)
                     output.write(ByteBuffer.wrap(decryptedBuffer, 0, decryptedLength))
-                    
                     currentIdx++
                 }
-                
-                ringBuffer.compact() // Prepare for writing more data, keeping any remainder
+                ringBuffer.compact()
             }
-            
-            // Process any remaining partial block at EOF
             ringBuffer.flip()
             val remaining = ringBuffer.remaining()
             if (remaining > 0) {
@@ -596,14 +613,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                     System.arraycopy(block, 0, decryptedBuffer, 0, remaining)
                     remaining
                 }
-                
-                val blockIndex = if (patchIndices != null) {
-                    if (currentIdx >= patchIndices.size) throw Exception("Index out of bounds for patchIndices")
-                    patchIndices[currentIdx].toLong()
-                } else {
-                    currentIdx.toLong()
-                }
-                
+                val blockIndex = if (patchIndices != null) patchIndices[currentIdx].toLong() else currentIdx.toLong()
                 val offset = blockIndex * CryptoEngine.BLOCK_SIZE
                 output.position(offset)
                 output.write(ByteBuffer.wrap(decryptedBuffer, 0, decryptedLength))
@@ -614,7 +624,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
 
     private fun handleSetFileTimestamp(call: MethodCall, result: MethodChannel.Result) {
         val path = call.argument<String>("path")!!
-        val updatedAt = call.argument<Number>("updatedAt")!!.toLong()
+        val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong() ?: 0L
         executor.execute {
             val success = setFileTimestampInternal(path, updatedAt)
             mainHandler.post { result.success(success) }
@@ -624,7 +634,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     private fun setFileTimestampInternal(path: String, updatedAt: Long): Boolean {
         return try {
             when {
-                path.startsWith("content://") -> true // No touch for SAF
+                path.startsWith("content://") -> true 
                 isShizukuPath(path) -> getShizukuServiceSync().setLastModified(getCleanPath(path), updatedAt)
                 else -> {
                     val file = File(path)
@@ -648,200 +658,65 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                     if (size != -1L) {
                         mainHandler.post { result.success(mapOf("size" to size, "lastModified" to service.getLastModified(path))) }
                     } else {
-                        mainHandler.post { result.error("NOT_FOUND", "File not found", null) }
+                        mainHandler.post { result.error("NOT_FOUND", "File not found via Shizuku", null) }
+                    }
+                } else if (uriStr.startsWith("content://")) {
+                    val df = DocumentFile.fromSingleUri(context!!, Uri.parse(uriStr))
+                    if (df != null && df.exists()) {
+                        mainHandler.post { result.success(mapOf("size" to df.length(), "lastModified" to df.lastModified())) }
+                    } else {
+                        mainHandler.post { result.error("NOT_FOUND", "File not found via SAF", null) }
                     }
                 } else {
-                    val f = if (uriStr.startsWith("content://")) DocumentFile.fromSingleUri(context!!, Uri.parse(uriStr)) else DocumentFile.fromFile(File(uriStr))
-                    if (f != null && f.exists()) {
-                        mainHandler.post { result.success(mapOf("size" to f.length(), "lastModified" to f.lastModified())) }
+                    val file = File(uriStr)
+                    if (file.exists()) {
+                        mainHandler.post { result.success(mapOf("size" to file.length(), "lastModified" to file.lastModified())) }
                     } else {
-                        mainHandler.post { result.error("NOT_FOUND", "File not found", null) }
+                        mainHandler.post { result.error("NOT_FOUND", "Local file not found", null) }
                     }
                 }
             } catch (e: Exception) {
-                mainHandler.post { result.error("INFO_ERROR", e.message, null) }
+                mainHandler.post { result.error("FILE_INFO_ERROR", e.message, null) }
             }
         }
     }
 
-    private fun checkPathExists(path: String?): Boolean {
-        if (path == null || context == null) return false
-        return when {
-            path.startsWith("content://") -> {
-                try { DocumentFile.fromTreeUri(context!!, Uri.parse(path))?.exists() ?: false } catch (e: Exception) { false }
-            }
-            isShizukuPath(path) -> getShizukuServiceSync().getFileSize(getCleanPath(path)) != -1L
-            else -> File(path).exists()
-        }
-    }
-
-    private fun checkSafPermission(uriStr: String): Boolean {
-        if (context == null || !uriStr.startsWith("content://")) return true
-        val targetUriStr = Uri.parse(uriStr).toString()
-        val permissions = context!!.contentResolver.persistedUriPermissions
-        return permissions.any { it.uri.toString() == targetUriStr && it.isWritePermission }
-    }
-
-    private fun handleListSafDirectory(call: MethodCall, result: MethodChannel.Result) {
-        val uriStr = call.argument<String>("uri")!!
-        executor.execute {
-            try {
-                val results: String = when {
-                    uriStr.startsWith("content://") -> {
-                        fileScanner.listSafDirectory(Uri.parse(uriStr)).toString()
-                    }
-                    isShizukuPath(uriStr) -> {
-                        val cleanPath = getCleanPath(uriStr)
-                        val service = getShizukuServiceSync()
-                        val files = JSONArray(service.listFileInfo(cleanPath))
-                        val shizukuResults = JSONArray()
-                        for (i in 0 until files.length()) {
-                            val f = files.getJSONObject(i)
-                            shizukuResults.put(JSONObject().apply {
-                                put("name", f.getString("name"))
-                                put("uri", "shizuku://$cleanPath/${f.getString("name")}")
-                                put("isDirectory", f.getBoolean("isDirectory"))
-                            })
-                        }
-                        shizukuResults.toString()
-                    }
-                    else -> {
-                        val localResults = JSONArray()
-                        File(uriStr).listFiles()?.forEach { file ->
-                            localResults.put(JSONObject().apply {
-                                put("name", file.name)
-                                put("uri", file.absolutePath)
-                                put("isDirectory", file.isDirectory)
-                            })
-                        }
-                        localResults.toString()
-                    }
-                }
-                mainHandler.post { result.success(results) }
-            } catch (e: Exception) {
-                mainHandler.post { result.error("LIST_ERROR", e.message, null) }
-            }
-        }
-    }
-
-    private fun handleHasFilesWithExtensions(call: MethodCall, result: MethodChannel.Result) {
-        val uriStr = call.argument<String>("uri")!!
-        val extensions = call.argument<List<String>>("extensions")!!
-        executor.execute {
-            try {
-                val success = when {
-                    uriStr.startsWith("content://") -> {
-                        val rootUri = Uri.parse(uriStr)
-                        val docId = try { DocumentsContract.getTreeDocumentId(rootUri) } catch(e: Exception) { DocumentsContract.getDocumentId(rootUri) }
-                        fileScanner.checkSafExtensionsRecursive(rootUri, docId, extensions, 0)
-                    }
-                    else -> false // Simplified for now
-                }
-                mainHandler.post { result.success(success) }
-            } catch (e: Exception) {
-                mainHandler.post { result.error("SCAN_ERROR", e.message, null) }
-            }
-        }
-    }
-
-    private fun checkShizukuStatus(): Map<String, Any> {
-        val status = mutableMapOf<String, Any>()
-        try {
-            if (Shizuku.pingBinder()) {
-                status["running"] = true
-                status["authorized"] = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
-                status["version"] = Shizuku.getLatestServiceVersion()
-            } else {
-                status["running"] = false
-                status["authorized"] = false
-            }
-        } catch (e: Exception) {
-            status["running"] = false
-            status["authorized"] = false
-            status["error"] = e.message ?: "Error"
-        }
-        return status
-    }
-
-    private fun requestShizukuPermission(result: MethodChannel.Result) {
-        if (!Shizuku.pingBinder()) {
-            result.error("SHIZUKU_NOT_RUNNING", "Shizuku is not running", null)
-            return
-        }
-        if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-            result.success(true)
-            return
-        }
-        val listener = object : Shizuku.OnRequestPermissionResultListener {
-            override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
-                Shizuku.removeRequestPermissionResultListener(this)
-                mainHandler.post { result.success(grantResult == PackageManager.PERMISSION_GRANTED) }
-            }
-        }
-        Shizuku.addRequestPermissionResultListener(listener)
-        Shizuku.requestPermission(1001)
-    }
-
-    private fun openShizukuApp() {
-        context?.let { ctx ->
-            val intent = ctx.packageManager.getLaunchIntentForPackage("rikka.shizuku")
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                ctx.startActivity(intent)
-            } else {
-                val marketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=rikka.shizuku")).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                ctx.startActivity(marketIntent)
-            }
-        }
-    }
-
-    private fun openSafDirectoryPicker(initialUriStr: String?, result: MethodChannel.Result) {
-        if (activity == null) {
-            result.error("NO_ACTIVITY", "Activity not attached", null)
-            return
-        }
-        pendingResult = result
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-            addCategory(Intent.CATEGORY_DEFAULT)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && initialUriStr != null) {
-            try { intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(initialUriStr)) } 
-            catch (e: Exception) { android.util.Log.w("VaultSync", "Could not set initial URI for picker: ${e.message}") }
-        }
-        activity!!.startActivityForResult(intent, PICK_DIRECTORY_REQUEST_CODE)
-    }
-
-    private fun isShizukuPath(path: String?): Boolean = path?.startsWith("shizuku://") == true
-    private fun getCleanPath(path: String): String = if (path.startsWith("shizuku://")) path.substring(10).replace("//", "/") else path.replace("//", "/")
+    private fun isShizukuPath(path: String): Boolean = path.startsWith("shizuku://")
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
         binding.addActivityResultListener(this)
     }
 
+    override fun onDetachedFromActivityForConfigChanges() {
+        activity = null
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        activity = binding.activity
+        binding.addActivityResultListener(this)
+    }
+
+    override fun onDetachedFromActivity() {
+        activity = null
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
         if (requestCode == PICK_DIRECTORY_REQUEST_CODE) {
-            if (resultCode == Activity.RESULT_OK) {
-                data?.data?.let { uri -> 
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                val uri = data.data
+                if (uri != null) {
                     context!!.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                    pendingResult?.success(uri.toString()) 
-                } ?: pendingResult?.success(null)
+                    pendingResult?.success(uri.toString())
+                } else {
+                    pendingResult?.error("PICK_FAILED", "No URI returned", null)
+                }
             } else {
-                pendingResult?.success(null)
+                pendingResult?.error("PICK_CANCELLED", "User cancelled directory pick", null)
             }
             pendingResult = null
             return true
         }
         return false
     }
-
-    override fun onDetachedFromActivityForConfigChanges() { activity = null }
-    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) { 
-        activity = binding.activity 
-        binding.addActivityResultListener(this)
-    }
-    override fun onDetachedFromActivity() { activity = null }
 }
