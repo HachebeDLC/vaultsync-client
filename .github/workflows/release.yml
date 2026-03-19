@@ -64,8 +64,8 @@ jobs:
         if: matrix.target == 'Windows'
         shell: pwsh
         run: |
-          cd build\windows\runner\Release
-          7z a ..\..\..\..\VaultSync-Windows.zip *
+          cd build\windows\x64\runner\Release
+          7z a ..\..\..\..\..\VaultSync-Windows.zip *
 
       - name: Zip Artifacts (Linux)
         if: matrix.target == 'Linux'
