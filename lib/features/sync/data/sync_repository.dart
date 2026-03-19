@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -107,7 +108,7 @@ class SyncRepository {
     if (sid == 'dolphin') {
       if (localRelPath.toLowerCase().contains('/wii/title/00010000/')) {
          final idx = parts.indexOf('00010000');
-         return 'Wii/' + parts.sublist(idx + 1).join('/');
+         return 'Wii/${parts.sublist(idx + 1).join('/')}';
       }
       if (localRelPath.toLowerCase().contains('/gc/')) {
          final idx = parts.indexWhere((p) => p.toLowerCase() == 'gc');
@@ -286,8 +287,9 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
       String status = 'Synced';
       String type = (relPath.toLowerCase().contains('.state') || relPath.toLowerCase().endsWith('.png')) ? 'State' : 'Save';
       
-      if (localInfo == null) status = 'Remote Only';
-      else if (remoteInfo == null) status = 'Local Only';
+      if (localInfo == null) {
+        status = 'Remote Only';
+      } else if (remoteInfo == null) status = 'Local Only';
       else {
         final String remoteHash = remoteInfo['hash'];
         if (_isJournaledSynced(prefs, systemId, relPath, remoteHash)) { status = 'Synced'; }
@@ -310,7 +312,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
 
   /// Synchronizes a system's save files between the local device and the server.
   /// Uses delta-syncing for large files and convergent encryption.
-  Future<void> syncSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, String? filenameFilter, bool fastSync = false}) async {
+  Future<void> syncSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, String? filenameFilter, bool fastSync = false, bool Function()? isCancelled}) async {
     await _syncLock.protect(() async {
       final prefs = await SharedPreferences.getInstance();
       final effectivePath = await _pathService.getEffectivePath(systemId);
@@ -328,6 +330,10 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
         final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
 
         for (final relPath in cloudRelPaths) {
+          if (isCancelled?.call() == true) {
+            onProgress?.call('Sync Cancelled');
+            break;
+          }
           if (relPath.isEmpty) continue; // Skip unmappable paths
           final remotePath = '$cloudPrefix/$relPath';
           if (filenameFilter != null && !remotePath.contains(filenameFilter)) continue;
@@ -371,7 +377,17 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
           }
         }
         await _commitSyncJournal(prefs);
-      } catch (e) { print('❌ SYNC ERROR: $e'); onError?.call(e.toString()); } 
+      } catch (e) { 
+        print('❌ SYNC ERROR: $e'); 
+        onError?.call(e.toString()); 
+        
+        // Rethrow critical auth or network errors to abort the entire sync run
+        if (e is ApiException && (e.statusCode == 401 || e.statusCode == 403)) {
+          rethrow;
+        } else if (e is SocketException || e is http.ClientException) {
+          rethrow;
+        }
+      } 
     });
   }
 

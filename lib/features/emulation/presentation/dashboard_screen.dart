@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../sync/domain/sync_provider.dart';
 import '../../sync/services/system_path_service.dart';
 import '../../sync/services/shizuku_service.dart';
+import '../../../core/errors/error_mapper.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -73,8 +74,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget _getSystemIconWidget(String systemId, {double size = 24}) {
     final id = systemId.toLowerCase();
     String iconName = 'controller';
-    if (id.contains('ps2') || id.contains('aethersx2') || id.contains('nethersx2')) iconName = 'playstation';
-    else if (id.contains('gba') || id.contains('gbc') || id.contains('gb')) iconName = 'gameboy';
+    if (id.contains('ps2') || id.contains('aethersx2') || id.contains('nethersx2')) {
+      iconName = 'playstation';
+    } else if (id.contains('gba') || id.contains('gbc') || id.contains('gb')) iconName = 'gameboy';
     else if (id.contains('gc') || id.contains('dolphin')) iconName = 'gc';
     else if (id.contains('3ds') || id.contains('citra')) iconName = 'nintendo3ds';
     else if (id.contains('ds') || id.contains('melonds')) iconName = 'ds';
@@ -88,6 +90,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       placeholderBuilder: (context) => const Icon(Icons.folder, size: 24, color: Colors.blue),
       errorBuilder: (context, error, stackTrace) => const Icon(Icons.folder, size: 24, color: Colors.blue),
     );
+  }
+
+  String _getActionLabel(SyncAction action) {
+    switch (action) {
+      case SyncAction.login: return 'LOGIN';
+      case SyncAction.openShizuku: return 'FIX';
+      case SyncAction.reselectFolder: return 'SETTINGS';
+      case SyncAction.checkNetwork: return 'RETRY';
+      default: return 'DISMISS';
+    }
   }
 
   @override
@@ -134,12 +146,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           if (bridgeAlert != null) bridgeAlert,
           if (syncState.syncErrors.isNotEmpty && bridgeAlert == null)
             _buildActionAlert(
-              '${syncState.syncErrors.length} sync errors detected', 
-              'check system paths and connectivity',
+              syncState.syncErrors.first.title, 
+              syncState.syncErrors.first.message,
               Icons.error_outline, 
               Colors.red.shade900,
-              onAction: () => ref.read(syncProvider.notifier).clearErrors(),
-              actionLabel: 'DISMISS',
+              onAction: () {
+                final error = syncState.syncErrors.first;
+                if (error.action == SyncAction.login) {
+                  context.push('/auth');
+                } else if (error.action == SyncAction.reselectFolder) {
+                  context.push('/settings');
+                } else if (error.action == SyncAction.openShizuku) {
+                  _fixShizuku();
+                } else if (error.action == SyncAction.checkNetwork) {
+                  ref.read(syncProvider.notifier).sync();
+                }
+                ref.read(syncProvider.notifier).clearErrors();
+              },
+              actionLabel: _getActionLabel(syncState.syncErrors.first.action),
             ),
           
           Expanded(

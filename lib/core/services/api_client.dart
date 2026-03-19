@@ -7,6 +7,16 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:crypto/crypto.dart';
 import 'package:pointycastle/export.dart';
 
+class ApiException implements Exception {
+  final int statusCode;
+  final String message;
+
+  ApiException(this.statusCode, this.message);
+
+  @override
+  String toString() => 'ApiException: HTTP $statusCode: $message';
+}
+
 class ApiClient {
   final _secureStorage = const FlutterSecureStorage(
     aOptions: AndroidOptions(
@@ -78,7 +88,7 @@ class ApiClient {
       headers: await _getHeaders(includeJson: false),
     );
     if (response.statusCode != 200) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body.length > 100 ? response.body.substring(0, 100) : response.body}');
+      throw ApiException(response.statusCode, response.body.length > 100 ? response.body.substring(0, 100) : response.body);
     }
     return json.decode(response.body);
   }
@@ -90,7 +100,7 @@ class ApiClient {
       body: json.encode(body),
     );
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body.length > 100 ? response.body.substring(0, 100) : response.body}');
+      throw ApiException(response.statusCode, response.body.length > 100 ? response.body.substring(0, 100) : response.body);
     }
     return json.decode(response.body);
   }
@@ -102,7 +112,7 @@ class ApiClient {
       body: body != null ? json.encode(body) : null,
     );
     if (response.statusCode != 200) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body.length > 100 ? response.body.substring(0, 100) : response.body}');
+      throw ApiException(response.statusCode, response.body.length > 100 ? response.body.substring(0, 100) : response.body);
     }
     return json.decode(response.body);
   }

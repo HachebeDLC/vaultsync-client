@@ -13,6 +13,53 @@ class FileScanner(private val context: Context) {
     companion object {
         const val MAX_EXTENSION_SCAN_DEPTH = 3
         const val MAX_SCAN_DEPTH = 15
+
+        // Systems whose user-configured path is already narrowed to
+        // a save-only directory (SAVEDATA/, nand/user/save/ etc.)
+        // — safe to sync every file found, no extension check needed.
+        private val SYNC_EVERYTHING_SIDS = setOf(
+            "switch", "eden"   // walk-guard handles scope inside the scan
+        )
+
+        // Systems that use a structural scope guard (relPath must
+        // contain a known anchor) instead of extension matching.
+        // Files inside are typically extensionless binary blobs.
+        private val SCOPE_GUARDED_SIDS = setOf(
+            "wii",                          // guard: Wii/title/00010000/
+            "3ds", "citra", "azahar"        // guard: sdmc/ or nand/
+        )
+
+        // Extension whitelist for all other systems.
+        // Deliberately excludes: ".save", ".bin" (too generic),
+        // ".dat" (used by covers/config on several emulators).
+        val SAVE_EXTENSIONS = setOf(
+            // RetroArch universal
+            "srm", "state",
+            // RetroArch auto-save states (bare extension is 'auto' after substringAfterLast)
+            "auto",
+            // PS1 (DuckStation standalone, ePSXe, FPse)
+            "mcd", "mcr",
+            // PS2 (AetherSX2/NetherSX2/PCSX2 standalone)
+            "ps2",
+            // GameCube (Dolphin individual slot saves & raw memcard images)
+            "gci", "raw",
+            // Nintendo DS / DSi (Drastic, MelonDS standalone)
+            "dsv", "dss",
+            // Dreamcast (Redream, Flycast)
+            "vms", "vmu",
+            // N64 (Mupen64Plus FZ — SRAM, FlashRAM, MemPak, EEPROM)
+            "eep", "sra", "fla", "mpk",
+            // Saturn (YabaSanshiro standalone)
+            "bcr",
+            // NeoGeo Pocket (NGP.emu)
+            "ngf", "ngs",
+            // DS saves used by some RetroArch cores
+            "sav",
+            // RetroArch save-state screenshot thumbnails
+            "png",
+            // Generic backup/export formats used by several emulators
+            "bak", "vfs"
+        )
     }
 
     private val safLock = Any()
@@ -135,6 +182,57 @@ class FileScanner(private val context: Context) {
         }
     }
 
+    /**
+     * Returns true if [relPath]/[fileName] should be included in the
+     * sync manifest for [sid] (lowercased system ID).
+     *
+     * [relPath]  — path relative to the scan root, e.g. "GC/EUR/GALE01.gci"
+     * [fileName] — bare filename, e.g. "GALE01.gci"
+     */
+    private fun shouldSyncFile(
+        sid: String,
+        relPath: String,
+        fileName: String
+    ): Boolean {
+        // ── Global Noise Filter ──────────────────────────────────
+        // Ignore hidden files, macOS metadata, and Syncthing conflicts.
+        if (fileName.startsWith(".")) return false
+
+        // ── Systems configured for full-directory sync ───────────
+        if (sid in SYNC_EVERYTHING_SIDS) return true
+
+        // ── PSP / PPSSPP ─────────────────────────────────────────
+        // Only sync standard save data and emulator save states.
+        // This prevents syncing large 'TEXTURES' or 'GAME' (DLC) folders
+        // if the user pointed the path to the root /PSP/ directory.
+        if (sid == "psp" || sid == "ppsspp") {
+            val lower = relPath.lowercase()
+            return lower.contains("savedata/") || lower.contains("ppsspp_state/") || 
+                   // Support flat structures where the user pointed exactly at the SAVEDATA folder
+                   !lower.contains("/") 
+        }
+
+        // ── Wii ──────────────────────────────────────────────────
+        // title/0001000 captures games (0000), DLC (0002), and
+        // WiiWare (0004) while excluding firmware/system data.
+        if (sid == "wii") {
+            return relPath.contains("title/0001000", ignoreCase = true)
+        }
+
+        // ── 3DS / Citra / Azahar ─────────────────────────────────
+        // Save data lives under sdmc/Nintendo 3DS/.../title/00040000/
+        // for retail games. The 00040000 anchor ensures we only sync
+        // actual game saves and skip system data/firmware.
+        if (sid == "3ds" || sid == "citra" || sid == "azahar") {
+            val lower = relPath.lowercase()
+            return lower.contains("title/00040000")
+        }
+
+        // ── All other systems: extension filter ──────────────────
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        return ext.isNotEmpty() && SAVE_EXTENSIONS.contains(ext)
+    }
+
     fun scanSafRecursive(
         uri: Uri, 
         systemId: String, 
@@ -145,7 +243,6 @@ class FileScanner(private val context: Context) {
         val results = JSONArray()
         val sid = systemId.lowercase()
         val isSwitch = sid == "switch" || sid == "eden"
-        val syncEverything = sid in setOf("switch", "eden", "ps2", "psx", "ps1", "duckstation", "aethersx2", "nethersx2", "pcsx2", "psp", "ppsspp", "dolphin", "gc", "wii", "3ds", "citra", "azahar")
         
         val ignoreSet = ignoredFoldersList.map { it.lowercase() }.toHashSet()
         val combinedIgnoreSet = combinedIgnores.map { it.lowercase() }.toHashSet()
@@ -183,8 +280,10 @@ class FileScanner(private val context: Context) {
                     if (combinedIgnoreSet.contains(name.lowercase()) || ignoreSet.contains(relPath.lowercase())) continue
 
                     if (isSwitch && !alreadyInZone) {
-                        val inSavePath = relPath.contains("nand/user/save")
-                        if (!inSavePath && !relPath.startsWith("nand") && relPath != "nand") continue
+                        val inSavePath = relPath.contains("nand/user/save", ignoreCase = true)
+                        if (!inSavePath && 
+                            !relPath.startsWith("nand", ignoreCase = true) && 
+                            !relPath.equals("nand", ignoreCase = true)) continue
                     }
 
                     val isDir = mime == DocumentsContract.Document.MIME_TYPE_DIR
@@ -202,22 +301,16 @@ class FileScanner(private val context: Context) {
                         })
                         walkSaf(id, relPath, depth + 1)
                     } else {
-                        var fSize = cursor.getLong(3)
-                        var fLast = cursor.getLong(4)
-                        
-                        if (fSize <= 0) {
-                            val df = currentLevelMap[name]
-                            fSize = df?.length() ?: 0
-                            fLast = df?.lastModified() ?: 0
-                        }
+                        if (shouldSyncFile(sid, relPath, name)) {
+                            var fSize = cursor.getLong(3)
+                            var fLast = cursor.getLong(4)
+                            
+                            if (fSize <= 0) {
+                                val df = currentLevelMap[name]
+                                fSize = df?.length() ?: 0
+                                fLast = df?.lastModified() ?: 0
+                            }
 
-                        val shouldSync = if (isSwitch) {
-                            relPath.contains("nand/user/save") || alreadyInZone || syncEverything
-                        } else {
-                            syncEverything || allowedExtensions.contains(name.split(".").last().lowercase())
-                        }
-
-                        if (shouldSync) {
                             results.put(JSONObject().apply {
                                 put("name", name)
                                 put("relPath", relPath)
@@ -247,7 +340,6 @@ class FileScanner(private val context: Context) {
         val results = JSONArray()
         val sid = systemId.lowercase()
         val isSwitch = sid == "switch" || sid == "eden"
-        val syncEverything = sid in setOf("switch", "eden", "ps2", "psx", "ps1", "duckstation", "aethersx2", "nethersx2", "pcsx2", "psp", "ppsspp")
         
         val ignoreSet = ignoredFoldersList.map { it.lowercase() }.toHashSet()
         val combinedIgnoreSet = combinedIgnores.map { it.lowercase() }.toHashSet()
@@ -264,8 +356,10 @@ class FileScanner(private val context: Context) {
                 if (combinedIgnoreSet.contains(name.lowercase()) || ignoreSet.contains(relPath.lowercase())) continue
 
                 if (isSwitch && !alreadyInZone) {
-                    val inSavePath = relPath.contains("nand/user/save")
-                    if (!inSavePath && !relPath.startsWith("nand") && relPath != "nand") continue
+                    val inSavePath = relPath.contains("nand/user/save", ignoreCase = true)
+                    if (!inSavePath && 
+                        !relPath.startsWith("nand", ignoreCase = true) && 
+                        !relPath.equals("nand", ignoreCase = true)) continue
                 }
                 
                 val fullPath = if (currentPath.endsWith("/")) "$currentPath$name" else "$currentPath/$name"
@@ -278,13 +372,7 @@ class FileScanner(private val context: Context) {
                     })
                     walkShizuku(fullPath, relPath, depth + 1)
                 } else {
-                    val shouldSync = if (isSwitch) {
-                        relPath.contains("nand/user/save") || alreadyInZone || syncEverything
-                    } else {
-                        syncEverything || allowedExtensions.contains(name.split(".").last().lowercase())
-                    }
-
-                    if (shouldSync) {
+                    if (shouldSyncFile(sid, relPath, name)) {
                         results.put(JSONObject().apply {
                             put("name", name)
                             put("relPath", relPath)
@@ -311,7 +399,6 @@ class FileScanner(private val context: Context) {
         val results = JSONArray()
         val sid = systemId.lowercase()
         val isSwitch = sid == "switch" || sid == "eden"
-        val syncEverything = sid in setOf("switch", "eden", "ps2", "psx", "ps1", "duckstation", "aethersx2", "nethersx2", "pcsx2", "psp", "ppsspp")
         
         val ignoreSet = ignoredFoldersList.map { it.lowercase() }.toHashSet()
         val combinedIgnoreSet = combinedIgnores.map { it.lowercase() }.toHashSet()
@@ -323,8 +410,10 @@ class FileScanner(private val context: Context) {
                 if (combinedIgnoreSet.contains(file.name.lowercase()) || ignoreSet.contains(relPath.lowercase())) return@forEach
                 
                 if (isSwitch && !alreadyInZone) {
-                    val inSavePath = relPath.contains("nand/user/save")
-                    if (!inSavePath && !relPath.startsWith("nand") && relPath != "nand") return@forEach
+                    val inSavePath = relPath.contains("nand/user/save", ignoreCase = true)
+                    if (!inSavePath && 
+                        !relPath.startsWith("nand", ignoreCase = true) && 
+                        !relPath.equals("nand", ignoreCase = true)) return@forEach
                 }
 
                 if (file.isDirectory) {
@@ -336,13 +425,7 @@ class FileScanner(private val context: Context) {
                     })
                     walkLocal(file, relPath)
                 } else {
-                    val shouldSync = if (isSwitch) {
-                        relPath.contains("nand/user/save") || alreadyInZone || syncEverything
-                    } else {
-                        syncEverything || allowedExtensions.contains(file.name.split(".").last().lowercase())
-                    }
-
-                    if (shouldSync) {
+                    if (shouldSyncFile(sid, relPath, file.name)) {
                         results.put(JSONObject().apply {
                             put("name", file.name)
                             put("relPath", relPath)

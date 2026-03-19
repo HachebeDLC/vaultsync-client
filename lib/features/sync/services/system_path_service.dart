@@ -386,7 +386,7 @@ class SystemPathService {
   Future<Map<String, String>> getRetroArchPaths() async {
     final saves = await getSystemPath('retroarch') ?? suggestSavePathById('retroarch');
     final states = saves.endsWith('/saves') 
-        ? saves.substring(0, saves.length - 6) + '/states' 
+        ? '${saves.substring(0, saves.length - 6)}/states' 
         : '$saves/states'; // Fallback if the configured path doesn't end in /saves
 
     return {

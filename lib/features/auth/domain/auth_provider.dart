@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:workmanager/workmanager.dart';
 import '../../../core/services/api_client_provider.dart';
 import '../data/auth_repository.dart';
 
@@ -34,6 +35,7 @@ class AuthNotifier extends StateNotifier<User?> {
   }
 
   Future<void> logout() async {
+    await Workmanager().cancelAll();
     await _repository.logout();
     state = null;
   }

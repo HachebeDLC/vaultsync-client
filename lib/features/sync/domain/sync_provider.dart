@@ -1,9 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/sync_service.dart';
+import '../domain/sync_log_provider.dart';
+import '../../../core/errors/error_mapper.dart';
 
 final syncProvider = StateNotifierProvider<SyncNotifier, SyncState>((ref) {
   final syncService = ref.watch(syncServiceProvider);
-  return SyncNotifier(syncService);
+  return SyncNotifier(syncService, ref);
 });
 
 class SyncState {
@@ -12,7 +14,7 @@ class SyncState {
   final String status;
   final double progress;
   final List<Map<String, dynamic>> conflicts;
-  final List<String> syncErrors;
+  final List<UserFacingError> syncErrors;
 
   SyncState({
     this.isSyncing = false, 
@@ -29,7 +31,7 @@ class SyncState {
     String? status, 
     double? progress,
     List<Map<String, dynamic>>? conflicts,
-    List<String>? syncErrors,
+    List<UserFacingError>? syncErrors,
   }) {
     return SyncState(
       isSyncing: isSyncing ?? this.isSyncing,
@@ -44,8 +46,9 @@ class SyncState {
 
 class SyncNotifier extends StateNotifier<SyncState> {
   final SyncService _syncService;
+  final Ref _ref;
 
-  SyncNotifier(this._syncService) : super(SyncState()) {
+  SyncNotifier(this._syncService, this._ref) : super(SyncState()) {
     refreshConflicts();
   }
 
@@ -55,12 +58,30 @@ class SyncNotifier extends StateNotifier<SyncState> {
       state = state.copyWith(conflicts: conflicts);
     } catch (e) {
       print('Error fetching conflicts: $e');
-      _addError('Failed to fetch conflicts: $e');
+      _addError(e, systemId: 'All');
     }
   }
 
-  void _addError(String msg) {
-    state = state.copyWith(syncErrors: [...state.syncErrors, msg]);
+  void _addError(dynamic error, {String systemId = 'All'}) {
+    final userError = ErrorMapper.map(error);
+    state = state.copyWith(syncErrors: [...state.syncErrors, userError]);
+    
+    String? actionLabel;
+    switch (userError.action) {
+      case SyncAction.login: actionLabel = 'Login'; break;
+      case SyncAction.openShizuku: actionLabel = 'Fix Shizuku'; break;
+      case SyncAction.checkNetwork: actionLabel = 'Retry'; break;
+      case SyncAction.reselectFolder: actionLabel = 'Settings'; break;
+      default: break;
+    }
+
+    _ref.read(syncLogProvider.notifier).addLog(
+      systemId, 
+      userError.message, 
+      isError: true, 
+      errorTitle: userError.title,
+      actionLabel: actionLabel
+    );
   }
 
   void clearErrors() {
@@ -82,7 +103,7 @@ class SyncNotifier extends StateNotifier<SyncState> {
         onProgress: (msg) {
           state = state.copyWith(status: msg);
         },
-        onError: _addError,
+        onError: (msg) => _addError(msg, systemId: 'All'),
         isCancelled: () => state.isCancelled,
       );
       await refreshConflicts();
@@ -93,8 +114,9 @@ class SyncNotifier extends StateNotifier<SyncState> {
         state = state.copyWith(status: 'Sync Complete!', progress: 1.0, isSyncing: false);
       }
     } catch (e) {
-      state = state.copyWith(status: 'Error: $e', isSyncing: false, isCancelled: false);
-      _addError('Sync failed: $e');
+      final userError = ErrorMapper.map(e);
+      state = state.copyWith(status: 'Error: ${userError.title}', isSyncing: false, isCancelled: false);
+      _addError(e, systemId: 'All');
     }
   }
 
@@ -106,12 +128,13 @@ class SyncNotifier extends StateNotifier<SyncState> {
       // Direct call to repository via service logic
       await _syncService.syncSpecificSystem(systemId, localPath, ignoredFolders: ignoredFolders, onProgress: (msg) {
         state = state.copyWith(status: msg);
-      }, onError: _addError);
+      }, onError: (msg) => _addError(msg, systemId: systemId));
       
       state = state.copyWith(status: 'Sync Complete!', progress: 1.0, isSyncing: false);
     } catch (e) {
-      state = state.copyWith(status: 'Error: $e', isSyncing: false);
-      _addError('Sync for $systemId failed: $e');
+      final userError = ErrorMapper.map(e);
+      state = state.copyWith(status: 'Error: ${userError.title}', isSyncing: false);
+      _addError(e, systemId: systemId);
     }
   }
 
@@ -121,7 +144,7 @@ class SyncNotifier extends StateNotifier<SyncState> {
       await refreshConflicts();
     } catch (e) {
       state = state.copyWith(status: 'Error resolving conflict: $e');
-      _addError('Failed to resolve conflict: $e');
+      _addError(e, systemId: 'All');
     }
   }
 
@@ -132,11 +155,12 @@ class SyncNotifier extends StateNotifier<SyncState> {
     try {
       await _syncService.syncGameBeforeLaunch(systemId, gameId, onProgress: (msg) {
         state = state.copyWith(status: msg);
-      }, onError: _addError);
+      }, onError: (msg) => _addError(msg, systemId: systemId));
       state = state.copyWith(status: 'Sync Complete!', progress: 1.0, isSyncing: false);
     } catch (e) {
-      state = state.copyWith(status: 'Error: $e', isSyncing: false);
-      _addError('Pre-launch sync for $gameId failed: $e');
+      final userError = ErrorMapper.map(e);
+      state = state.copyWith(status: 'Error: ${userError.title}', isSyncing: false);
+      _addError(e, systemId: systemId);
     }
   }
 

@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../data/sync_repository.dart';
 import '../domain/sync_log_provider.dart';
 import 'system_path_service.dart';
+import '../../../core/errors/error_mapper.dart';
 
 final syncServiceProvider = Provider<SyncService>((ref) {
   final repository = ref.watch(syncRepositoryProvider);
@@ -47,17 +48,23 @@ class SyncService {
       await _showNotification('VaultSync', 'Performing background maintenance...');
       await _platform.invokeMethod('acquirePowerLock');
     }
-    
+
     try {
       final paths = await _pathService.getAllSystemPaths();
       final allSystems = await _pathService.getEmulatorRepository().loadSystems();
-      if (paths.isEmpty) { 
-        onProgress?.call('No paths configured.'); 
-        return; 
+      if (paths.isEmpty) {
+        onProgress?.call('No paths configured.');
+        return;
       }
-      
+
+      // Pre-flight check: Shizuku status
+      Map? shizukuStatus;
+      try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (_) {}
+      final bool shizukuRunning = shizukuStatus?['running'] == true;
+      final bool shizukuAuthorized = shizukuStatus?['authorized'] == true;
+
       final Set<String> syncedPaths = {};
-      
+
       for (final entry in paths.entries) {
         if (isCancelled?.call() == true) { 
           onProgress?.call('Sync Cancelled'); 
@@ -66,31 +73,42 @@ class SyncService {
         final systemId = entry.key;
         if (isBackground) await _showNotification('VaultSync', 'Syncing $systemId...');
         onProgress?.call('Syncing $systemId...');
-        
+
         final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
         final ignoredFolders = systemConfig?.system.ignoredFolders;
-        
+
         final effectivePaths = await _resolveEffectivePaths(systemId);
-        
+
         for (final path in effectivePaths) {
           // Use a system-aware key to allow shared directories (like Dolphin) to sync for both Wii and GC
           final syncKey = '${systemId}_$path';
           if (syncedPaths.contains(syncKey)) continue;
-          
+
+          // Shizuku Safeguard: If path requires Shizuku but it's not ready, skip with a log
+          if (path.startsWith('shizuku://')) {
+            if (!shizukuRunning || !shizukuAuthorized) {
+              final reason = !shizukuRunning ? 'Shizuku not running' : 'Shizuku not authorized';
+              print('⚠️ SKIPPING $systemId: $reason');
+              _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Skipped: $reason', isError: true);
+              continue;
+            }
+          }
+
           final hasPermission = await _pathService.ensureSafPermission(path);
           if (!hasPermission) { 
             onProgress?.call('Permission denied for $path. Skipping.'); 
             onError?.call('Permission denied for $path'); 
             continue; 
           }
-          
+
           await _repository.syncSystem(
             path.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId, 
             path, 
             ignoredFolders: ignoredFolders, 
             onProgress: onProgress, 
             onError: onError, 
-            fastSync: fastSync
+            fastSync: fastSync,
+            isCancelled: isCancelled
           );
           syncedPaths.add(syncKey);
         }
@@ -98,8 +116,25 @@ class SyncService {
       }
       onProgress?.call('Sync Complete!');
     } catch(e) {
-      _ref?.read(syncLogProvider.notifier).addLog('All', 'Sync Failed: $e', isError: true);
-      onError?.call('Sync failed: $e');
+      final userError = ErrorMapper.map(e);
+      
+      String? actionLabel;
+      switch (userError.action) {
+        case SyncAction.login: actionLabel = 'Login'; break;
+        case SyncAction.openShizuku: actionLabel = 'Fix Shizuku'; break;
+        case SyncAction.checkNetwork: actionLabel = 'Retry'; break;
+        case SyncAction.reselectFolder: actionLabel = 'Settings'; break;
+        default: break;
+      }
+
+      _ref?.read(syncLogProvider.notifier).addLog(
+        'All', 
+        userError.message, 
+        isError: true, 
+        errorTitle: userError.title,
+        actionLabel: actionLabel
+      );
+      onError?.call(userError.toString());
     } finally { 
       if (isBackground) {
         await _clearNotification();
@@ -115,11 +150,26 @@ class SyncService {
       await _platform.invokeMethod('acquirePowerLock');
     }
     try {
+      // Pre-flight check: Shizuku status
+      Map? shizukuStatus;
+      try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (_) {}
+      final bool shizukuRunning = shizukuStatus?['running'] == true;
+      final bool shizukuAuthorized = shizukuStatus?['authorized'] == true;
+
       final effectivePaths = await _resolveEffectivePaths(systemId);
       for (final path in effectivePaths) {
+        // Shizuku Safeguard
+        if (path.startsWith('shizuku://')) {
+          if (!shizukuRunning || !shizukuAuthorized) {
+             final reason = !shizukuRunning ? 'Shizuku not running' : 'Shizuku not authorized';
+             _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Skipped: $reason', isError: true);
+             continue;
+          }
+        }
+
         final hasPermission = await _pathService.ensureSafPermission(path);
         if (!hasPermission) continue;
-        
+
         await _repository.syncSystem(
           path.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId, 
           path, 
@@ -131,8 +181,25 @@ class SyncService {
       }
       _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Success');
     } catch(e) {
-      _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Failed: $e', isError: true);
-      onError?.call('Auto-sync failed: $e');
+      final userError = ErrorMapper.map(e);
+      
+      String? actionLabel;
+      switch (userError.action) {
+        case SyncAction.login: actionLabel = 'Login'; break;
+        case SyncAction.openShizuku: actionLabel = 'Fix Shizuku'; break;
+        case SyncAction.checkNetwork: actionLabel = 'Retry'; break;
+        case SyncAction.reselectFolder: actionLabel = 'Settings'; break;
+        default: break;
+      }
+
+      _ref?.read(syncLogProvider.notifier).addLog(
+        systemId, 
+        userError.message, 
+        isError: true, 
+        errorTitle: userError.title,
+        actionLabel: actionLabel
+      );
+      onError?.call(userError.toString());
     } finally { 
       if (isBackground) {
         await _clearNotification();
@@ -140,7 +207,6 @@ class SyncService {
       }
     }
   }
-
   /// Resolves the effective local save path(s) for [systemId].
   /// Returns multiple paths for RetroArch (saves + states directories).
   Future<List<String>> _resolveEffectivePaths(String systemId) async {

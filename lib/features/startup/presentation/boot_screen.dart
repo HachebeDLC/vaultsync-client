@@ -7,8 +7,6 @@ import '../../auth/domain/auth_provider.dart';
 import '../../sync/services/system_path_service.dart';
 import '../../sync/services/desktop_tray_service.dart';
 
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../sync/services/background_sync_service.dart';
 
 class BootScreen extends ConsumerStatefulWidget {
   const BootScreen({super.key});

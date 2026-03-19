@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -6,6 +5,8 @@ import 'dart:convert';
 class SyncLog {
   final String systemId;
   final String status;
+  final String? errorTitle;
+  final String? actionLabel;
   final DateTime timestamp;
   final bool isError;
 
@@ -14,6 +15,8 @@ class SyncLog {
     required this.status,
     required this.timestamp,
     this.isError = false,
+    this.errorTitle,
+    this.actionLabel,
   });
 
   Map<String, dynamic> toJson() => {
@@ -21,6 +24,8 @@ class SyncLog {
     'status': status,
     'timestamp': timestamp.toIso8601String(),
     'isError': isError,
+    'errorTitle': errorTitle,
+    'actionLabel': actionLabel,
   };
 
   factory SyncLog.fromJson(Map<String, dynamic> json) => SyncLog(
@@ -28,6 +33,8 @@ class SyncLog {
     status: json['status'],
     timestamp: DateTime.parse(json['timestamp']),
     isError: json['isError'] ?? false,
+    errorTitle: json['errorTitle'],
+    actionLabel: json['actionLabel'],
   );
 }
 
@@ -48,7 +55,7 @@ class SyncLogNotifier extends StateNotifier<List<SyncLog>> {
     state = data.map((item) => SyncLog.fromJson(json.decode(item))).toList();
   }
 
-  Future<void> addLog(String systemId, String status, {bool isError = false}) async {
+  Future<void> addLog(String systemId, String status, {bool isError = false, String? errorTitle, String? actionLabel}) async {
     if (!mounted) return;
     
     final log = SyncLog(
@@ -56,6 +63,8 @@ class SyncLogNotifier extends StateNotifier<List<SyncLog>> {
       status: status,
       timestamp: DateTime.now(),
       isError: isError,
+      errorTitle: errorTitle,
+      actionLabel: actionLabel,
     );
     
     final newState = [log, ...state].take(50).toList(); // Keep last 50 logs

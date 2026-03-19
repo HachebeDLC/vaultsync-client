@@ -46,8 +46,36 @@ class SyncHistoryScreen extends ConsumerWidget {
                       color: log.isError ? Colors.red : Colors.green,
                     ),
                   ),
-                  title: Text(log.systemId.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(log.status),
+                  title: Row(
+                    children: [
+                      Text(log.systemId.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      if (log.actionLabel != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.blue.withOpacity(0.5)),
+                          ),
+                          child: Text(
+                            log.actionLabel!,
+                            style: const TextStyle(fontSize: 10, color: Colors.blue, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                    ],
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (log.errorTitle != null)
+                        Text(
+                          log.errorTitle!,
+                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500, fontSize: 13),
+                        ),
+                      Text(log.status, style: TextStyle(fontSize: 12, color: log.isError ? Colors.black87 : Colors.grey[600])),
+                    ],
+                  ),
                   trailing: Text(
                     DateFormat('HH:mm\nMMM d').format(log.timestamp),
                     textAlign: TextAlign.right,

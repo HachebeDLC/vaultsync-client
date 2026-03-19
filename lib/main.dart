@@ -27,6 +27,16 @@ void callbackDispatcher() {
     // Initialize a temporary container for background sync
     final container = ProviderContainer();
     try {
+      final apiClient = container.read(apiClientProvider);
+      final token = await apiClient.getToken();
+      
+      // If we've lost our session or logged out, stop the background worker permanently
+      if (token == null || token.isEmpty) {
+        print("🕒 WORKER: No auth token found. User is logged out. Cancelling background tasks.");
+        await Workmanager().cancelAll();
+        return true; 
+      }
+
       final syncService = container.read(syncServiceProvider);
       
       // Perform a Fast Sync (timestamp based) for all systems

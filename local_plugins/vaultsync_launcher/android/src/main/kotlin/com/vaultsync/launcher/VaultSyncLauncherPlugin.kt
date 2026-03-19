@@ -270,28 +270,38 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     private fun handleScanRecursive(call: MethodCall, result: MethodChannel.Result) {
-        val path = call.argument<String>("path")!!
-        val systemId = call.argument<String>("systemId")!!
+        val path           = call.argument<String>("path")!!
+        val systemId       = call.argument<String>("systemId")!!
         val ignoredFolders = call.argument<List<String>>("ignoredFolders") ?: emptyList()
-        
+
         executor.execute {
             try {
-                val allowedExtensions = setOf("dat", "bin", "sav", "srm", "state", "vfs")
-                val combinedIgnores = (setOf("cache", "shaders", "resourcepack", "load", "log", "logs", "temp", "tmp", "bios", "covers") + ignoredFolders).toSet()
+                // combinedIgnores: hardcoded noise + per-system ignored_folders from JSON
+                val combinedIgnores = (setOf(
+                    "cache", "shaders", "resourcepack", "load",
+                    "log", "logs", "temp", "tmp", "bios", "covers",
+                    "textures", "custom_textures", "game"
+                ) + ignoredFolders).toSet()
 
-                val results = when {
-                    path.startsWith("shizuku://") -> {
-                        val cleanPath = getCleanPath(path)
-                        fileScanner.scanShizukuRecursive(getShizukuServiceSync(), cleanPath, systemId, ignoredFolders, allowedExtensions, combinedIgnores)
-                    }
-                    path.startsWith("content://") -> {
-                        fileScanner.scanSafRecursive(Uri.parse(path), systemId, ignoredFolders, allowedExtensions, combinedIgnores)
-                    }
-                    else -> {
-                        fileScanner.scanLocalRecursive(path, systemId, ignoredFolders, allowedExtensions, combinedIgnores)
-                    }
+                val scanResults = when {
+                    path.startsWith("shizuku://") ->
+                        fileScanner.scanShizukuRecursive(
+                            getShizukuServiceSync(), getCleanPath(path),
+                            systemId, ignoredFolders,
+                            FileScanner.SAVE_EXTENSIONS, combinedIgnores
+                        )
+                    path.startsWith("content://") ->
+                        fileScanner.scanSafRecursive(
+                            Uri.parse(path), systemId, ignoredFolders,
+                            FileScanner.SAVE_EXTENSIONS, combinedIgnores
+                        )
+                    else ->
+                        fileScanner.scanLocalRecursive(
+                            path, systemId, ignoredFolders,
+                            FileScanner.SAVE_EXTENSIONS, combinedIgnores
+                        )
                 }
-                mainHandler.post { result.success(results.toString()) }
+                mainHandler.post { result.success(scanResults.toString()) }
             } catch (e: Exception) {
                 android.util.Log.e("VaultSync", "Scan failed: ${e.message}", e)
                 mainHandler.post { result.error("SCAN_ERROR", e.message, null) }
