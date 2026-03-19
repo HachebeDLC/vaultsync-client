@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:file_selector/file_selector.dart';
 import '../../emulation/data/emulator_repository.dart';
 import '../../emulation/domain/emulator_config.dart';
 
@@ -190,6 +191,12 @@ class SystemPathService {
   /// Opens the native directory picker (SAF on Android, platform picker on Desktop) 
   /// and returns the picked URI or absolute path.
   Future<String?> openDirectoryPicker({String? initialUri}) async {
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      return await getDirectoryPath(
+        initialDirectory: initialUri,
+        confirmButtonText: 'Select Folder',
+      );
+    }
     try { return await _platform.invokeMethod('openSafDirectoryPicker', {'initialUri': initialUri}); }
     on PlatformException catch (_) { return null; }
   }

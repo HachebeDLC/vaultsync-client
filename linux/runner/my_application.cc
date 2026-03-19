@@ -45,14 +45,20 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "vaultsync_client");
+    gtk_header_bar_set_title(header_bar, "VaultSync");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "vaultsync_client");
+    gtk_window_set_title(window, "VaultSync");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+
+  g_autoptr(GError) error = nullptr;
+  g_autoptr(GdkPixbuf) icon = gdk_pixbuf_new_from_file("data/flutter_assets/assets/vaultsync_icon.png", &error);
+  if (icon != nullptr) {
+    gtk_window_set_icon(window, icon);
+  }
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
