@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:workmanager/workmanager.dart';
 import '../../../core/services/api_client_provider.dart';
@@ -35,7 +36,9 @@ class AuthNotifier extends StateNotifier<User?> {
   }
 
   Future<void> logout() async {
-    await Workmanager().cancelAll();
+    if (Platform.isAndroid || Platform.isIOS) {
+      await Workmanager().cancelAll();
+    }
     await _repository.logout();
     state = null;
   }

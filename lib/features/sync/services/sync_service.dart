@@ -237,12 +237,14 @@ class SyncService {
 
   /// Registers a one-off background task to upload saves after an emulator is closed.
   Future<void> syncGameAfterClose(String systemId, String gameId) async {
-    await Workmanager().registerOneOffTask(
-      "upload-${DateTime.now().millisecondsSinceEpoch}", 
-      "uploadTask",
-      inputData: {'systemId': systemId, 'gameId': gameId},
-      constraints: Constraints(networkType: NetworkType.connected),
-    );
+    if (Platform.isAndroid || Platform.isIOS) {
+      await Workmanager().registerOneOffTask(
+        "upload-${DateTime.now().millisecondsSinceEpoch}", 
+        "uploadTask",
+        inputData: {'systemId': systemId, 'gameId': gameId},
+        constraints: Constraints(networkType: NetworkType.connected),
+      );
+    }
   }
 
   /// Returns a filename filter for a specific game, used to narrow down sync scope.

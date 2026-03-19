@@ -83,24 +83,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('periodic_sync', value);
     setState(() => _periodicSync = value);
-    
-    if (value) {
-      print('🕒 SCHEDULER: Registering periodic sync (6 hours)');
-      await Workmanager().registerPeriodicTask(
-        "periodic-sync", 
-        "syncTask",
-        frequency: const Duration(hours: 6),
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-          requiresBatteryNotLow: true,
-        ),
-      );
+
+    if (Platform.isAndroid || Platform.isIOS) {
+      if (value) {
+        print('🕒 SCHEDULER: Registering periodic sync (6 hours)');
+        await Workmanager().registerPeriodicTask(
+          "periodic-sync",
+          "syncTask",
+          frequency: const Duration(hours: 6),
+          constraints: Constraints(
+            networkType: NetworkType.connected,
+            requiresBatteryNotLow: true,
+          ),
+        );
+      } else {
+        print('🕒 SCHEDULER: Cancelling periodic sync');
+        await Workmanager().cancelByUniqueName("periodic-sync");
+      }
     } else {
-      print('🕒 SCHEDULER: Cancelling periodic sync');
-      await Workmanager().cancelByUniqueName("periodic-sync");
+      print('🕒 SCHEDULER: Background sync is not supported on this platform');
     }
   }
-
   Future<void> _grantUsageStats() async {
     await _platform.invokeMethod('openUsageStatsSettings');
     Future.delayed(const Duration(seconds: 2), _loadSettings);
