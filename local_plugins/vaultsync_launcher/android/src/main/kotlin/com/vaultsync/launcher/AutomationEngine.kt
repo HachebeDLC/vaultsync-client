@@ -17,7 +17,7 @@ class AutomationEngine(private val context: Context, private val channel: Method
     private var lastForegroundApp: String? = null
     private var monitoredPackages: List<String> = emptyList()
     private val automationHandler = Handler(Looper.getMainLooper())
-    private val pollingExecutor = Executors.newSingleThreadScheduledExecutor()
+    private var pollingExecutor = Executors.newSingleThreadScheduledExecutor()
     
     private fun checkAppClosure() {
         if (!hasUsageStatsPermission() || monitoredPackages.isEmpty()) return
@@ -41,11 +41,16 @@ class AutomationEngine(private val context: Context, private val channel: Method
 
     fun startMonitoring(packages: List<String>, intervalMs: Long) {
         monitoredPackages = packages
+        if (pollingExecutor.isShutdown || pollingExecutor.isTerminated) {
+            pollingExecutor = Executors.newSingleThreadScheduledExecutor()
+        }
         pollingExecutor.scheduleAtFixedRate(::checkAppClosure, 0, intervalMs, TimeUnit.MILLISECONDS)
     }
 
     fun stopMonitoring() {
-        pollingExecutor.shutdown()
+        if (!pollingExecutor.isShutdown) {
+            pollingExecutor.shutdown()
+        }
     }
 
     fun hasUsageStatsPermission(): Boolean {
