@@ -423,9 +423,10 @@ class SystemPathService {
     }
 
     switch (sid) {
+      // --- Standalone Desktop Emulators ---
       case 'ps2': return { 'path': findFolder(base, 'pcsx2'), 'emulatorId': 'ps2.pcsx2.desktop' };
       case 'psx':
-      case 'ps1': return { 'path': findFolder(base, 'duckstation'), 'emulatorId': 'psx.duckstation.desktop' };
+      case 'ps1': return { 'path': findFolder(base, 'duckstation'), 'emulatorId': 'ps1.duckstation.desktop' };
       case 'psp': return { 'path': findFolder(base, 'ppsspp'), 'emulatorId': 'psp.ppsspp.desktop' };
       case 'gc': return { 'path': findFolder(base, 'dolphin'), 'emulatorId': 'gc.dolphin.desktop' };
       case 'wii': return { 'path': findFolder(base, 'dolphin'), 'emulatorId': 'wii.dolphin.desktop' };
@@ -456,8 +457,46 @@ class SystemPathService {
       case 'model2': return { 'path': findFolder(base, 'model2'), 'emulatorId': 'model2.emulator.desktop' };
       case 'model3': return { 'path': findFolder(base, 'model3'), 'emulatorId': 'model3.supermodel.desktop' };
       case 'jag': return { 'path': findFolder(base, 'bigpemu'), 'emulatorId': 'jag.bigpemu.desktop' };
+
+      // --- RetroArch Systems ---
+      case 'snes': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'snes.ra.snes9x' };
+      case 'nes': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'nes.ra.mesen' };
+      case 'genesis':
+      case 'md':
+      case 'megadrive':
+      case 'ms':
+      case 'mastersystem':
+      case 'gg':
+      case 'gamegear':
+      case 'scd':
+      case 'segacd': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'genesis.ra.genesis_plus_gx' };
+      case '32x': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': '32x.ra.picodrive' };
+      case 'amiga': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'amiga.ra.puae' };
+      case 'c64': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'c64.ra.vice' };
+      case 'cpc': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'cpc.ra.caprice32' };
+      case '2600': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': '2600.ra.stella' };
+      case 'lynx': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'lynx.ra.handy' };
+      case 'doom': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'doom.ra.prboom' };
+      case 'dos': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'dos.ra.dosbox_pure' };
+      case 'easyrpg': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'easyrpg.ra.easyrpg' };
+      case 'fbneo': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'fbneo.ra.fbneo' };
+      case 'intv': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'intellivision.ra.freeintv' };
+      case 'pc98': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'pc98.ra.neko_project_ii_kai' };
+      case 'pico8': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'pico8.ra.pico8' };
+      case 'pce':
+      case 'tg16':
+      case 'tgcd': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'pce.ra.mednafen_pce_fast' };
+      case 'sat':
+      case 'saturn': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'saturn.ra.mednafen_saturn' };
+      case 'vb': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'vb.ra.mednafen_vb' };
+      case '3do': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': '3do.ra.opera' };
+      case 'zxspectrum': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'zxspectrum.ra.fuse' };
+      case 'ws':
+      case 'wsc': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'wonderswan.ra.mednafen_wswan' };
+      case 'ngp':
+      case 'ngpc': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'ngp.ra.mednafen_neopop' };
+
       default:
-        // RetroArch handles the vast majority of retro systems (SNES, NES, Genesis, etc.)
         return { 'path': findFolder(base, 'retroarch'), 'emulatorId': '' };
     }
   }

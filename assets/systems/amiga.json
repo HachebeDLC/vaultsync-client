@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "amiga",
+    "name": "Commodore Amiga",
+    "folders": ["amiga", "amiga600", "amiga1200", "amigacd32"],
+    "extensions": ["adf", "ipf", "dms", "uae", "lha", "zip", "7z"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "RetroArch PUAE",
+      "unique_id": "amiga.ra.puae",
+      "default": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "pico8",
+    "name": "PICO-8",
+    "folders": ["pico8", "pico-8"],
+    "extensions": ["p8", "png"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "RetroArch PICO-8",
+      "unique_id": "pico8.ra.pico8",
+      "default": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "c64",
+    "name": "Commodore 64",
+    "folders": ["c64", "c128", "vic20", "c16"],
+    "extensions": ["d64", "g64", "t64", "x64", "prg", "tap", "crt", "zip", "7z"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "RetroArch Vice",
+      "unique_id": "c64.ra.vice",
+      "default": true
+    }
+  ]
+}

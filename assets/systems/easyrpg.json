@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "easyrpg",
+    "name": "EasyRPG",
+    "folders": ["easyrpg"],
+    "extensions": ["ini", "ldmt"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "RetroArch EasyRPG",
+      "unique_id": "easyrpg.ra.easyrpg",
+      "default": true
+    }
+  ]
+}

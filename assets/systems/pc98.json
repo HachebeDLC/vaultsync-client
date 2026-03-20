@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "pc98",
+    "name": "NEC PC-98",
+    "folders": ["pc98"],
+    "extensions": ["hdi", "fdi", "d88", "nhd", "zip", "7z"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "RetroArch Neko Project II Kai",
+      "unique_id": "pc98.ra.neko_project_ii_kai",
+      "default": true
+    }
+  ]
+}

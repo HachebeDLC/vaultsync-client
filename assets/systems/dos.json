@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "dos",
+    "name": "DOS",
+    "folders": ["dos", "pc"],
+    "extensions": ["exe", "com", "bat", "conf", "zip", "7z"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "RetroArch DOSBox Pure",
+      "unique_id": "dos.ra.dosbox_pure",
+      "default": true
+    }
+  ]
+}

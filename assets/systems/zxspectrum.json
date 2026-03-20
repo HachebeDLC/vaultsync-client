@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "zxspectrum",
+    "name": "Sinclair ZX Spectrum",
+    "folders": ["zxspectrum", "spec", "spectrum"],
+    "extensions": ["tap", "tzx", "z80", "scl", "trd", "szx", "zip", "7z"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "RetroArch Fuse",
+      "unique_id": "zxspectrum.ra.fuse",
+      "default": true
+    }
+  ]
+}

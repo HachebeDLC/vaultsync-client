@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "doom",
+    "name": "DooM",
+    "folders": ["doom"],
+    "extensions": ["wad", "iwad", "pwad"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "RetroArch PrBoom",
+      "unique_id": "doom.ra.prboom",
+      "default": true
+    }
+  ]
+}
