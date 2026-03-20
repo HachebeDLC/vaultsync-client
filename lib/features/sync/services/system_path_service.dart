@@ -350,6 +350,29 @@ class SystemPathService {
     return _convertToPosix(rawPath);
   }
 
+  Future<bool> _hasValidRoms(Directory dir, List<String> validExtensions) async {
+    if (validExtensions.isEmpty) return false;
+    
+    // Convert to a quick lowercase set for fast lookups
+    final extSet = validExtensions.map((e) => e.toLowerCase()).toSet();
+    
+    try {
+      // Do a shallow recursive scan (it will stop instantly on the first match)
+      await for (final entity in dir.list(recursive: true)) {
+        if (entity is File) {
+          final fileName = entity.path.split('/').last.toLowerCase();
+          if (fileName.startsWith('.')) continue; // ignore hidden
+          
+          final ext = fileName.contains('.') ? fileName.split('.').last : '';
+          if (ext.isNotEmpty && extSet.contains(ext)) {
+            return true; // Found at least one valid ROM!
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
   /// Scans a library folder recursively to detect supported emulation systems 
   /// by matching directory names against known system IDs and verifying file content.
   Future<List<Map<String, String>>> scanLibrary(String inputPath) async {
@@ -369,15 +392,11 @@ class SystemPathService {
         });
         
         for (final d in matchingDirs) {
-          // Verify the folder actually contains valid saves for this system
-          // before cluttering the user's dashboard with empty/ROM-only folders.
-          try {
-            final scanResults = await DartFileScanner.scanRecursive(d.path, system.system.id, []);
-            final hasSaves = scanResults.any((f) => f['isDirectory'] == false);
-            if (hasSaves) {
-              results.add({'systemId': system.system.id, 'path': d.path});
-            }
-          } catch (_) {}
+          // Verify the folder actually contains valid ROMs for this system
+          // before cluttering the user's dashboard with empty EmuDeck structure folders.
+          if (await _hasValidRoms(d, system.system.extensions)) {
+            results.add({'systemId': system.system.id, 'path': d.path});
+          }
         }
       }
     } catch (e) { print('⚠️ SCAN: Library scan failed: $e'); }
