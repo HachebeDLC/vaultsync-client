@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_selector/file_selector.dart';
 import '../../emulation/data/emulator_repository.dart';
 import '../../emulation/domain/emulator_config.dart';
+import '../data/dart_file_scanner.dart';
 
 final systemPathServiceProvider = Provider<SystemPathService>((ref) {
   final emulatorRepo = ref.watch(emulatorRepositoryProvider);
@@ -349,18 +350,6 @@ class SystemPathService {
     return _convertToPosix(rawPath);
   }
 
-  Future<bool> _hasValidFiles(Directory dir) async {
-    try {
-      final List<FileSystemEntity> list = await dir.list().toList();
-      if (list.isEmpty) return false;
-      return list.where((e) {
-        if (e is! File) return true;
-        final name = e.path.split('/').last.toLowerCase();
-        return !name.endsWith('.txt') && !name.startsWith('.');
-      }).isNotEmpty;
-    } catch (_) { return false; }
-  }
-
   /// Scans a library folder recursively to detect supported emulation systems 
   /// by matching directory names against known system IDs and verifying file content.
   Future<List<Map<String, String>>> scanLibrary(String inputPath) async {
@@ -369,17 +358,26 @@ class SystemPathService {
       String path = _convertToPosix(inputPath);
       final dir = Directory(path);
       if (!await dir.exists()) return [];
+      
       final systems = await _emulatorRepository.loadSystems();
       final List<FileSystemEntity> list = await dir.list().toList();
+      
       for (final system in systems) {
         final matchingDirs = list.whereType<Directory>().where((d) {
           final name = d.path.split('/').last.toLowerCase();
           return name == system.system.id.toLowerCase() || name == system.system.name.toLowerCase();
         });
+        
         for (final d in matchingDirs) {
-          if (await _hasValidFiles(d)) {
-            results.add({'systemId': system.system.id, 'path': d.path});
-          }
+          // Verify the folder actually contains valid saves for this system
+          // before cluttering the user's dashboard with empty/ROM-only folders.
+          try {
+            final scanResults = await DartFileScanner.scanRecursive(d.path, system.system.id, []);
+            final hasSaves = scanResults.any((f) => f['isDirectory'] == false);
+            if (hasSaves) {
+              results.add({'systemId': system.system.id, 'path': d.path});
+            }
+          } catch (_) {}
         }
       }
     } catch (e) { print('⚠️ SCAN: Library scan failed: $e'); }
