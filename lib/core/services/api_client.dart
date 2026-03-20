@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:isolate';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -40,20 +41,60 @@ class ApiClient {
     _cachedBaseUrl = url;
   }
 
+  Future<String?> _secureRead(String key) async {
+    try {
+      return await _secureStorage.read(key: key);
+    } on PlatformException catch (e) {
+      if (e.message?.contains('keyring') == true || e.code == 'Libsecret error') {
+        print('⚠️ SECURE STORAGE FAILED: Keyring unavailable. Falling back to SharedPreferences for $key.');
+        final prefs = await SharedPreferences.getInstance();
+        return prefs.getString('fallback_$key');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _secureWrite(String key, String value) async {
+    try {
+      await _secureStorage.write(key: key, value: value);
+    } on PlatformException catch (e) {
+      if (e.message?.contains('keyring') == true || e.code == 'Libsecret error') {
+        print('⚠️ SECURE STORAGE FAILED: Keyring unavailable. Falling back to SharedPreferences for $key.');
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('fallback_$key', value);
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _secureDelete(String key) async {
+    try {
+      await _secureStorage.delete(key: key);
+    } on PlatformException catch (e) {
+      if (e.message?.contains('keyring') == true || e.code == 'Libsecret error') {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('fallback_$key');
+        return;
+      }
+      rethrow;
+    }
+  }
+
   Future<String?> getToken() async {
     if (_cachedToken != null) return _cachedToken;
-    _cachedToken = await _secureStorage.read(key: 'auth_token');
+    _cachedToken = await _secureRead('auth_token');
     return _cachedToken;
   }
 
   Future<void> setToken(String token) async {
-    await _secureStorage.write(key: 'auth_token', value: token);
+    await _secureWrite('auth_token', token);
     _cachedToken = token;
   }
 
   Future<void> clearToken() async {
-    await _secureStorage.delete(key: 'auth_token');
-    await _secureStorage.delete(key: 'master_key');
+    await _secureDelete('auth_token');
+    await _secureDelete('master_key');
     _cachedToken = null;
   }
 
@@ -172,12 +213,12 @@ class ApiClient {
       return base64Url.encode(masterKeyBytes);
     });
     
-    await _secureStorage.write(key: 'master_key', value: masterKey);
+    await _secureWrite('master_key', masterKey);
     print('🔐 AUTH: Zero-Knowledge Master Key derived via PBKDF2 (100k iterations) and secured locally.');
   }
 
   Future<String?> getEncryptionKey() async {
-    return await _secureStorage.read(key: 'master_key');
+    return await _secureRead('master_key');
   }
 
   Future<void> setupRecovery(String answers, String recoverySalt, List<int> questionIndices) async {
@@ -254,7 +295,7 @@ class ApiClient {
     final masterKey = base64Url.encode(masterKeyBytes);
 
     // 4. Save locally
-    await _secureStorage.write(key: 'master_key', value: masterKey);
+    await _secureWrite('master_key', masterKey);
     print('🔐 AUTH: Master Key restored locally via Recovery Fail-Safe.');
   }
 }
