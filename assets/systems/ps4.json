@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "ps4",
+    "name": "Sony PlayStation 4",
+    "folders": ["ps4"],
+    "extensions": ["pkg", "bin", "iso"],
+    "ignored_folders": ["user", "sys", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "ShadPS4",
+      "unique_id": "ps4.shadps4.desktop",
+      "default": true
+    }
+  ]
+}

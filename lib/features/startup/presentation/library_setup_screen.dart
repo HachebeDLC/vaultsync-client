@@ -75,6 +75,24 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
     try {
       final path = _pathController.text;
       final found = await service.scanLibrary(path);
+      
+      // Auto-save the detected paths and configure default emulators
+      if (found.isNotEmpty) {
+        final systems = await ref.read(systemsProvider.future);
+        for (final f in found) {
+          final sid = f['systemId']!;
+          final p = f['path']!;
+          
+          final currentPath = await service.getSystemPath(sid);
+          if (currentPath == null) {
+            final sysConf = systems.firstWhere((s) => s.system.id == sid);
+            final defaultEmu = sysConf.emulators.firstWhere((e) => e.defaultEmulator, orElse: () => sysConf.emulators.first);
+            await service.setSystemEmulator(sid, defaultEmu.uniqueId);
+            await service.setSystemPath(sid, p);
+          }
+        }
+      }
+
       setState(() => _foundSystems = found);
       await _loadConfiguredPaths();
       ref.invalidate(systemPathsProvider);
@@ -133,10 +151,10 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
     if (selectedEmulatorId == null) return;
 
     final emulator = system.emulators.firstWhere((e) => e.uniqueId == selectedEmulatorId);
-    String initialPath = pathService.suggestSavePath(emulator, systemId);
-    if (selectedEmulatorId == currentEmulatorId && currentPath != null) {
-      initialPath = currentPath;
-    }
+    
+    // First try the current configured path, then the auto-mapped EmuDeck path, then fallback to platform defaults
+    final mappedPath = _foundSystems.where((f) => f['systemId'] == systemId).firstOrNull?['path'];
+    String initialPath = currentPath ?? mappedPath ?? pathService.suggestSavePath(emulator, systemId);
 
     if (!mounted) return;
 

@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "model2",
+    "name": "Sega Model 2",
+    "folders": ["model2"],
+    "extensions": ["zip", "7z"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "Model 2 Emulator",
+      "unique_id": "model2.emulator.desktop",
+      "default": true
+    }
+  ]
+}

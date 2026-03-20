@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "vita",
+    "name": "Sony PlayStation Vita",
+    "folders": ["vita", "psvita"],
+    "extensions": ["vpk", "zip", "app", "bin"],
+    "ignored_folders": ["app", "patch", "addcont", "rePatch", "tmp", "ux0", "ur0"]
+  },
+  "emulators": [
+    {
+      "name": "Vita3K",
+      "unique_id": "vita.vita3k.desktop",
+      "default": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "scummvm",
+    "name": "ScummVM",
+    "folders": ["scummvm"],
+    "extensions": ["scummvm", "svm"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "ScummVM",
+      "unique_id": "scummvm.scummvm.desktop",
+      "default": true
+    }
+  ]
+}

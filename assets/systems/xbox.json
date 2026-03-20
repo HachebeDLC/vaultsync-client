@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "xbox",
+    "name": "Microsoft Xbox",
+    "folders": ["xbox"],
+    "extensions": ["iso", "xiso", "cgc", "bin"],
+    "ignored_folders": ["cache", "sys", "updates"]
+  },
+  "emulators": [
+    {
+      "name": "Xemu",
+      "unique_id": "xbox.xemu.desktop",
+      "default": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "model3",
+    "name": "Sega Model 3",
+    "folders": ["model3"],
+    "extensions": ["zip", "7z"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "Supermodel",
+      "unique_id": "model3.supermodel.desktop",
+      "default": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "primehack",
+    "name": "Metroid Prime Trilogy (PrimeHack)",
+    "folders": ["primehack"],
+    "extensions": ["iso", "wbfs", "gcm", "ciso", "rvz"],
+    "ignored_folders": ["media", "cache", "sys", "updates"]
+  },
+  "emulators": [
+    {
+      "name": "PrimeHack",
+      "unique_id": "primehack.dolphin.desktop",
+      "default": true
+    }
+  ]
+}

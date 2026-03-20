@@ -392,9 +392,14 @@ class SystemPathService {
       case 'gba':
       case 'gbc':
       case 'gb': return '$emuDeckSaves/mgba';
-      case 'wiiu': return '$emuDeckSaves/cemu';
+      case 'wiiu': return '$emuDeckSaves/Cemu';
       case 'ps3': return '$emuDeckSaves/rpcs3';
-      case 'vita': return '$emuDeckSaves/vita3k';
+      case 'ps4': return '$emuDeckSaves/shadps4';
+      case 'vita': return '$emuDeckSaves/Vita3K';
+      case 'xbox': return '$emuDeckSaves/xemu';
+      case 'xbox360': return '$emuDeckSaves/xenia';
+      case 'scummvm': return '$emuDeckSaves/scummvm';
+      case 'primehack': return '$emuDeckSaves/primehack';
       case 'mame':
       case 'arcade': return '$emuDeckSaves/MAME';
       default:
