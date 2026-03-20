@@ -45,12 +45,9 @@ class ApiClient {
     try {
       return await _secureStorage.read(key: key);
     } on PlatformException catch (e) {
-      if (e.message?.contains('keyring') == true || e.code == 'Libsecret error') {
-        print('⚠️ SECURE STORAGE FAILED: Keyring unavailable. Falling back to SharedPreferences for $key.');
-        final prefs = await SharedPreferences.getInstance();
-        return prefs.getString('fallback_$key');
-      }
-      rethrow;
+      print('⚠️ SECURE STORAGE FAILED: ${e.code} - ${e.message}. Falling back to SharedPreferences for $key.');
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('fallback_$key');
     }
   }
 
@@ -58,13 +55,9 @@ class ApiClient {
     try {
       await _secureStorage.write(key: key, value: value);
     } on PlatformException catch (e) {
-      if (e.message?.contains('keyring') == true || e.code == 'Libsecret error') {
-        print('⚠️ SECURE STORAGE FAILED: Keyring unavailable. Falling back to SharedPreferences for $key.');
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('fallback_$key', value);
-        return;
-      }
-      rethrow;
+      print('⚠️ SECURE STORAGE FAILED: ${e.code} - ${e.message}. Falling back to SharedPreferences for $key.');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('fallback_$key', value);
     }
   }
 
@@ -72,12 +65,9 @@ class ApiClient {
     try {
       await _secureStorage.delete(key: key);
     } on PlatformException catch (e) {
-      if (e.message?.contains('keyring') == true || e.code == 'Libsecret error') {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('fallback_$key');
-        return;
-      }
-      rethrow;
+      print('⚠️ SECURE STORAGE FAILED: ${e.code} - ${e.message}. Falling back to SharedPreferences for $key.');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('fallback_$key');
     }
   }
 
