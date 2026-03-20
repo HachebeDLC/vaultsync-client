@@ -85,6 +85,11 @@
       "name": "NooDS",
       "unique_id": "ds.standalone.noods",
       "default": false
+    },
+    {
+      "name": "melonDS",
+      "unique_id": "ds.melonds.desktop",
+      "default": false
     }
   ]
 }

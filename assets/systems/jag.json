@@ -39,6 +39,11 @@
       "name": "RetroArch Virtual Jaguar",
       "unique_id": "jaguar.ra.virtualjaguar",
       "default": true
+    },
+    {
+      "name": "BigPEmu",
+      "unique_id": "jag.bigpemu.desktop",
+      "default": false
     }
   ]
 }

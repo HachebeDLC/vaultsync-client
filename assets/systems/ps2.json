@@ -84,6 +84,11 @@
       "name": "ARMSX2 (Nightly)",
       "unique_id": "ps2.com.nanodata.armsx2.debug",
       "default": false
+    },
+    {
+      "name": "PCSX2",
+      "unique_id": "ps2.pcsx2.desktop",
+      "default": false
     }
   ]
 }

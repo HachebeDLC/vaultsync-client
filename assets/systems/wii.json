@@ -86,6 +86,11 @@
       "name": "RetroArch Dolphin",
       "unique_id": "wii.ra.dolphin",
       "default": true
+    },
+    {
+      "name": "Dolphin",
+      "unique_id": "wii.dolphin.desktop",
+      "default": false
     }
   ]
 }

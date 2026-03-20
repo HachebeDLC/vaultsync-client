@@ -139,7 +139,12 @@ class SystemPathService {
     await _incrementStorageVersion();
   }
 
-  String suggestSavePath(EmulatorInfo emulator, String systemId) {
+  Future<String> suggestSavePath(EmulatorInfo emulator, String systemId) async {
+    final emuDeckSaves = await getEmuDeckSavesPath();
+    if (emuDeckSaves != null) {
+       return _getEmuDeckConfig(emuDeckSaves, systemId)['path']!;
+    }
+
     if (Platform.isWindows || Platform.isLinux) {
       for (final entry in standaloneDefaults.entries) {
         if (emulator.uniqueId.contains(entry.key)) {
@@ -163,7 +168,12 @@ class SystemPathService {
   }
 
   /// Returns a suggested save path for a system ID based on platform defaults.
-  String suggestSavePathById(String systemId) {
+  Future<String> suggestSavePathById(String systemId) async {
+    final emuDeckSaves = await getEmuDeckSavesPath();
+    if (emuDeckSaves != null) {
+       return _getEmuDeckConfig(emuDeckSaves, systemId)['path']!;
+    }
+
     final lowerId = systemId.toLowerCase();
     if (Platform.isWindows || Platform.isLinux) {
       for (final entry in standaloneDefaults.entries) {
@@ -183,10 +193,31 @@ class SystemPathService {
     return prefs.getString('rom_library_path');
   }
 
-  /// Saves the library folder path.
+  /// Saves the library folder path and auto-detects EmuDeck.
   Future<void> setLibraryPath(String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('rom_library_path', path);
+    
+    // Detect EmuDeck structure
+    String? emuDeckSaves;
+    final dir = Directory(path);
+    if (await Directory('$path/roms').exists() && await Directory('$path/saves').exists()) {
+      emuDeckSaves = '$path/saves';
+    } else if (path.toLowerCase().endsWith('/roms') && await Directory('${dir.parent.path}/saves').exists()) {
+      emuDeckSaves = '${dir.parent.path}/saves';
+    }
+    
+    if (emuDeckSaves != null) {
+      await prefs.setString('emudeck_saves_path', emuDeckSaves);
+      print('🛠️ EMUDECK: Detected saves at $emuDeckSaves');
+    } else {
+      await prefs.remove('emudeck_saves_path');
+    }
+  }
+
+  Future<String?> getEmuDeckSavesPath() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('emudeck_saves_path');
   }
 
   /// Opens the native directory picker (SAF on Android, platform picker on Desktop) 
@@ -326,7 +357,7 @@ class SystemPathService {
   /// Shizuku, SAF content URIs, and standard local filesystem variants.
   Future<String> getEffectivePath(String systemId) async {
     final rawPath = await getSystemPath(systemId);
-    if (rawPath == null) return suggestSavePathById(systemId);
+    if (rawPath == null) return await suggestSavePathById(systemId);
     if (!Platform.isAndroid) return rawPath;
 
     final androidVersion = await _getAndroidVersion();
@@ -373,38 +404,61 @@ class SystemPathService {
     return false;
   }
 
-  String _getEmuDeckSavePath(String emuDeckSaves, String systemId) {
-    switch (systemId.toLowerCase()) {
-      case 'ps2': return '$emuDeckSaves/pcsx2';
+  Map<String, String> _getEmuDeckConfig(String emuDeckSaves, String systemId) {
+    final base = emuDeckSaves;
+    final sid = systemId.toLowerCase();
+    
+    // Helper to find existing folder case-insensitively
+    String findFolder(String parent, String target) {
+      try {
+        final dir = Directory(parent);
+        if (!dir.existsSync()) return '$parent/$target';
+        for (final entity in dir.listSync()) {
+          if (entity is Directory && entity.path.split('/').last.toLowerCase() == target.toLowerCase()) {
+            return entity.path;
+          }
+        }
+      } catch (_) {}
+      return '$parent/$target';
+    }
+
+    switch (sid) {
+      case 'ps2': return { 'path': findFolder(base, 'pcsx2'), 'emulatorId': 'ps2.pcsx2.desktop' };
       case 'psx':
-      case 'ps1': return '$emuDeckSaves/duckstation';
-      case 'psp': return '$emuDeckSaves/ppsspp';
-      case 'gc':
-      case 'wii': return '$emuDeckSaves/dolphin';
-      case '3ds': return '$emuDeckSaves/citra';
+      case 'ps1': return { 'path': findFolder(base, 'duckstation'), 'emulatorId': 'psx.duckstation.desktop' };
+      case 'psp': return { 'path': findFolder(base, 'ppsspp'), 'emulatorId': 'psp.ppsspp.desktop' };
+      case 'gc': return { 'path': findFolder(base, 'dolphin'), 'emulatorId': 'gc.dolphin.desktop' };
+      case 'wii': return { 'path': findFolder(base, 'dolphin'), 'emulatorId': 'wii.dolphin.desktop' };
+      case '3ds': return { 'path': findFolder(base, 'citra'), 'emulatorId': '3ds.citra.desktop' };
       case 'switch': 
       case 'eden':
-        if (Directory('$emuDeckSaves/yuzu').existsSync()) return '$emuDeckSaves/yuzu';
-        if (Directory('$emuDeckSaves/ryujinx').existsSync()) return '$emuDeckSaves/ryujinx';
-        return '$emuDeckSaves/yuzu';
+        final yuzu = findFolder(base, 'yuzu');
+        if (Directory(yuzu).existsSync()) return { 'path': yuzu, 'emulatorId': 'switch.yuzu.desktop' };
+        return { 'path': findFolder(base, 'ryujinx'), 'emulatorId': 'switch.ryujinx.desktop' };
       case 'nds':
-      case 'ds': return '$emuDeckSaves/melonds';
-      case 'gba':
-      case 'gbc':
-      case 'gb': return '$emuDeckSaves/mgba';
-      case 'wiiu': return '$emuDeckSaves/Cemu';
-      case 'ps3': return '$emuDeckSaves/rpcs3';
-      case 'ps4': return '$emuDeckSaves/shadps4';
-      case 'vita': return '$emuDeckSaves/Vita3K';
-      case 'xbox': return '$emuDeckSaves/xemu';
-      case 'xbox360': return '$emuDeckSaves/xenia';
-      case 'scummvm': return '$emuDeckSaves/scummvm';
-      case 'primehack': return '$emuDeckSaves/primehack';
+      case 'ds': return { 'path': findFolder(base, 'melonds'), 'emulatorId': 'ds.melonds.desktop' };
+      case 'gba': return { 'path': findFolder(base, 'mgba'), 'emulatorId': 'gba.mgba.desktop' };
+      case 'gbc': return { 'path': findFolder(base, 'mgba'), 'emulatorId': 'gbc.mgba.desktop' };
+      case 'gb': return { 'path': findFolder(base, 'mgba'), 'emulatorId': 'gb.mgba.desktop' };
+      case 'wiiu': return { 'path': findFolder(base, 'Cemu'), 'emulatorId': 'wiiu.cemu.desktop' };
+      case 'ps3': return { 'path': findFolder(base, 'rpcs3'), 'emulatorId': 'ps3.rpcs3.desktop' };
+      case 'ps4': return { 'path': findFolder(base, 'shadps4'), 'emulatorId': 'ps4.shadps4.desktop' };
+      case 'vita': return { 'path': findFolder(base, 'Vita3K'), 'emulatorId': 'vita.vita3k.desktop' };
+      case 'xbox': return { 'path': findFolder(base, 'xemu'), 'emulatorId': 'xbox.xemu.desktop' };
+      case 'xbox360': return { 'path': findFolder(base, 'xenia'), 'emulatorId': 'xbox360.xenia.desktop' };
+      case 'scummvm': return { 'path': findFolder(base, 'scummvm'), 'emulatorId': 'scummvm.scummvm.desktop' };
+      case 'primehack': return { 'path': findFolder(base, 'primehack'), 'emulatorId': 'primehack.dolphin.desktop' };
       case 'mame':
-      case 'arcade': return '$emuDeckSaves/MAME';
+      case 'arcade': return { 'path': findFolder(base, 'MAME'), 'emulatorId': 'mame.mame.desktop' };
+      case 'n64': return { 'path': findFolder(base, 'rmg'), 'emulatorId': 'n64.rmg.desktop' };
+      case 'dc':
+      case 'dreamcast': return { 'path': findFolder(base, 'flycast'), 'emulatorId': 'dc.flycast.desktop' };
+      case 'model2': return { 'path': findFolder(base, 'model2'), 'emulatorId': 'model2.emulator.desktop' };
+      case 'model3': return { 'path': findFolder(base, 'model3'), 'emulatorId': 'model3.supermodel.desktop' };
+      case 'jag': return { 'path': findFolder(base, 'bigpemu'), 'emulatorId': 'jag.bigpemu.desktop' };
       default:
         // RetroArch handles the vast majority of retro systems (SNES, NES, Genesis, etc.)
-        return '$emuDeckSaves/retroarch';
+        return { 'path': findFolder(base, 'retroarch'), 'emulatorId': '' };
     }
   }
 
@@ -442,13 +496,14 @@ class SystemPathService {
         for (final d in matchingDirs) {
           // Verify the folder actually contains valid ROMs for this system
           if (await _hasValidRoms(d, system.system.extensions)) {
-            // If EmuDeck is detected, route the sync path to the explicit saves directory.
-            // Otherwise, assume an Android-style flat layout where saves and ROMs are mixed.
-            final finalPath = emuDeckSaves != null 
-                ? _getEmuDeckSavePath(emuDeckSaves.path, system.system.id) 
-                : d.path;
-                
-            results.add({'systemId': system.system.id, 'path': finalPath});
+            // If EmuDeck is detected, route the sync path and emulator explicitly
+            if (emuDeckSaves != null) {
+              final config = _getEmuDeckConfig(emuDeckSaves.path, system.system.id);
+              results.add({'systemId': system.system.id, 'path': config['path']!, 'emulatorId': config['emulatorId']!});
+            } else {
+              // Android-style flat layout where saves and ROMs are mixed
+              results.add({'systemId': system.system.id, 'path': d.path});
+            }
           }
         }
       }
@@ -461,7 +516,7 @@ class SystemPathService {
   
   /// Resolves standard RetroArch paths for saves and states.
   Future<Map<String, String>> getRetroArchPaths() async {
-    final saves = await getSystemPath('retroarch') ?? suggestSavePathById('retroarch');
+    final saves = await getSystemPath('retroarch') ?? await suggestSavePathById('retroarch');
     final states = saves.endsWith('/saves') 
         ? '${saves.substring(0, saves.length - 6)}/states' 
         : '$saves/states'; // Fallback if the configured path doesn't end in /saves

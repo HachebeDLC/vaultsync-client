@@ -90,6 +90,16 @@
       "name": "Benji-SC",
       "unique_id": "switch.org.benjisc.android",
       "default": false
+    },
+    {
+      "name": "Ryujinx",
+      "unique_id": "switch.ryujinx.desktop",
+      "default": false
+    },
+    {
+      "name": "Yuzu",
+      "unique_id": "switch.yuzu.desktop",
+      "default": false
     }
   ]
 }

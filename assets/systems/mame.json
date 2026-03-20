@@ -113,6 +113,11 @@
       "name": "RetroArch MAME 2010",
       "unique_id": "mame.ra.mame2010",
       "default": false
+    },
+    {
+      "name": "MAME",
+      "unique_id": "mame.mame.desktop",
+      "default": false
     }
   ]
 }

@@ -72,6 +72,11 @@
       "name": "RetroArch Dolphin",
       "unique_id": "gc.ra.dolphin",
       "default": true
+    },
+    {
+      "name": "Dolphin",
+      "unique_id": "gc.dolphin.desktop",
+      "default": false
     }
   ]
 }

@@ -2,9 +2,19 @@
   "system": {
     "id": "ps4",
     "name": "Sony PlayStation 4",
-    "folders": ["ps4"],
-    "extensions": ["pkg", "bin", "iso"],
-    "ignored_folders": ["user", "sys", "cache"]
+    "folders": [
+      "ps4"
+    ],
+    "extensions": [
+      "pkg",
+      "bin",
+      "iso"
+    ],
+    "ignored_folders": [
+      "user",
+      "sys",
+      "cache"
+    ]
   },
   "emulators": [
     {

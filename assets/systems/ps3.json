@@ -2,9 +2,25 @@
   "system": {
     "id": "ps3",
     "name": "Sony PlayStation 3",
-    "folders": ["ps3"],
-    "extensions": ["iso", "m3u", "pkg", "bin", "pup"],
-    "ignored_folders": ["dev_hdd0", "dev_flash", "sys", "vsh", "cache", "updates", "game"]
+    "folders": [
+      "ps3"
+    ],
+    "extensions": [
+      "iso",
+      "m3u",
+      "pkg",
+      "bin",
+      "pup"
+    ],
+    "ignored_folders": [
+      "dev_hdd0",
+      "dev_flash",
+      "sys",
+      "vsh",
+      "cache",
+      "updates",
+      "game"
+    ]
   },
   "emulators": [
     {

@@ -2,9 +2,17 @@
   "system": {
     "id": "model3",
     "name": "Sega Model 3",
-    "folders": ["model3"],
-    "extensions": ["zip", "7z"],
-    "ignored_folders": ["media", "cache"]
+    "folders": [
+      "model3"
+    ],
+    "extensions": [
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": [
+      "media",
+      "cache"
+    ]
   },
   "emulators": [
     {

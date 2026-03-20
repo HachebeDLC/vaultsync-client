@@ -144,6 +144,11 @@
       "name": "RetroArch Mesen-S",
       "unique_id": "gbc.ra.mesen-s",
       "default": false
+    },
+    {
+      "name": "mGBA",
+      "unique_id": "gbc.mgba.desktop",
+      "default": false
     }
   ]
 }

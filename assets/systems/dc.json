@@ -50,6 +50,11 @@
       "name": "RetroArch Flycast",
       "unique_id": "dreamcast.ra.flycast",
       "default": true
+    },
+    {
+      "name": "Flycast",
+      "unique_id": "dc.flycast.desktop",
+      "default": false
     }
   ]
 }

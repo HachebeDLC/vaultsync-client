@@ -2,9 +2,24 @@
   "system": {
     "id": "wiiu",
     "name": "Nintendo Wii U",
-    "folders": ["wiiu", "wii u"],
-    "extensions": ["wud", "wux", "iso", "rpx"],
-    "ignored_folders": ["mlc01", "usr", "sys", "updates", "dlc", "shaderCache"]
+    "folders": [
+      "wiiu",
+      "wii u"
+    ],
+    "extensions": [
+      "wud",
+      "wux",
+      "iso",
+      "rpx"
+    ],
+    "ignored_folders": [
+      "mlc01",
+      "usr",
+      "sys",
+      "updates",
+      "dlc",
+      "shaderCache"
+    ]
   },
   "emulators": [
     {

@@ -2,9 +2,20 @@
   "system": {
     "id": "xbox360",
     "name": "Microsoft Xbox 360",
-    "folders": ["xbox360", "x360"],
-    "extensions": ["iso", "xex"],
-    "ignored_folders": ["cache", "sys", "updates", "media"]
+    "folders": [
+      "xbox360",
+      "x360"
+    ],
+    "extensions": [
+      "iso",
+      "xex"
+    ],
+    "ignored_folders": [
+      "cache",
+      "sys",
+      "updates",
+      "media"
+    ]
   },
   "emulators": [
     {

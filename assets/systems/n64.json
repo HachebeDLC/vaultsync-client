@@ -82,6 +82,11 @@
       "name": "RetroArch ParaLLEl N64",
       "unique_id": "n64.ra.parallel_n64",
       "default": false
+    },
+    {
+      "name": "Rosalie's Mupen GUI",
+      "unique_id": "n64.rmg.desktop",
+      "default": false
     }
   ]
 }

@@ -47,6 +47,11 @@
       "name": "RetroArch PPSSPP",
       "unique_id": "psp.ra.ppsspp",
       "default": true
+    },
+    {
+      "name": "PPSSPP",
+      "unique_id": "psp.ppsspp.desktop",
+      "default": false
     }
   ]
 }

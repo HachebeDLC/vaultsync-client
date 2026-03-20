@@ -69,6 +69,11 @@
       "name": "Azahar",
       "unique_id": "3ds.azahar",
       "default": true
+    },
+    {
+      "name": "Citra",
+      "unique_id": "3ds.citra.desktop",
+      "default": false
     }
   ]
 }

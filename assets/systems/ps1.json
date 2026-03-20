@@ -121,6 +121,11 @@
       "name": "RetroArch Swanstation",
       "unique_id": "psx.ra.swanstation",
       "default": false
+    },
+    {
+      "name": "DuckStation",
+      "unique_id": "ps1.duckstation.desktop",
+      "default": false
     }
   ]
 }

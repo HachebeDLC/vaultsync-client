@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../sync/services/system_path_service.dart';
 import '../../emulation/presentation/emulator_providers.dart';
 import '../../emulation/domain/emulator_config.dart';
+import '../../../core/utils/platform_utils.dart';
 
 class LibrarySetupScreen extends ConsumerStatefulWidget {
   const LibrarySetupScreen({super.key});
@@ -86,8 +87,22 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           final currentPath = await service.getSystemPath(sid);
           if (currentPath == null) {
             final sysConf = systems.firstWhere((s) => s.system.id == sid);
-            final defaultEmu = sysConf.emulators.firstWhere((e) => e.defaultEmulator, orElse: () => sysConf.emulators.first);
-            await service.setSystemEmulator(sid, defaultEmu.uniqueId);
+            final supportedEmus = sysConf.emulators.where((e) => PlatformUtils.isEmulatorSupported(e.uniqueId)).toList();
+            
+            // Auto-selected mapped emulator from EmuDeck detection
+            final mappedEmuId = f['emulatorId'];
+            
+            EmulatorInfo? selectedEmu;
+            if (mappedEmuId != null && mappedEmuId.isNotEmpty) {
+              selectedEmu = supportedEmus.where((e) => e.uniqueId == mappedEmuId).firstOrNull;
+            }
+            
+            // Fallback to the explicit default, or just the first supported one
+            if (selectedEmu == null) {
+              selectedEmu = supportedEmus.firstWhere((e) => e.defaultEmulator, orElse: () => supportedEmus.isNotEmpty ? supportedEmus.first : sysConf.emulators.first);
+            }
+            
+            await service.setSystemEmulator(sid, selectedEmu.uniqueId);
             await service.setSystemPath(sid, p);
           }
         }
@@ -123,6 +138,14 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
 
     if (!mounted) return;
 
+    final supportedEmulators = system.emulators.where((e) => PlatformUtils.isEmulatorSupported(e.uniqueId)).toList();
+    if (supportedEmulators.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No supported emulators found for this platform.')),
+      );
+      return;
+    }
+
     final selectedEmulatorId = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -131,9 +154,9 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           width: double.maxFinite,
           child: ListView.builder(
             shrinkWrap: true,
-            itemCount: system.emulators.length,
+            itemCount: supportedEmulators.length,
             itemBuilder: (context, index) {
-              final emu = system.emulators[index];
+              final emu = supportedEmulators[index];
               final isSelected = emu.uniqueId == currentEmulatorId;
               return ListTile(
                 title: Text(emu.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
@@ -154,7 +177,7 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
     
     // First try the current configured path, then the auto-mapped EmuDeck path, then fallback to platform defaults
     final mappedPath = _foundSystems.where((f) => f['systemId'] == systemId).firstOrNull?['path'];
-    String initialPath = currentPath ?? mappedPath ?? pathService.suggestSavePath(emulator, systemId);
+    String initialPath = currentPath ?? mappedPath ?? await pathService.suggestSavePath(emulator, systemId);
 
     if (!mounted) return;
 
