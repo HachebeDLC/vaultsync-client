@@ -75,9 +75,10 @@ jobs:
           cp /usr/lib/x86_64-linux-gnu/libayatana-appindicator3.so.1 lib/ || true
           cp /usr/lib/x86_64-linux-gnu/libayatana-indicator3.so.7 lib/ || true
           cp /usr/lib/x86_64-linux-gnu/libayatana-ido3-0.4.so.0 lib/ || true
-          patchelf --set-rpath '$ORIGIN' lib/libayatana-appindicator3.so.1 || true
-          patchelf --set-rpath '$ORIGIN' lib/libayatana-indicator3.so.7 || true
-          patchelf --set-rpath '$ORIGIN' lib/libayatana-ido3-0.4.so.0 || true
+          # Patch all shared libraries to look in $ORIGIN (their own directory) for dependencies
+          for f in lib/*.so*; do
+            patchelf --set-rpath '$ORIGIN' "$f" || true
+          done
           zip -r ../../../../../VaultSync-Linux.zip *
 
       - name: Create Release
