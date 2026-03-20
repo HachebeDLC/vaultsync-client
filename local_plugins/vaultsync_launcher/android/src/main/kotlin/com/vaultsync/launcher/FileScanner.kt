@@ -203,10 +203,10 @@ class FileScanner(private val context: Context) {
 
         // ── PSP / PPSSPP ─────────────────────────────────────────
         // Only sync standard save data and emulator save states.
-        // This prevents syncing ISOs if the user points to a ROMs folder.
         if (sid == "psp" || sid == "ppsspp") {
             val lower = relPath.lowercase()
-            return lower.contains("savedata/") || lower.contains("ppsspp_state/")
+            return lower.contains("savedata/") || lower.contains("ppsspp_state/") || 
+                   !lower.contains("/") 
         }
 
         // ── Wii ──────────────────────────────────────────────────

@@ -22,9 +22,9 @@ class DartFileScanner {
     
     if (sid == "psp" || sid == "ppsspp") {
       final lower = relPath.toLowerCase();
-      // Only sync if inside the standard save or state subfolders.
-      // This prevents syncing ISOs if the user points to the root ROMs folder.
-      return lower.contains("savedata/") || lower.contains("ppsspp_state/");
+      // Restore flexibility: sync subfolders and files sitting at the root.
+      // Global noise filters (textures, game, etc.) still apply via walk logic.
+      return lower.contains("savedata/") || lower.contains("ppsspp_state/") || !lower.contains("/");
     }
     
     if (sid == "wii") {
