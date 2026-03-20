@@ -373,6 +373,36 @@ class SystemPathService {
     return false;
   }
 
+  String _getEmuDeckSavePath(String emuDeckSaves, String systemId) {
+    switch (systemId.toLowerCase()) {
+      case 'ps2': return '$emuDeckSaves/pcsx2';
+      case 'psx':
+      case 'ps1': return '$emuDeckSaves/duckstation';
+      case 'psp': return '$emuDeckSaves/ppsspp';
+      case 'gc':
+      case 'wii': return '$emuDeckSaves/dolphin';
+      case '3ds': return '$emuDeckSaves/citra';
+      case 'switch': 
+      case 'eden':
+        if (Directory('$emuDeckSaves/yuzu').existsSync()) return '$emuDeckSaves/yuzu';
+        if (Directory('$emuDeckSaves/ryujinx').existsSync()) return '$emuDeckSaves/ryujinx';
+        return '$emuDeckSaves/yuzu';
+      case 'nds':
+      case 'ds': return '$emuDeckSaves/melonds';
+      case 'gba':
+      case 'gbc':
+      case 'gb': return '$emuDeckSaves/mgba';
+      case 'wiiu': return '$emuDeckSaves/cemu';
+      case 'ps3': return '$emuDeckSaves/rpcs3';
+      case 'vita': return '$emuDeckSaves/vita3k';
+      case 'mame':
+      case 'arcade': return '$emuDeckSaves/MAME';
+      default:
+        // RetroArch handles the vast majority of retro systems (SNES, NES, Genesis, etc.)
+        return '$emuDeckSaves/retroarch';
+    }
+  }
+
   /// Scans a library folder recursively to detect supported emulation systems 
   /// by matching directory names against known system IDs and verifying file content.
   Future<List<Map<String, String>>> scanLibrary(String inputPath) async {
@@ -382,20 +412,38 @@ class SystemPathService {
       final dir = Directory(path);
       if (!await dir.exists()) return [];
       
+      // Auto-detect EmuDeck structure
+      Directory romsDir = dir;
+      Directory? emuDeckSaves;
+      
+      if (await Directory('$path/roms').exists() && await Directory('$path/saves').exists()) {
+        // User pointed to the root "Emulation" folder
+        romsDir = Directory('$path/roms');
+        emuDeckSaves = Directory('$path/saves');
+      } else if (path.toLowerCase().endsWith('/roms') && await Directory('${dir.parent.path}/saves').exists()) {
+        // User pointed specifically to the "roms" folder
+        emuDeckSaves = Directory('${dir.parent.path}/saves');
+      }
+      
       final systems = await _emulatorRepository.loadSystems();
-      final List<FileSystemEntity> list = await dir.list().toList();
+      final List<FileSystemEntity> list = await romsDir.list().toList();
       
       for (final system in systems) {
         final matchingDirs = list.whereType<Directory>().where((d) {
           final name = d.path.split('/').last.toLowerCase();
-          return name == system.system.id.toLowerCase() || name == system.system.name.toLowerCase();
+          return name == system.system.id.toLowerCase() || name == system.system.name.toLowerCase() || system.system.folders.map((f) => f.toLowerCase()).contains(name);
         });
         
         for (final d in matchingDirs) {
           // Verify the folder actually contains valid ROMs for this system
-          // before cluttering the user's dashboard with empty EmuDeck structure folders.
           if (await _hasValidRoms(d, system.system.extensions)) {
-            results.add({'systemId': system.system.id, 'path': d.path});
+            // If EmuDeck is detected, route the sync path to the explicit saves directory.
+            // Otherwise, assume an Android-style flat layout where saves and ROMs are mixed.
+            final finalPath = emuDeckSaves != null 
+                ? _getEmuDeckSavePath(emuDeckSaves.path, system.system.id) 
+                : d.path;
+                
+            results.add({'systemId': system.system.id, 'path': finalPath});
           }
         }
       }
