@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mutex/mutex.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'file_cache.dart';
+import 'dart_file_scanner.dart';
 import '../services/system_path_service.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/api_client_provider.dart';
@@ -235,8 +236,14 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
        return _lastScanList;
     }
     
-    final String jsonResult = await _platform.invokeMethod('scanRecursive', { 'path': effectivePath, 'systemId': systemId, 'ignoredFolders': ignoredFolders ?? [] });
-    final List<dynamic> result = json.decode(jsonResult);
+    List<dynamic> result;
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      result = await DartFileScanner.scanRecursive(effectivePath, systemId, ignoredFolders ?? []);
+    } else {
+      final String jsonResult = await _platform.invokeMethod('scanRecursive', { 'path': effectivePath, 'systemId': systemId, 'ignoredFolders': ignoredFolders ?? [] });
+      result = json.decode(jsonResult);
+    }
+    
     _lastScanList = result;
     _scanCache[systemId] = (result, DateTime.now());
     return result;
@@ -481,8 +488,13 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
 
   /// Scans the local filesystem for files belonging to a specific system.
   Future<Map<String, dynamic>> scanLocalFiles(String path, String systemId) async {
-    final String result = await _platform.invokeMethod('scanRecursive', {'path': path, 'systemId': systemId});
-    final List list = json.decode(result);
+    List<dynamic> list;
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      list = await DartFileScanner.scanRecursive(path, systemId, []);
+    } else {
+      final String result = await _platform.invokeMethod('scanRecursive', {'path': path, 'systemId': systemId});
+      list = json.decode(result);
+    }
     return { for (var f in list) f['relPath']: f };
   }
 }
