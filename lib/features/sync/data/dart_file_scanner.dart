@@ -15,20 +15,14 @@ class DartFileScanner {
     "textures", "custom_textures", "game"
   };
 
-  static bool _shouldSyncFile(String sid, String relPath, String fileName, String rootPath) {
+  static bool _shouldSyncFile(String sid, String relPath, String fileName) {
     if (fileName.startsWith(".")) return false;
     
     if (_syncEverythingSids.contains(sid)) return true;
     
     if (sid == "psp" || sid == "ppsspp") {
-      final lowerRel = relPath.toLowerCase();
-      final lowerRoot = rootPath.toLowerCase();
-      
-      // If the user pointed directly to the save folder, sync everything inside
-      if (lowerRoot.contains("savedata") || lowerRoot.contains("ppsspp_state")) return true;
-      
-      // Otherwise, only sync files that reside in the correct subfolders
-      return lowerRel.contains("savedata/") || lowerRel.contains("ppsspp_state/");
+      final lower = relPath.toLowerCase();
+      return lower.contains("savedata/") || lower.contains("ppsspp_state/") || !lower.contains("/");
     }
     
     if (sid == "wii") {
@@ -82,7 +76,7 @@ class DartFileScanner {
             });
             await walk(entity, relPath, depth + 1);
           } else if (entity is File) {
-            if (_shouldSyncFile(sid, relPath, fileName, rootPath)) {
+            if (_shouldSyncFile(sid, relPath, fileName)) {
               final stat = await entity.stat();
               results.add({
                 'name': fileName,

@@ -192,8 +192,7 @@ class FileScanner(private val context: Context) {
     private fun shouldSyncFile(
         sid: String,
         relPath: String,
-        fileName: String,
-        rootPath: String
+        fileName: String
     ): Boolean {
         // ── Global Noise Filter ──────────────────────────────────
         // Ignore hidden files, macOS metadata, and Syncthing conflicts.
@@ -204,15 +203,13 @@ class FileScanner(private val context: Context) {
 
         // ── PSP / PPSSPP ─────────────────────────────────────────
         // Only sync standard save data and emulator save states.
+        // This prevents syncing large 'TEXTURES' or 'GAME' (DLC) folders
+        // if the user pointed the path to the root /PSP/ directory.
         if (sid == "psp" || sid == "ppsspp") {
-            val lowerRel = relPath.lowercase()
-            val lowerRoot = rootPath.lowercase()
-            
-            // If the user pointed directly to the save folder, sync everything inside
-            if (lowerRoot.contains("savedata") || lowerRoot.contains("ppsspp_state")) return true
-            
-            // Otherwise, only sync files that reside in the correct subfolders
-            return lowerRel.contains("savedata/") || lowerRel.contains("ppsspp_state/")
+            val lower = relPath.lowercase()
+            return lower.contains("savedata/") || lower.contains("ppsspp_state/") || 
+                   // Support flat structures where the user pointed exactly at the SAVEDATA folder
+                   !lower.contains("/") 
         }
 
         // ── Wii ──────────────────────────────────────────────────
@@ -304,7 +301,7 @@ class FileScanner(private val context: Context) {
                         })
                         walkSaf(id, relPath, depth + 1)
                     } else {
-                        if (shouldSyncFile(sid, relPath, name, uriStr)) {
+                        if (shouldSyncFile(sid, relPath, name)) {
                             var fSize = cursor.getLong(3)
                             var fLast = cursor.getLong(4)
                             
@@ -375,7 +372,7 @@ class FileScanner(private val context: Context) {
                     })
                     walkShizuku(fullPath, relPath, depth + 1)
                 } else {
-                    if (shouldSyncFile(sid, relPath, name, cleanBase)) {
+                    if (shouldSyncFile(sid, relPath, name)) {
                         results.put(JSONObject().apply {
                             put("name", name)
                             put("relPath", relPath)
@@ -428,7 +425,7 @@ class FileScanner(private val context: Context) {
                     })
                     walkLocal(file, relPath)
                 } else {
-                    if (shouldSyncFile(sid, relPath, file.name, path)) {
+                    if (shouldSyncFile(sid, relPath, file.name)) {
                         results.put(JSONObject().apply {
                             put("name", file.name)
                             put("relPath", relPath)
