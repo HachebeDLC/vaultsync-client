@@ -59,9 +59,54 @@ void callbackDispatcher() {
   });
 }
 
+Future<void> _installLinuxShortcut() async {
+  if (!Platform.isLinux) return;
+  try {
+    final exePath = Platform.resolvedExecutable;
+    if (!exePath.contains('VaultSync')) return; // Don't install during dev/test
+
+    final dir = File(exePath).parent.path;
+    final home = Platform.environment['HOME'];
+    if (home == null) return;
+    
+    final desktopDir = Directory('$home/.local/share/applications');
+    if (!await desktopDir.exists()) {
+      await desktopDir.create(recursive: true);
+    }
+    
+    final desktopFile = File('${desktopDir.path}/vaultsync.desktop');
+    final content = '''[Desktop Entry]
+Version=1.0
+Name=VaultSync
+Comment=High-performance emulator save synchronization
+Exec=$exePath
+Icon=$dir/data/flutter_assets/assets/vaultsync_icon.png
+Terminal=false
+Type=Application
+Categories=Utility;Game;
+''';
+    
+    // Only write if it's different to save disk I/O
+    if (await desktopFile.exists()) {
+      final currentContent = await desktopFile.readAsString();
+      if (currentContent == content) return;
+    }
+    
+    await desktopFile.writeAsString(content);
+    await Process.run('chmod', ['+x', desktopFile.path]);
+    print('✅ Installed Linux desktop shortcut at ${desktopFile.path}');
+  } catch (e) {
+    print('⚠️ Failed to install Linux shortcut: $e');
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  if (Platform.isLinux) {
+    await _installLinuxShortcut();
+  }
+
   if (Platform.isAndroid || Platform.isIOS) {
     await Workmanager().initialize(
       callbackDispatcher,
