@@ -1,0 +1,16 @@
+{
+  "system": {
+    "id": "x68000",
+    "name": "Sharp X68000",
+    "folders": ["x68000", "x68k"],
+    "extensions": ["dim", "img", "d88", "hdm", "zip", "7z"],
+    "ignored_folders": ["media", "cache"]
+  },
+  "emulators": [
+    {
+      "name": "RetroArch PX68k",
+      "unique_id": "x68000.ra.px68k",
+      "default": true
+    }
+  ]
+}

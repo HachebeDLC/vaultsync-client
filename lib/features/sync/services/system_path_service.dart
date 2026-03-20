@@ -7,6 +7,7 @@ import 'package:file_selector/file_selector.dart';
 import '../../emulation/data/emulator_repository.dart';
 import '../../emulation/domain/emulator_config.dart';
 import '../data/dart_file_scanner.dart';
+import '../../../core/utils/platform_utils.dart';
 
 final systemPathServiceProvider = Provider<SystemPathService>((ref) {
   final emulatorRepo = ref.watch(emulatorRepositoryProvider);
@@ -200,11 +201,10 @@ class SystemPathService {
     
     // Detect EmuDeck structure
     String? emuDeckSaves;
-    final dir = Directory(path);
     if (await Directory('$path/roms').exists() && await Directory('$path/saves').exists()) {
       emuDeckSaves = '$path/saves';
-    } else if (path.toLowerCase().endsWith('/roms') && await Directory('${dir.parent.path}/saves').exists()) {
-      emuDeckSaves = '${dir.parent.path}/saves';
+    } else if (path.toLowerCase().endsWith('/roms') && await Directory('${Directory(path).parent.path}/saves').exists()) {
+      emuDeckSaves = '${Directory(path).parent.path}/saves';
     }
     
     if (emuDeckSaves != null) {
@@ -414,7 +414,8 @@ class SystemPathService {
         final dir = Directory(parent);
         if (!dir.existsSync()) return '$parent/$target';
         for (final entity in dir.listSync()) {
-          if (entity is Directory && entity.path.split('/').last.toLowerCase() == target.toLowerCase()) {
+          final name = entity.path.split('/').last;
+          if (name.toLowerCase() == target.toLowerCase()) {
             return entity.path;
           }
         }
@@ -422,83 +423,108 @@ class SystemPathService {
       return '$parent/$target';
     }
 
-    switch (sid) {
-      // --- Standalone Desktop Emulators ---
-      case 'ps2': return { 'path': findFolder(base, 'pcsx2'), 'emulatorId': 'ps2.pcsx2.desktop' };
-      case 'psx':
-      case 'ps1': return { 'path': findFolder(base, 'duckstation'), 'emulatorId': 'ps1.duckstation.desktop' };
-      case 'psp': return { 'path': findFolder(base, 'ppsspp'), 'emulatorId': 'psp.ppsspp.desktop' };
-      case 'gc': return { 'path': findFolder(base, 'dolphin'), 'emulatorId': 'gc.dolphin.desktop' };
-      case 'wii': return { 'path': findFolder(base, 'dolphin'), 'emulatorId': 'wii.dolphin.desktop' };
-      case '3ds': return { 'path': findFolder(base, 'citra'), 'emulatorId': '3ds.citra.desktop' };
-      case 'switch': 
-      case 'eden':
+    // Define the preferred standalone vs RA core for each system
+    final Map<String, (String folder, String standaloneId, String raId)> emuMap = {
+      'ps2': ('pcsx2', 'ps2.pcsx2.desktop', 'ps2.ra.pcsx2'),
+      'psx': ('duckstation', 'ps1.duckstation.desktop', 'psx.ra.swanstation'),
+      'ps1': ('duckstation', 'ps1.duckstation.desktop', 'psx.ra.swanstation'),
+      'psp': ('ppsspp', 'psp.ppsspp.desktop', 'psp.ra.ppsspp'),
+      'gc': ('dolphin', 'gc.dolphin.desktop', 'gc.ra.dolphin'),
+      'wii': ('dolphin', 'wii.dolphin.desktop', 'wii.ra.dolphin'),
+      '3ds': ('citra', '3ds.citra.desktop', '3ds.ra.citra'),
+      'nds': ('melonds', 'ds.melonds.desktop', 'ds.ra.melondsds'),
+      'ds': ('melonds', 'ds.melonds.desktop', 'ds.ra.melondsds'),
+      'gba': ('mgba', 'gba.mgba.desktop', 'gba.ra.mgba'),
+      'gbc': ('mgba', 'gbc.mgba.desktop', 'gbc.ra.sameboy'),
+      'gb': ('mgba', 'gb.mgba.desktop', 'gb.ra.sameboy'),
+      'wiiu': ('Cemu', 'wiiu.cemu.desktop', ''),
+      'ps3': ('rpcs3', 'ps3.rpcs3.desktop', ''),
+      'ps4': ('shadps4', 'ps4.shadps4.desktop', ''),
+      'vita': ('Vita3K', 'vita.vita3k.desktop', ''),
+      'xbox': ('xemu', 'xbox.xemu.desktop', ''),
+      'xbox360': ('xenia', 'xbox360.xenia.desktop', ''),
+      'scummvm': ('scummvm', 'scummvm.scummvm.desktop', ''),
+      'primehack': ('primehack', 'primehack.dolphin.desktop', ''),
+      'mame': ('MAME', 'mame.mame.desktop', 'mame.ra.mame'),
+      'arcade': ('MAME', 'arcade.mame.desktop', 'mame.ra.fbneo'),
+      'n64': ('rmg', 'n64.rmg.desktop', 'n64.ra.mupen64plus_next_gles3'),
+      'dc': ('flycast', 'dc.flycast.desktop', 'dc.ra.flycast'),
+      'dreamcast': ('flycast', 'dc.flycast.desktop', 'dc.ra.flycast'),
+      'model2': ('model2', 'model2.emulator.desktop', ''),
+      'model3': ('model3', 'model3.supermodel.desktop', ''),
+      'jag': ('bigpemu', 'jag.bigpemu.desktop', ''),
+    };
+
+    final config = emuMap[sid];
+    if (config != null) {
+      final standalonePath = findFolder(base, config.$1);
+      // If the dedicated standalone folder exists, use it
+      if (Directory(standalonePath).existsSync()) {
+        return { 'path': standalonePath, 'emulatorId': config.$2 };
+      }
+      
+      // Special case for Switch (check yuzu then ryujinx)
+      if (sid == 'switch' || sid == 'eden') {
         final yuzu = findFolder(base, 'yuzu');
         if (Directory(yuzu).existsSync()) return { 'path': yuzu, 'emulatorId': 'switch.yuzu.desktop' };
-        return { 'path': findFolder(base, 'ryujinx'), 'emulatorId': 'switch.ryujinx.desktop' };
-      case 'nds':
-      case 'ds': return { 'path': findFolder(base, 'melonds'), 'emulatorId': 'ds.melonds.desktop' };
-      case 'gba': return { 'path': findFolder(base, 'mgba'), 'emulatorId': 'gba.mgba.desktop' };
-      case 'gbc': return { 'path': findFolder(base, 'mgba'), 'emulatorId': 'gbc.mgba.desktop' };
-      case 'gb': return { 'path': findFolder(base, 'mgba'), 'emulatorId': 'gb.mgba.desktop' };
-      case 'wiiu': return { 'path': findFolder(base, 'Cemu'), 'emulatorId': 'wiiu.cemu.desktop' };
-      case 'ps3': return { 'path': findFolder(base, 'rpcs3'), 'emulatorId': 'ps3.rpcs3.desktop' };
-      case 'ps4': return { 'path': findFolder(base, 'shadps4'), 'emulatorId': 'ps4.shadps4.desktop' };
-      case 'vita': return { 'path': findFolder(base, 'Vita3K'), 'emulatorId': 'vita.vita3k.desktop' };
-      case 'xbox': return { 'path': findFolder(base, 'xemu'), 'emulatorId': 'xbox.xemu.desktop' };
-      case 'xbox360': return { 'path': findFolder(base, 'xenia'), 'emulatorId': 'xbox360.xenia.desktop' };
-      case 'scummvm': return { 'path': findFolder(base, 'scummvm'), 'emulatorId': 'scummvm.scummvm.desktop' };
-      case 'primehack': return { 'path': findFolder(base, 'primehack'), 'emulatorId': 'primehack.dolphin.desktop' };
-      case 'mame':
-      case 'arcade': return { 'path': findFolder(base, 'MAME'), 'emulatorId': 'mame.mame.desktop' };
-      case 'n64': return { 'path': findFolder(base, 'rmg'), 'emulatorId': 'n64.rmg.desktop' };
-      case 'dc':
-      case 'dreamcast': return { 'path': findFolder(base, 'flycast'), 'emulatorId': 'dc.flycast.desktop' };
-      case 'model2': return { 'path': findFolder(base, 'model2'), 'emulatorId': 'model2.emulator.desktop' };
-      case 'model3': return { 'path': findFolder(base, 'model3'), 'emulatorId': 'model3.supermodel.desktop' };
-      case 'jag': return { 'path': findFolder(base, 'bigpemu'), 'emulatorId': 'jag.bigpemu.desktop' };
+        final ryu = findFolder(base, 'ryujinx');
+        if (Directory(ryu).existsSync()) return { 'path': ryu, 'emulatorId': 'switch.ryujinx.desktop' };
+      }
 
-      // --- RetroArch Systems ---
-      case 'snes': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'snes.ra.snes9x' };
-      case 'nes': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'nes.ra.mesen' };
-      case 'genesis':
-      case 'md':
-      case 'megadrive':
-      case 'ms':
-      case 'mastersystem':
-      case 'gg':
-      case 'gamegear':
-      case 'scd':
-      case 'segacd': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'genesis.ra.genesis_plus_gx' };
-      case '32x': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': '32x.ra.picodrive' };
-      case 'amiga': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'amiga.ra.puae' };
-      case 'c64': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'c64.ra.vice' };
-      case 'cpc': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'cpc.ra.caprice32' };
-      case '2600': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': '2600.ra.stella' };
-      case 'lynx': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'lynx.ra.handy' };
-      case 'doom': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'doom.ra.prboom' };
-      case 'dos': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'dos.ra.dosbox_pure' };
-      case 'easyrpg': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'easyrpg.ra.easyrpg' };
-      case 'fbneo': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'fbneo.ra.fbneo' };
-      case 'intv': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'intellivision.ra.freeintv' };
-      case 'pc98': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'pc98.ra.neko_project_ii_kai' };
-      case 'pico8': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'pico8.ra.pico8' };
-      case 'pce':
-      case 'tg16':
-      case 'tgcd': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'pce.ra.mednafen_pce_fast' };
-      case 'sat':
-      case 'saturn': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'saturn.ra.mednafen_saturn' };
-      case 'vb': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'vb.ra.mednafen_vb' };
-      case '3do': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': '3do.ra.opera' };
-      case 'zxspectrum': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'zxspectrum.ra.fuse' };
-      case 'ws':
-      case 'wsc': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'wonderswan.ra.mednafen_wswan' };
-      case 'ngp':
-      case 'ngpc': return { 'path': findFolder(base, 'retroarch'), 'emulatorId': 'ngp.ra.mednafen_neopop' };
-
-      default:
-        return { 'path': findFolder(base, 'retroarch'), 'emulatorId': '' };
+      // Fallback: If standalone doesn't exist, but RA core is defined, use RetroArch
+      if (config.$3.isNotEmpty) {
+        return { 'path': findFolder(base, 'retroarch'), 'emulatorId': config.$3 };
+      }
+      
+      // Absolute fallback for standalone-only systems
+      return { 'path': standalonePath, 'emulatorId': config.$2 };
     }
+
+    // Default catch-all for retro systems (NES, SNES, Genesis, etc.)
+    final Map<String, String> retroArchCores = {
+      'snes': 'snes.ra.snes9x',
+      'nes': 'nes.ra.mesen',
+      'genesis': 'genesis.ra.genesis_plus_gx',
+      'md': 'genesis.ra.genesis_plus_gx',
+      'megadrive': 'genesis.ra.genesis_plus_gx',
+      'ms': 'genesis.ra.genesis_plus_gx',
+      'mastersystem': 'genesis.ra.genesis_plus_gx',
+      'gg': 'genesis.ra.genesis_plus_gx',
+      'gamegear': 'genesis.ra.genesis_plus_gx',
+      'scd': 'genesis.ra.genesis_plus_gx',
+      'segacd': 'genesis.ra.genesis_plus_gx',
+      '32x': '32x.ra.picodrive',
+      'amiga': 'amiga.ra.puae',
+      'c64': 'c64.ra.vice',
+      'cpc': 'cpc.ra.cap32',
+      '2600': '2600.ra.stella',
+      'lynx': 'lynx.ra.handy',
+      'doom': 'doom.ra.prboom',
+      'dos': 'dos.ra.dosbox_pure',
+      'easyrpg': 'easyrpg.ra.easyrpg',
+      'fbneo': 'fbneo.ra.fbneo',
+      'intv': 'intellivision.ra.freeintv',
+      'pc98': 'pc98.ra.neko_project_ii_kai',
+      'pico8': 'pico8.ra.pico8',
+      'pce': 'pce.ra.mednafen_pce_fast',
+      'tg16': 'pce.ra.mednafen_pce_fast',
+      'tgcd': 'pce.ra.mednafen_pce_fast',
+      'sat': 'saturn.ra.mednafen_saturn',
+      'saturn': 'saturn.ra.mednafen_saturn',
+      'vb': 'vb.ra.mednafen_vb',
+      '3do': '3do.ra.opera',
+      'zxspectrum': 'zxspectrum.ra.fuse',
+      'ws': 'ws.ra.mednafen_wswan',
+      'wsc': 'ws.ra.mednafen_wswan',
+      'ngp': 'ngp.ra.mednafen_ngp',
+      'ngpc': 'ngp.ra.mednafen_ngp',
+      'x68000': 'x68000.ra.px68k',
+    };
+
+    return { 
+      'path': findFolder(base, 'retroarch'), 
+      'emulatorId': retroArchCores[sid] ?? '' 
+    };
   }
 
   /// Scans a library folder recursively to detect supported emulation systems 
@@ -518,9 +544,9 @@ class SystemPathService {
         // User pointed to the root "Emulation" folder
         romsDir = Directory('$path/roms');
         emuDeckSaves = Directory('$path/saves');
-      } else if (path.toLowerCase().endsWith('/roms') && await Directory('${dir.parent.path}/saves').exists()) {
+      } else if (path.toLowerCase().endsWith('/roms') && await Directory('${Directory(path).parent.path}/saves').exists()) {
         // User pointed specifically to the "roms" folder
-        emuDeckSaves = Directory('${dir.parent.path}/saves');
+        emuDeckSaves = Directory('${Directory(path).parent.path}/saves');
       }
       
       final systems = await _emulatorRepository.loadSystems();
@@ -564,4 +590,5 @@ class SystemPathService {
       'saves': saves,
       'states': states
     };
-  }}
+  }
+}
