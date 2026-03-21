@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 class FileCache {
   static Database? _database;
@@ -15,7 +17,14 @@ class FileCache {
   }
 
   Future<Database> _initDatabase() async {
-    final dbPath = await getDatabasesPath();
+    String dbPath;
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      final dir = await getApplicationSupportDirectory();
+      dbPath = dir.path;
+    } else {
+      dbPath = await getDatabasesPath();
+    }
+    
     final path = p.join(dbPath, 'file_cache.db');
 
     return await openDatabase(
