@@ -195,9 +195,12 @@ class SystemPathService {
   }
 
   /// Saves the library folder path and auto-detects EmuDeck.
-  Future<void> setLibraryPath(String path) async {
+  Future<void> setLibraryPath(String rawPath) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('rom_library_path', path);
+    await prefs.setString('rom_library_path', rawPath);
+    
+    // Normalize path to prevent trailing slash bugs
+    final path = rawPath.endsWith('/') ? rawPath.substring(0, rawPath.length - 1) : rawPath;
     
     // Detect EmuDeck structure
     String? emuDeckSaves;
@@ -532,7 +535,8 @@ class SystemPathService {
   Future<List<Map<String, String>>> scanLibrary(String inputPath) async {
     final results = <Map<String, String>>[];
     try {
-      String path = _convertToPosix(inputPath);
+      String rawPath = _convertToPosix(inputPath);
+      final path = rawPath.endsWith('/') ? rawPath.substring(0, rawPath.length - 1) : rawPath;
       final dir = Directory(path);
       if (!await dir.exists()) return [];
       
