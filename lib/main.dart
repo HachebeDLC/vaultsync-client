@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/services/api_client_provider.dart';
 import 'features/auth/domain/auth_provider.dart';
@@ -103,6 +104,11 @@ Categories=Utility;Game;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  if (Platform.isLinux || Platform.isWindows) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   if (Platform.isLinux) {
     await _installLinuxShortcut();
   }

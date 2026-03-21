@@ -1,7 +1,7 @@
 name: vaultsync_client
 description: High-performance, hardware-encrypted emulator save synchronization.
 publish_to: 'none'
-version: 1.2.2+33
+version: 1.2.2+34
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -39,6 +39,7 @@ dependencies:
   vaultsync_launcher:
     path: local_plugins/vaultsync_launcher
   file_selector: ^1.1.0
+  sqflite_common_ffi: ^2.4.0+2
 
 dev_dependencies:
   flutter_test:
