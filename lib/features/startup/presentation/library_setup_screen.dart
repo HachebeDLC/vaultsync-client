@@ -85,19 +85,23 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           final p = f['path']!;
           
           final currentPath = await service.getSystemPath(sid);
-          if (currentPath == null) {
-            final sysConf = systems.firstWhere((s) => s.system.id == sid);
+          final sysConf = systems.firstWhere((s) => s.system.id == sid);
+          
+          // Auto-selected mapped emulator from EmuDeck detection
+          final mappedEmuId = f['emulatorId'];
+          
+          // If the path was never set, OR if we just found an explicit EmuDeck route, 
+          // we should override it to fix any previously incorrect fallback setups.
+          final isEmuDeckRoute = p.toLowerCase().contains('emulation/saves');
+          
+          if (currentPath == null || (isEmuDeckRoute && !currentPath.toLowerCase().contains('emulation/saves'))) {
             final supportedEmus = sysConf.emulators.where((e) => PlatformUtils.isEmulatorSupported(e.uniqueId)).toList();
-            
-            // Auto-selected mapped emulator from EmuDeck detection
-            final mappedEmuId = f['emulatorId'];
             
             EmulatorInfo? selectedEmu;
             if (mappedEmuId != null && mappedEmuId.isNotEmpty) {
               selectedEmu = supportedEmus.where((e) => e.uniqueId == mappedEmuId).firstOrNull;
             }
             
-            // Fallback to the explicit default, or just the first supported one
             if (selectedEmu == null) {
               selectedEmu = supportedEmus.firstWhere((e) => e.defaultEmulator, orElse: () => supportedEmus.isNotEmpty ? supportedEmus.first : sysConf.emulators.first);
             }
