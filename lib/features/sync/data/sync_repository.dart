@@ -8,6 +8,7 @@ import 'package:mutex/mutex.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'file_cache.dart';
 import 'dart_file_scanner.dart';
+import 'dart_native_crypto.dart';
 import '../services/system_path_service.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/api_client_provider.dart';
@@ -401,18 +402,31 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
   /// Encrypts and uploads a file to the server using native hardware acceleration.
   Future<void> uploadFile(dynamic localPathOrFile, String remotePath, {required String systemId, required String relPath, required SharedPreferences prefs, String? plainHash, bool force = false}) async {
     final path = localPathOrFile is File ? localPathOrFile.path : localPathOrFile.toString();
-    final Map? info = await _platform.invokeMapMethod('getFileInfo', {'uri': path});
+
+    final Map? info = (Platform.isLinux || Platform.isWindows || Platform.isMacOS) 
+        ? await DartNativeCrypto.getFileInfo(path)
+        : await _platform.invokeMapMethod('getFileInfo', {'uri': path});
+
     if (info == null) return;
     final int size = info['size'];
     final int updatedAt = info['lastModified'] ?? 0;
-    final String hash = plainHash ?? (await _platform.invokeMethod<String>('calculateHash', {'path': path}) ?? 'unknown');
+
+    final String hash = plainHash ?? (
+      (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+        ? await DartNativeCrypto.calculateHash(path)
+        : (await _platform.invokeMethod<String>('calculateHash', {'path': path}) ?? 'unknown')
+    );
+
     final masterKey = await _getMasterKey();
     final baseUrl = await _apiClient.getBaseUrl();
     final token = await _apiClient.getToken();
 
     List<int>? dirtyIndices;
     if (size > 1024 * 1024) {
-      final String blockHashesJson = await _platform.invokeMethod('calculateBlockHashes', {'path': path});
+      final String blockHashesJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+          ? await DartNativeCrypto.calculateBlockHashes(path)
+          : await _platform.invokeMethod('calculateBlockHashes', {'path': path});
+
       try {
         final checkResult = await _apiClient.post('/api/v1/blocks/check', body: {'path': remotePath, 'blocks': json.decode(blockHashesJson)});
         final List missing = checkResult['missing'] ?? [];
@@ -421,18 +435,28 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
       } catch (e) { print('⚠️ Delta check failed: $e'); }
     }
 
-    await _platform.invokeMethod('uploadFileNative', { 'url': '$baseUrl/api/v1/upload', 'token': token, 'masterKey': masterKey, 'remotePath': remotePath, 'uri': path, 'hash': hash, 'deviceName': await _getDeviceName(), 'updatedAt': updatedAt, 'dirtyIndices': dirtyIndices });
-    _recordSyncSuccess(prefs, systemId, relPath, hash);
+    final uploadArgs = { 'url': '$baseUrl/api/v1/upload', 'token': token, 'masterKey': masterKey, 'remotePath': remotePath, 'uri': path, 'hash': hash, 'deviceName': await _getDeviceName(), 'updatedAt': updatedAt, 'dirtyIndices': dirtyIndices };
+
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      await DartNativeCrypto.uploadFileNative(uploadArgs);
+    } else {
+      await _platform.invokeMethod('uploadFileNative', uploadArgs);
     }
 
-    /// Downloads and decrypts a file (or specific blocks) from the server.
-    Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
+    _recordSyncSuccess(prefs, systemId, relPath, hash);
+  }
+
+  /// Downloads and decrypts a file (or specific blocks) from the server.
+  Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
     final baseUrl = await _apiClient.getBaseUrl();
     final token = await _apiClient.getToken();
     final masterKey = await _getMasterKey();
     List<int>? patchIndices;
     if (localUri != null && serverBlocks != null) {
-       final String localBlocksJson = await _platform.invokeMethod('calculateBlockHashes', {'path': localUri});
+       final String localBlocksJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+           ? await DartNativeCrypto.calculateBlockHashes(localUri)
+           : await _platform.invokeMethod('calculateBlockHashes', {'path': localUri});
+
        final List localHashes = json.decode(localBlocksJson);
        final List remoteHashes = serverBlocks is String ? json.decode(serverBlocks) : serverBlocks;
        final dirty = <int>[];
@@ -440,11 +464,19 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
        if (dirty.isNotEmpty && dirty.length < remoteHashes.length) { patchIndices = dirty; }
     }
     final downloadUrl = (patchIndices != null) ? '$baseUrl/api/v1/blocks/download' : '$baseUrl/api/v1/download';
-    await _platform.invokeMethod('downloadFileNative', { 'url': downloadUrl, 'token': token, 'masterKey': masterKey, 'remoteFilename': remotePath, 'uri': localBasePath, 'localFilename': relPath, 'updatedAt': updatedAt, 'patchIndices': patchIndices });
+
+    final downloadArgs = { 'url': downloadUrl, 'token': token, 'masterKey': masterKey, 'remoteFilename': remotePath, 'uri': localBasePath, 'localFilename': relPath, 'updatedAt': updatedAt, 'patchIndices': patchIndices };
+
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      await DartNativeCrypto.downloadFileNative(downloadArgs);
+    } else {
+      await _platform.invokeMethod('downloadFileNative', downloadArgs);
+    }
 
     if (remoteHash != null) {
       _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
-    }  }
+    }  
+  }
 
   /// Deletes a file from the server.
   Future<void> deleteRemoteFile(String path) async { 
@@ -462,7 +494,8 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     final baseUrl = await _apiClient.getBaseUrl();
     final token = await _apiClient.getToken();
     final masterKey = await _getMasterKey();
-    await _platform.invokeMethod('downloadFileNative', { 
+    
+    final args = { 
       'url': '$baseUrl/api/v1/versions/restore', 
       'token': token, 
       'masterKey': masterKey, 
@@ -470,7 +503,13 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
       'versionId': versionId, 
       'uri': localBasePath, 
       'localFilename': relPath 
-    });
+    };
+
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      await DartNativeCrypto.downloadFileNative(args);
+    } else {
+      await _platform.invokeMethod('downloadFileNative', args);
+    }
   }
 
   /// Deletes all cloud data associated with a specific system.

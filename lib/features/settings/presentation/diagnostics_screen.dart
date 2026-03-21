@@ -1,3 +1,4 @@
+import '../../sync/data/dart_native_crypto.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -36,13 +37,15 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
 
       // 2. Metadata Consistency
       _log('📁 Testing Metadata Parity...');
-      final tempDir = await Directory.systemTemp.createTemp('vs_diag');
-      final testFile = File('${tempDir.path}/meta.bin');
-      await testFile.writeAsBytes(Uint8List(1024));
-      
-      final nativeInfo = await _platform.invokeMapMethod('getFileInfo', {'uri': testFile.path});
-      if (nativeInfo != null && nativeInfo['size'] == 1024) {
-        _log('✅ Metadata matches (Native size 1024 bytes)');
+            final tempDir = await Directory.systemTemp.createTemp('vs_diag');
+            final testFile = File('${tempDir.path}/meta.bin');
+            await testFile.writeAsBytes(Uint8List(1024));
+
+            final nativeInfo = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+                ? await DartNativeCrypto.getFileInfo(testFile.path)
+                : await _platform.invokeMapMethod('getFileInfo', {'uri': testFile.path});
+
+            if (nativeInfo != null && nativeInfo['size'] == 1024) {        _log('✅ Metadata matches (Native size 1024 bytes)');
       } else {
         _log('❌ Metadata mismatch: $nativeInfo');
       }
