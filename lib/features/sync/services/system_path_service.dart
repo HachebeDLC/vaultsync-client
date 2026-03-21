@@ -538,7 +538,11 @@ class SystemPathService {
       String rawPath = _convertToPosix(inputPath);
       final path = rawPath.endsWith('/') ? rawPath.substring(0, rawPath.length - 1) : rawPath;
       final dir = Directory(path);
-      if (!await dir.exists()) return [];
+      print('🔍 SCAN: Starting Library Scan for path: "$path"');
+      if (!await dir.exists()) {
+        print('❌ SCAN: Directory does not exist: "$path"');
+        return [];
+      }
       
       // Auto-detect EmuDeck structure
       Directory romsDir = dir;
@@ -548,13 +552,18 @@ class SystemPathService {
         // User pointed to the root "Emulation" folder
         romsDir = Directory('$path/roms');
         emuDeckSaves = Directory('$path/saves');
+        print('✅ SCAN: EmuDeck ROOT detected. Roms: ${romsDir.path} | Saves: ${emuDeckSaves.path}');
       } else if (path.toLowerCase().endsWith('/roms') && await Directory('${Directory(path).parent.path}/saves').exists()) {
         // User pointed specifically to the "roms" folder
         emuDeckSaves = Directory('${Directory(path).parent.path}/saves');
+        print('✅ SCAN: EmuDeck ROMS dir detected. Saves: ${emuDeckSaves.path}');
+      } else {
+        print('ℹ️ SCAN: Standard flat directory assumed. No sibling /saves folder found.');
       }
       
       final systems = await _emulatorRepository.loadSystems();
       final List<FileSystemEntity> list = await romsDir.list().toList();
+      print('📂 SCAN: Found ${list.length} items in roms dir.');
       
       for (final system in systems) {
         final matchingDirs = list.whereType<Directory>().where((d) {
@@ -563,20 +572,27 @@ class SystemPathService {
         });
         
         for (final d in matchingDirs) {
+          print('🔎 SCAN: Checking system ${system.system.id} in folder: ${d.path}...');
           // Verify the folder actually contains valid ROMs for this system
           if (await _hasValidRoms(d, system.system.extensions)) {
+            print('  -> Valid ROMs found.');
             // If EmuDeck is detected, route the sync path and emulator explicitly
             if (emuDeckSaves != null) {
               final config = _getEmuDeckConfig(emuDeckSaves.path, system.system.id);
+              print('  -> EmuDeck Routing: ${system.system.id} mapped to ${config['path']} with emulator ${config['emulatorId']}');
               results.add({'systemId': system.system.id, 'path': config['path']!, 'emulatorId': config['emulatorId']!});
             } else {
               // Android-style flat layout where saves and ROMs are mixed
+              print('  -> Flat Routing: ${system.system.id} mapped to ${d.path}');
               results.add({'systemId': system.system.id, 'path': d.path});
             }
+          } else {
+            print('  -> No valid ROMs found. Skipping.');
           }
         }
       }
     } catch (e) { print('⚠️ SCAN: Library scan failed: $e'); }
+    print('🏁 SCAN COMPLETE: Found ${results.length} active systems.');
     return results;
   }
 

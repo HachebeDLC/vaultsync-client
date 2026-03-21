@@ -37,7 +37,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final apiClient = ref.read(apiClientProvider);
     final url = await apiClient.getBaseUrl() ?? '';
-    final usage = await _platform.invokeMethod<bool>('hasUsageStatsPermission') ?? false;
+    
+    bool usage = false;
+    if (Platform.isAndroid) {
+      try {
+        usage = await _platform.invokeMethod<bool>('hasUsageStatsPermission') ?? false;
+      } catch (_) {}
+    }
 
     if (mounted) {
       setState(() {
