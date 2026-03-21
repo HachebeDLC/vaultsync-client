@@ -83,13 +83,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     else if (id.contains('switch') || id.contains('eden')) iconName = 'nintendoswitch';
     else if (id.contains('psp') || id.contains('ppsspp')) iconName = 'psp';
 
-    return SvgPicture.asset(
-      'assets/systems/$iconName.svg',
-      width: size, height: size,
-      colorFilter: const ColorFilter.mode(Colors.blue, BlendMode.srcIn),
-      placeholderBuilder: (context) => const Icon(Icons.folder, size: 24, color: Colors.blue),
-      errorBuilder: (context, error, stackTrace) => const Icon(Icons.folder, size: 24, color: Colors.blue),
-    );
+    try {
+      return SvgPicture.asset(
+        'assets/systems/$iconName.svg',
+        width: size, height: size,
+        colorFilter: const ColorFilter.mode(Colors.blue, BlendMode.srcIn),
+        placeholderBuilder: (context) => const Icon(Icons.folder, size: 24, color: Colors.blue),
+      );
+    } catch (_) {
+      return const Icon(Icons.folder, size: 24, color: Colors.blue);
+    }
   }
 
   String _getActionLabel(SyncAction action) {

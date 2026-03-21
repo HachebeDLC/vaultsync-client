@@ -235,14 +235,17 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
       iconName = 'retroarch';
     }
 
-    return SvgPicture.asset(
-      'assets/systems/$iconName.svg',
-      width: size,
-      height: size,
-      colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-      placeholderBuilder: (context) => Icon(_getFallbackIcon(id), size: size, color: Colors.white),
-      errorBuilder: (context, error, stackTrace) => Icon(_getFallbackIcon(id), size: size, color: Colors.white),
-    );
+    try {
+      return SvgPicture.asset(
+        'assets/systems/$iconName.svg',
+        width: size,
+        height: size,
+        colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
+        placeholderBuilder: (context) => Icon(_getFallbackIcon(id), size: size, color: Colors.white),
+      );
+    } catch (_) {
+      return Icon(_getFallbackIcon(id), size: size, color: Colors.white);
+    }
   }
 
   IconData _getFallbackIcon(String id) {
