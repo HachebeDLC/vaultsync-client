@@ -73,44 +73,56 @@ class DartNativeCrypto {
       keyBytes = Uint8List.fromList(decoded.sublist(0, 32));
     }
 
-    for (final index in indicesToSync) {
-      final offset = index * blockSize;
-      await raf.setPosition(offset);
-      final blockData = await raf.read(blockSize);
-      
-      List<int> uploadData;
-      int uploadLength;
-      
-      if (keyBytes != null && blockData.isNotEmpty) {
-        final iv = md5.convert(blockData).bytes;
-        final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)), null));
-        final encryptedBytes = cipher.process(Uint8List.fromList(blockData));
+    final client = http.Client();
+    try {
+      for (int i = 0; i < indicesToSync.length; i += 4) {
+        final batch = indicesToSync.skip(i).take(4).toList();
+        final futures = <Future<void>>[];
         
-        final outBuffer = BytesBuilder();
-        outBuffer.add(_magicBytes);
-        outBuffer.add(iv);
-        outBuffer.add(encryptedBytes);
-        uploadData = outBuffer.toBytes();
-        uploadLength = uploadData.length;
-      } else {
-        uploadData = blockData;
-        uploadLength = blockData.length;
-      }
+        for (final index in batch) {
+          final offset = index * blockSize;
+          await raf.setPosition(offset);
+          final blockData = await raf.read(blockSize);
+          
+          futures.add(() async {
+            List<int> uploadData;
+            
+            if (keyBytes != null && blockData.isNotEmpty) {
+              final iv = md5.convert(blockData).bytes;
+              final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)), null));
+              final encryptedBytes = cipher.process(Uint8List.fromList(blockData));
+              
+              final outBuffer = BytesBuilder();
+              outBuffer.add(_magicBytes);
+              outBuffer.add(iv);
+              outBuffer.add(encryptedBytes);
+              uploadData = outBuffer.toBytes();
+            } else {
+              uploadData = blockData;
+            }
 
-      final encryptedOffset = index * encryptedBlockSize;
-      
-      final request = http.Request('POST', Uri.parse(url));
-      if (token != null) request.headers['Authorization'] = 'Bearer $token';
-      request.headers['x-vaultsync-path'] = remotePath;
-      request.headers['x-vaultsync-index'] = index.toString();
-      request.headers['x-vaultsync-offset'] = encryptedOffset.toString();
-      request.headers['Content-Type'] = 'application/octet-stream';
-      request.bodyBytes = uploadData;
-      
-      final response = await request.send();
-      if (response.statusCode != 200) throw Exception('Block $index: HTTP ${response.statusCode}');
+            final encryptedOffset = index * encryptedBlockSize;
+            
+            final request = http.Request('POST', Uri.parse(url));
+            if (token != null) request.headers['Authorization'] = 'Bearer $token';
+            request.headers['x-vaultsync-path'] = remotePath;
+            request.headers['x-vaultsync-index'] = index.toString();
+            request.headers['x-vaultsync-offset'] = encryptedOffset.toString();
+            request.headers['Content-Type'] = 'application/octet-stream';
+            request.bodyBytes = uploadData;
+            
+            final response = await client.send(request);
+            if (response.statusCode != 200) throw Exception('Block $index: HTTP ${response.statusCode}');
+            // Read stream to release connection
+            await response.stream.drain();
+          }());
+        }
+        await Future.wait(futures);
+      }
+    } finally {
+      await raf.close();
+      client.close();
     }
-    await raf.close();
 
     final finalizeUrl = url.endsWith('/') ? '${url}finalize' : '$url/finalize';
     final finReq = http.Request('POST', Uri.parse(finalizeUrl));
