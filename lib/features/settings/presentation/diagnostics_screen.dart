@@ -59,7 +59,9 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       final deltaFile = File('${tempDir.path}/delta.bin');
       await deltaFile.writeAsBytes(testData);
 
-      final String initialBlocksJson = await _platform.invokeMethod('calculateBlockHashes', {'path': deltaFile.path});
+      final String initialBlocksJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+          ? await DartNativeCrypto.calculateBlockHashes(deltaFile.path)
+          : await _platform.invokeMethod('calculateBlockHashes', {'path': deltaFile.path});
       final List initialHashes = json.decode(initialBlocksJson);
       _log('📍 Initial Blocks: ${initialHashes.length}');
 
@@ -68,7 +70,9 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       modifiedData[1572864] = (modifiedData[1572864] + 1) % 256;
       await deltaFile.writeAsBytes(modifiedData);
 
-      final String modifiedBlocksJson = await _platform.invokeMethod('calculateBlockHashes', {'path': deltaFile.path});
+      final String modifiedBlocksJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+          ? await DartNativeCrypto.calculateBlockHashes(deltaFile.path)
+          : await _platform.invokeMethod('calculateBlockHashes', {'path': deltaFile.path});
       final List modifiedHashes = json.decode(modifiedBlocksJson);
 
       final dirty = <int>[];

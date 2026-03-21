@@ -370,7 +370,9 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
             // Check SQLite Cache before hashing
             String? localHash = await _fileCache.getCachedHash(localInfo['uri'], localSize, localTs);
             if (localHash == null) {
-                localHash = await _platform.invokeMethod<String>('calculateHash', {'path': localInfo['uri']});
+                localHash = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+                    ? await DartNativeCrypto.calculateHash(localInfo['uri'])
+                    : await _platform.invokeMethod<String>('calculateHash', {'path': localInfo['uri']});
                 if (localHash != null) await _fileCache.updateCache(localInfo['uri'], localSize, localTs, localHash);
             }
 

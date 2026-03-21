@@ -1,7 +1,7 @@
 name: vaultsync_client
 description: High-performance, hardware-encrypted emulator save synchronization.
 publish_to: 'none'
-version: 1.2.2+36
+version: 1.2.2+37
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
