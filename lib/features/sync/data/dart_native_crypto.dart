@@ -83,7 +83,7 @@ class DartNativeCrypto {
       
       if (keyBytes != null && blockData.isNotEmpty) {
         final iv = md5.convert(blockData).bytes;
-        final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(true, ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)));
+        final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)), null));
         final encryptedBytes = cipher.process(Uint8List.fromList(blockData));
         
         final outBuffer = BytesBuilder();
@@ -203,7 +203,7 @@ class DartNativeCrypto {
              } else {
                final iv = Uint8List.fromList(currentChunk.sublist(7, 7 + 16));
                final ciphertext = Uint8List.fromList(currentChunk.sublist(7 + 16));
-               final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(false, ParametersWithIV(KeyParameter(keyBytes), iv));
+               final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(false, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
                decryptedData = cipher.process(ciphertext);
              }
           }
@@ -234,7 +234,7 @@ class DartNativeCrypto {
            } else {
              final iv = Uint8List.fromList(currentChunk.sublist(7, 7 + 16));
              final ciphertext = Uint8List.fromList(currentChunk.sublist(7 + 16));
-             final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(false, ParametersWithIV(KeyParameter(keyBytes), iv));
+             final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(false, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
              decryptedData = cipher.process(ciphertext);
            }
         }
