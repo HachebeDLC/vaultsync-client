@@ -27,22 +27,47 @@ class DartNativeCrypto {
 
   static Future<String> calculateHash(String path) async {
     final file = File(path);
-    final hashBytes = await sha256.bind(file.openRead()).first;
-    return hashBytes.toString();
+    final firstHash = await sha256.bind(file.openRead()).first;
+    // The Kotlin engine accidentally computes a double-hash for the full file:
+    // cryptoEngine.calculateHash(digest.digest(), digest.digest().size)
+    // We must replicate this exactly so Desktop matches the server's stored hashes.
+    final secondHash = sha256.convert(firstHash.bytes);
+    return secondHash.toString();
   }
 
-  static Future<String> calculateBlockHashes(String path) async {
+  static Future<String> calculateBlockHashes(String path, {String? masterKey}) async {
     final file = File(path);
     final raf = await file.open(mode: FileMode.read);
     final length = await raf.length();
     final hashes = <String>[];
     
+    Uint8List? keyBytes;
+    if (masterKey != null) {
+      final decoded = base64Url.decode(masterKey);
+      keyBytes = Uint8List.fromList(decoded.sublist(0, 32));
+    }
+
     int offset = 0;
     while (offset < length) {
       await raf.setPosition(offset);
       final buffer = await raf.read(blockSize);
       if (buffer.isEmpty) break;
-      hashes.add(sha256.convert(buffer).toString());
+      
+      if (keyBytes != null) {
+        final iv = md5.convert(buffer).bytes;
+        final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)), null));
+        final encryptedBytes = cipher.process(Uint8List.fromList(buffer));
+        
+        final outBuffer = BytesBuilder();
+        outBuffer.add(_magicBytes);
+        outBuffer.add(iv);
+        outBuffer.add(encryptedBytes);
+        
+        hashes.add(sha256.convert(outBuffer.toBytes()).toString());
+      } else {
+        hashes.add(sha256.convert(buffer).toString());
+      }
+      
       offset += buffer.length;
     }
     await raf.close();
@@ -148,6 +173,7 @@ class DartNativeCrypto {
     final localFilename = args['localFilename'] as String;
     final patchIndices = (args['patchIndices'] as List?)?.cast<int>();
     final versionId = args['versionId'] as String?;
+    final updatedAt = args['updatedAt'] as int?;
 
     if (localFilename.contains('..')) throw Exception('Invalid path');
 
@@ -262,5 +288,10 @@ class DartNativeCrypto {
     await raf.close();
     if (await file.exists()) await file.delete();
     await tmpFile.rename(file.path);
+    
+    if (updatedAt != null) {
+      // Dart's File.setLastModified expects a DateTime object
+      await file.setLastModified(DateTime.fromMillisecondsSinceEpoch(updatedAt));
+    }
   }
 }

@@ -426,8 +426,8 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     List<int>? dirtyIndices;
     if (size > 1024 * 1024) {
       final String blockHashesJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
-          ? await DartNativeCrypto.calculateBlockHashes(path)
-          : await _platform.invokeMethod('calculateBlockHashes', {'path': path});
+          ? await DartNativeCrypto.calculateBlockHashes(path, masterKey: masterKey)
+          : await _platform.invokeMethod('calculateBlockHashes', {'path': path, 'masterKey': masterKey});
 
       try {
         final checkResult = await _apiClient.post('/api/v1/blocks/check', body: {'path': remotePath, 'blocks': json.decode(blockHashesJson)});
@@ -456,8 +456,8 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     List<int>? patchIndices;
     if (localUri != null && serverBlocks != null) {
        final String localBlocksJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
-           ? await DartNativeCrypto.calculateBlockHashes(localUri)
-           : await _platform.invokeMethod('calculateBlockHashes', {'path': localUri});
+           ? await DartNativeCrypto.calculateBlockHashes(localUri, masterKey: masterKey)
+           : await _platform.invokeMethod('calculateBlockHashes', {'path': localUri, 'masterKey': masterKey});
 
        final List localHashes = json.decode(localBlocksJson);
        final List remoteHashes = serverBlocks is String ? json.decode(serverBlocks) : serverBlocks;

@@ -315,6 +315,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
 
     private fun handleCalculateBlockHashes(call: MethodCall, result: MethodChannel.Result) {
         val path = call.argument<String>("path")!!
+        val masterKey = call.argument<String>("masterKey")
         executor.execute {
             try {
                 val input = when {
@@ -327,13 +328,26 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                     else -> File(path).inputStream()
                 }
                 
+                val secretKey = masterKey?.let { 
+                    val keyBytes = android.util.Base64.decode(it, android.util.Base64.URL_SAFE).sliceArray(0 until 32)
+                    javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
+                }
+                
                 val blockHashes = JSONArray()
                 val buffer = ByteArray(CryptoEngine.BLOCK_SIZE)
+                val encryptedBuffer = ByteArray(CryptoEngine.ENCRYPTED_BLOCK_SIZE)
+                
                 input?.use { stream ->
                     while (true) {
                         val read = stream.read(buffer)
                         if (read == -1) break
-                        blockHashes.put(cryptoEngine.calculateHash(buffer, read))
+                        
+                        if (secretKey != null) {
+                            val encryptedLength = cryptoEngine.encryptBlock(buffer, read, secretKey, encryptedBuffer)
+                            blockHashes.put(cryptoEngine.calculateHash(encryptedBuffer, encryptedLength))
+                        } else {
+                            blockHashes.put(cryptoEngine.calculateHash(buffer, read))
+                        }
                     }
                 }
                 mainHandler.post { result.success(blockHashes.toString()) }
