@@ -22,34 +22,18 @@ final systemPathsProvider = FutureProvider<Map<String, String>>((ref) async {
 
 class SystemPathService {
   final EmulatorRepository _emulatorRepository;
-  static const _platform = MethodChannel("com.vaultsync.app/launcher");
+  static const _platform = MethodChannel('com.vaultsync.app/launcher');
   Map<String, String>? _cachedPaths;
 
   SystemPathService(this._emulatorRepository);
-
   EmulatorRepository getEmulatorRepository() => _emulatorRepository;
 
   static const Map<String, String> standaloneDefaults = {
     'ps2': '/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards',
-    'aethersx2': '/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards',
-    'nethersx2': '/storage/emulated/0/Android/data/xyz.nethersx2.android/files/memcards',
-    'pcsx2': '/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards',
     'ppsspp': '/storage/emulated/0/PSP/SAVEDATA',
-    'duckstation': '/storage/emulated/0/Android/data/com.github.stenzek.duckstation/files/memcards',
-    'duckstation_legacy': '/storage/emulated/0/DuckStation/memcards',
     'dolphin': '/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files',
-    'wii': '/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files',
-    'gc': '/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files',
     'citra': '/storage/emulated/0/Citra',
     'yuzu': '/storage/emulated/0/Android/data/org.yuzu.yuzu_emu/files',
-    'eden': '/storage/emulated/0/Android/data/dev.eden.eden_emulator/files',
-    'eden_legacy': '/storage/emulated/0/Android/data/dev.legacy.eden_emulator/files',
-    'eden_optimized': '/storage/emulated/0/Android/data/com.miHoYo.Yuanshen/files',
-    'eden_nightly': '/storage/emulated/0/Android/data/dev.eden.eden_nightly/files',
-    '3ds.azahar': '/storage/emulated/0/Azahar',
-    'redream': '/storage/emulated/0/Android/data/io.recompiled.redream/files/saves',
-    'flycast': '/storage/emulated/0/flycast/data',
-    'melonds': '/storage/emulated/0/Android/data/me.magnum.melonds/files/saves',
   };
 
   String _getDesktopHome() {
@@ -104,40 +88,32 @@ class SystemPathService {
     return paths[systemId];
   }
 
-  Future<void> _incrementStorageVersion() async {
-    _cachedPaths = null;
-    final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getInt('storage_version') ?? 0;
-    await prefs.setInt('storage_version', current + 1);
-  }
-
-  Future<int> getStorageVersion() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt('storage_version') ?? 0;
-  }
-
   Future<void> setSystemPath(String systemId, String path) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('system_path_$systemId', path);
-    await _incrementStorageVersion();
+    await prefs.setString("system_path_$systemId", path);
+    _cachedPaths = null;
+    await prefs.setInt("storage_version", (prefs.getInt("storage_version") ?? 0) + 1);
   }
 
   Future<String?> getSystemEmulator(String systemId) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('system_emulator_$systemId');
+    return prefs.getString("system_emulator_$systemId");
   }
 
   Future<void> setSystemEmulator(String systemId, String emulatorId) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('system_emulator_$systemId', emulatorId);
-    await _incrementStorageVersion();
+    await prefs.setString("system_emulator_$systemId", emulatorId);
+    await prefs.setInt("storage_version", (prefs.getInt("storage_version") ?? 0) + 1);
+  }
+
+  Future<int> getStorageVersion() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt("storage_version") ?? 0;
   }
 
   Future<String> suggestSavePath(EmulatorInfo emulator, String systemId) async {
     final emuDeckSaves = await getEmuDeckSavesPath();
-    if (emuDeckSaves != null) {
-       return _getEmuDeckConfig(emuDeckSaves, systemId)['path']!;
-    }
+    if (emuDeckSaves != null) return _getEmuDeckConfig(emuDeckSaves, systemId)['path']!;
     if (Platform.isWindows || Platform.isLinux) {
       for (final entry in standaloneDefaults.entries) {
         if (emulator.uniqueId.contains(entry.key)) {
@@ -147,35 +123,16 @@ class SystemPathService {
       }
       return '${_getDesktopHome()}/RetroArch/saves';
     }
-    for (final entry in standaloneDefaults.entries) {
-      if (emulator.uniqueId.contains(entry.key)) {
-        String path = entry.value;
-        if (entry.key == 'dolphin') {
-          if (systemId == 'gc') path = '$path/GC';
-          if (systemId == 'wii') path = '$path/Wii';
-        }
-        return path;
-      }
-    }
     return '/storage/emulated/0/RetroArch/saves';
   }
 
   Future<String> suggestSavePathById(String systemId) async {
     final emuDeckSaves = await getEmuDeckSavesPath();
-    if (emuDeckSaves != null) {
-       return _getEmuDeckConfig(emuDeckSaves, systemId)['path']!;
-    }
-    final lowerId = systemId.toLowerCase();
+    if (emuDeckSaves != null) return _getEmuDeckConfig(emuDeckSaves, systemId)['path']!;
     if (Platform.isWindows || Platform.isLinux) {
-      for (final entry in standaloneDefaults.entries) {
-        if (lowerId.contains(entry.key) || entry.key.contains(lowerId)) {
-          final desktopPath = _getDesktopDefault(entry.key, systemId);
-          if (desktopPath != null) return desktopPath;
-        }
-      }
       return '${_getDesktopHome()}/RetroArch/saves';
     }
-    return standaloneDefaults[lowerId] ?? '/storage/emulated/0/RetroArch/saves';
+    return standaloneDefaults[systemId.toLowerCase()] ?? '/storage/emulated/0/RetroArch/saves';
   }
 
   Future<String?> getLibraryPath() async {
@@ -222,39 +179,26 @@ class SystemPathService {
 
   Future<bool> ensureSafPermission(String path) async {
     if (!Platform.isAndroid) return true;
-    if (path.startsWith('shizuku://')) {
-       final shizuku = await _platform.invokeMethod<Map>('checkShizukuStatus');
-       if (shizuku == null || shizuku['running'] == false) throw Exception('Shizuku not running');
-       if (shizuku['authorized'] == false) throw Exception('Shizuku not authorized');
-       return true;
-    }
-    if (!_isProtectedPath(path)) return true;
+    if (path.startsWith('shizuku://')) return true;
+    if (!path.toLowerCase().contains('android/data')) return true;
     final prefs = await SharedPreferences.getInstance();
-    final androidVersion = await _getAndroidVersion();
-    if (androidVersion >= 34 && (prefs.getBool('use_shizuku') ?? false)) return true;
-    final persistedUri = prefs.getString('saf_uri_$path');
+    final persistedUri = prefs.getString("saf_uri_$path");
     if (persistedUri != null) {
       final hasPermission = await _platform.invokeMethod<bool>('checkSafPermission', {'uri': persistedUri});
       if (hasPermission == true) return true;
     }
     final pickedUri = await openDirectoryPicker(initialUri: _buildInitialUri(path));
-    if (pickedUri != null) { await prefs.setString('saf_uri_$path', pickedUri); return true; }
-    throw Exception('SAF Permission required for restricted folder: $path');
+    if (pickedUri != null) { await prefs.setString("saf_uri_$path", pickedUri); return true; }
+    throw Exception("SAF Permission required for restricted folder: $path");
   }
 
   String? _buildInitialUri(String path) {
     if (path.startsWith('content://')) return path;
     if (path.startsWith('/storage/emulated/0/')) {
       final relPath = path.replaceFirst('/storage/emulated/0/', '');
-      final encoded = Uri.encodeComponent(relPath);
-      return 'content://com.android.externalstorage.documents/document/primary%3A$encoded';
+      return "content://com.android.externalstorage.documents/document/primary%3A${Uri.encodeComponent(relPath)}";
     }
     return null;
-  }
-
-  bool _isProtectedPath(String path) {
-     final lower = path.toLowerCase();
-     return lower.contains('android/data') || lower.contains('android/obb');
   }
 
   String _convertToPosix(String path) {
@@ -292,65 +236,68 @@ class SystemPathService {
   Map<String, String> _getEmuDeckConfig(String emuDeckSaves, String systemId) {
     final base = emuDeckSaves;
     final sid = systemId.toLowerCase();
-    
     String findFolder(String parent, String target) {
       try {
         final dir = Directory(parent);
-        if (!dir.existsSync()) return '$parent/$target';
+        if (!dir.existsSync()) return "$parent/$target";
         for (final entity in dir.listSync()) {
           final name = entity.path.split('/').last;
           if (name.toLowerCase() == target.toLowerCase()) return entity.path;
         }
       } catch (_) {}
-      return '$parent/$target';
+      return "$parent/$target";
     }
 
-    final Map<String, (String folder, String standaloneId, String raId)> emuMap = {
-      'ps2': ('pcsx2', 'ps2.pcsx2.desktop', 'ps2.ra.pcsx2'),
-      'psx': ('duckstation', 'ps1.duckstation.desktop', 'psx.ra.swanstation'),
-      'ps1': ('duckstation', 'ps1.duckstation.desktop', 'psx.ra.swanstation'),
-      'psp': ('ppsspp', 'psp.ppsspp.desktop', 'psp.ra.ppsspp'),
-      'gc': ('dolphin', 'gc.dolphin.desktop', 'gc.ra.dolphin'),
-      'wii': ('dolphin', 'wii.dolphin.desktop', 'wii.ra.dolphin'),
-      '3ds': ('citra', '3ds.citra.desktop', '3ds.ra.citra'),
-      'nds': ('melonds', 'ds.melonds.desktop', 'ds.ra.melondsds'),
-      'ds': ('melonds', 'ds.melonds.desktop', 'ds.ra.melondsds'),
-      'gba': ('mgba', 'gba.mgba.desktop', 'gba.ra.mgba'),
-      'gbc': ('mgba', 'gbc.mgba.desktop', 'gbc.ra.sameboy'),
-      'gb': ('mgba', 'gb.mgba.desktop', 'gb.ra.sameboy'),
-      'wiiu': ('Cemu', 'wiiu.cemu.desktop', ''),
-      'ps3': ('rpcs3', 'ps3.rpcs3.desktop', ''),
-      'ps4': ('shadps4', 'ps4.shadps4.desktop', ''),
-      'vita': ('Vita3K', 'vita.vita3k.desktop', ''),
-      'xbox': ('xemu', 'xbox.xemu.desktop', ''),
-      'xbox360': ('xenia', 'xbox360.xenia.desktop', ''),
-      'switch': ('yuzu', 'switch.yuzu.desktop', ''),
-      'eden': ('yuzu', 'switch.yuzu.desktop', ''),
-      'scummvm': ('scummvm', 'scummvm.scummvm.desktop', ''),
-      'primehack': ('primehack', 'primehack.dolphin.desktop', ''),
-      'mame': ('MAME', 'mame.mame.desktop', 'mame.ra.mame'),
-      'arcade': ('MAME', 'arcade.mame.desktop', 'mame.ra.fbneo'),
-      'n64': ('rmg', 'n64.rmg.desktop', 'n64.ra.mupen64plus_next_gles3'),
-      'dc': ('flycast', 'dc.flycast.desktop', 'dc.ra.flycast'),
-      'dreamcast': ('flycast', 'dc.flycast.desktop', 'dc.ra.flycast'),
-      'model2': ('model2', 'model2.emulator.desktop', ''),
-      'model3': ('model3', 'model3.supermodel.desktop', ''),
-      'jag': ('bigpemu', 'jag.bigpemu.desktop', ''),
+    String wikiPath(String emulator, {String sub = "saves"}) {
+       final root = findFolder(base, emulator);
+       if (sub.isEmpty) return root;
+       return "$root/$sub";
+    }
+
+    final Map<String, (String path, String standaloneId, String raId)> emuMap = {
+      "ps2": (wikiPath("pcsx2"), "ps2.pcsx2.desktop", "ps2.ra.pcsx2"),
+      "psx": (wikiPath("duckstation"), "ps1.duckstation.desktop", "psx.ra.swanstation"),
+      "ps1": (wikiPath("duckstation"), "ps1.duckstation.desktop", "psx.ra.swanstation"),
+      "psp": (wikiPath("ppsspp"), "psp.ppsspp.desktop", "psp.ra.ppsspp"),
+      "gc": (wikiPath("dolphin", sub: "GC"), "gc.dolphin.desktop", "gc.ra.dolphin"),
+      "wii": (wikiPath("dolphin", sub: "Wii"), "wii.dolphin.desktop", "wii.ra.dolphin"),
+      "3ds": (wikiPath("citra"), "3ds.citra.desktop", "3ds.ra.citra"),
+      "nds": (wikiPath("melonds"), "ds.melonds.desktop", "ds.ra.melondsds"),
+      "ds": (wikiPath("melonds"), "ds.melonds.desktop", "ds.ra.melondsds"),
+      "gba": (wikiPath("mgba"), "gba.mgba.desktop", "gba.ra.mgba"),
+      "gbc": (wikiPath("mgba"), "gbc.mgba.desktop", "gbc.ra.sameboy"),
+      "gb": (wikiPath("mgba"), "gb.mgba.desktop", "gb.ra.sameboy"),
+      "wiiu": (wikiPath("Cemu"), "wiiu.cemu.desktop", ""),
+      "ps3": (wikiPath("rpcs3"), "ps3.rpcs3.desktop", ""),
+      "ps4": (wikiPath("shadps4"), "ps4.shadps4.desktop", ""),
+      "vita": (wikiPath("Vita3K", sub: ""), "vita.vita3k.desktop", ""),
+      "xbox": (wikiPath("xemu", sub: ""), "xbox.xemu.desktop", ""),
+      "xbox360": (wikiPath("xenia", sub: ""), "xbox360.xenia.desktop", ""),
+      "scummvm": (wikiPath("scummvm"), "scummvm.scummvm.desktop", ""),
+      "primehack": (wikiPath("primehack", sub: ""), "primehack.dolphin.desktop", ""),
+      "mame": (wikiPath("MAME"), "mame.mame.desktop", "mame.ra.mame"),
+      "arcade": (wikiPath("MAME"), "arcade.mame.desktop", "mame.ra.fbneo"),
+      "n64": (wikiPath("rmg"), "n64.rmg.desktop", "n64.ra.mupen64plus_next_gles3"),
+      "dc": (wikiPath("flycast"), "dc.flycast.desktop", "dc.ra.flycast"),
+      "dreamcast": (wikiPath("flycast"), "dc.flycast.desktop", "dc.ra.flycast"),
+      "model2": (wikiPath("model2", sub: ""), "model2.emulator.desktop", ""),
+      "model3": (wikiPath("model3", sub: ""), "model3.supermodel.desktop", ""),
+      "jag": (wikiPath("bigpemu"), "jag.bigpemu.desktop", ""),
     };
+
+    if (sid == "switch" || sid == "eden") {
+       final storageBase = base.replaceFirst("/saves", "/storage");
+       final yuzuStorage = "$storageBase/yuzu/nand/user/save";
+       if (Directory(yuzuStorage).existsSync()) return { "path": yuzuStorage, "emulatorId": "switch.yuzu.desktop" };
+       return { "path": wikiPath("ryujinx"), "emulatorId": "switch.ryujinx.desktop" };
+    }
 
     final config = emuMap[sid];
     if (config != null) {
-      if (sid == 'switch' || sid == 'eden') {
-        final ryu = findFolder(base, 'ryujinx');
-        if (Directory(ryu).existsSync() && !Directory(findFolder(base, 'yuzu')).existsSync()) {
-          return { 'path': ryu, 'emulatorId': 'switch.ryujinx.desktop' };
-        }
+      if (Directory(config.$1).existsSync() || config.$3.isEmpty) {
+        return { "path": config.$1, "emulatorId": config.$2 };
       }
-      final standalonePath = findFolder(base, config.$1);
-      if (Directory(standalonePath).existsSync() || config.$3.isEmpty) {
-        return { 'path': standalonePath, 'emulatorId': config.$2 };
-      }
-      return { 'path': findFolder(base, 'retroarch'), 'emulatorId': config.$3 };
+      return { "path": wikiPath("retroarch"), "emulatorId": config.$3 };
     }
 
     final Map<String, String> retroArchCores = {
@@ -369,9 +316,9 @@ class SystemPathService {
       'saturn': 'saturn.ra.mednafen_saturn', 'vb': 'virtualboy.ra.mednafen_vb',
       '3do': '3do.ra.opera', 'zxspectrum': 'zxspectrum.ra.fuse',
       'ws': 'ws.ra.mednafen_wswan', 'wsc': 'ws.ra.mednafen_wswan',
-      'ngp': 'ngp.ra.mednafen_neopop', 'ngpc': 'ngp.ra.mednafen_neopop', 'x68000': 'x68000.ra.px68k',
+      'ngp': 'ngp.ra.mednafen_ngp', 'ngpc': 'ngp.ra.mednafen_ngp', 'x68000': 'x68000.ra.px68k',
     };
-    return { 'path': findFolder(base, 'retroarch'), 'emulatorId': retroArchCores[sid] ?? '' };
+    return { 'path': wikiPath('retroarch'), 'emulatorId': retroArchCores[sid] ?? '' };
   }
 
   Future<String> getEffectivePath(String systemId) async {
@@ -381,11 +328,9 @@ class SystemPathService {
     final androidVersion = await _getAndroidVersion();
     final prefs = await SharedPreferences.getInstance();
     final useShizuku = prefs.getBool('use_shizuku') ?? false;
-    if (useShizuku && androidVersion >= 34 && _isProtectedPath(rawPath)) {
-       return 'shizuku://$rawPath';
-    }
-    if (_isProtectedPath(rawPath)) {
-       final persistedUri = prefs.getString('saf_uri_$rawPath');
+    if (useShizuku && androidVersion >= 34 && rawPath.toLowerCase().contains('android/data')) return 'shizuku://$rawPath';
+    if (rawPath.toLowerCase().contains('android/data')) {
+       final persistedUri = prefs.getString("saf_uri_$rawPath");
        if (persistedUri != null) return persistedUri;
     }
     return _convertToPosix(rawPath);
@@ -404,8 +349,8 @@ class SystemPathService {
       if (await Directory('$path/roms').exists() && await Directory('$path/saves').exists()) {
         romsDir = Directory('$path/roms');
         emuDeckSaves = Directory('$path/saves');
-      } else if (path.toLowerCase().endsWith('/roms') && await Directory('${Directory(path).parent.path}/saves').exists()) {
-        emuDeckSaves = Directory('${Directory(path).parent.path}/saves');
+      } else if (path.toLowerCase().endsWith('/roms') && await Directory("${Directory(path).parent.path}/saves").exists()) {
+        emuDeckSaves = Directory("${Directory(path).parent.path}/saves");
       }
       final systems = await _emulatorRepository.loadSystems();
       final List<FileSystemEntity> list = await romsDir.list().toList();
@@ -437,7 +382,7 @@ class SystemPathService {
     print('🛠️ VAULTSYNC CONFIGURATION DUMP');
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     for (final entry in paths.entries) {
-      final emu = prefs.getString('system_emulator_${entry.key}');
+      final emu = prefs.getString("system_emulator_${entry.key}");
       print('👾 ${entry.key.toUpperCase()}:');
       print('   Path: ${entry.value}');
       print('   Core: ${emu ?? "NOT SET"}');
