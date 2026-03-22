@@ -17,9 +17,7 @@ class FileScanner(private val context: Context) {
         // Systems whose user-configured path is already narrowed to
         // a save-only directory (SAVEDATA/, nand/user/save/ etc.)
         // — safe to sync every file found, no extension check needed.
-        private val SYNC_EVERYTHING_SIDS = setOf(
-            "switch", "eden"   // walk-guard handles scope inside the scan
-        )
+        private val SYNC_EVERYTHING_SIDS = setOf("switch", "eden")
 
         // Systems that use a structural scope guard (relPath must
         // contain a known anchor) instead of extension matching.
@@ -189,43 +187,21 @@ class FileScanner(private val context: Context) {
      * [relPath]  — path relative to the scan root, e.g. "GC/EUR/GALE01.gci"
      * [fileName] — bare filename, e.g. "GALE01.gci"
      */
-    private fun shouldSyncFile(
-        sid: String,
-        relPath: String,
-        fileName: String
-    ): Boolean {
-        // ── Global Noise Filter ──────────────────────────────────
-        // Ignore hidden files, macOS metadata, and Syncthing conflicts.
+    private fun shouldSyncFile(sid: String, relPath: String, fileName: String): Boolean {
         if (fileName.startsWith(".")) return false
-
-        // ── Systems configured for full-directory sync ───────────
         if (sid in SYNC_EVERYTHING_SIDS) return true
 
-        // ── PSP / PPSSPP ─────────────────────────────────────────
-        // Only sync standard save data and emulator save states.
+        val lowerRel = relPath.lowercase()
         if (sid == "psp" || sid == "ppsspp") {
-            val lower = relPath.lowercase()
-            return lower.contains("savedata/") || lower.contains("ppsspp_state/") || 
-                   !lower.contains("/") 
+            return lowerRel.contains("savedata/") || lowerRel.contains("ppsspp_state/") || !lowerRel.contains("/")
         }
-
-        // ── Wii ──────────────────────────────────────────────────
-        // title/0001000 captures games (0000), DLC (0002), and
-        // WiiWare (0004) while excluding firmware/system data.
         if (sid == "wii") {
-            return relPath.contains("title/0001000", ignoreCase = true)
+            return lowerRel.contains("title/0001000")
         }
-
-        // ── 3DS / Citra / Azahar ─────────────────────────────────
-        // Save data lives under sdmc/Nintendo 3DS/.../title/00040000/
-        // for retail games. The 00040000 anchor ensures we only sync
-        // actual game saves and skip system data/firmware.
         if (sid == "3ds" || sid == "citra" || sid == "azahar") {
-            val lower = relPath.lowercase()
-            return lower.contains("title/00040000")
+            return lowerRel.contains("title/00040000")
         }
 
-        // ── All other systems: extension filter ──────────────────
         val ext = fileName.substringAfterLast('.', "").lowercase()
         return ext.isNotEmpty() && SAVE_EXTENSIONS.contains(ext)
     }
@@ -237,6 +213,7 @@ class FileScanner(private val context: Context) {
         allowedExtensions: Set<String>,
         combinedIgnores: Set<String>
     ): JSONArray {
+        android.util.Log.d("VaultSync", "🔍 SCAN: Starting SAF Recursive Scan for $systemId at $uri")
         val results = JSONArray()
         val sid = systemId.lowercase()
         val isSwitch = sid == "switch" || sid == "eden"
@@ -290,6 +267,7 @@ class FileScanner(private val context: Context) {
                     currentLevelMap[name] = if (isDir) DocumentFile.fromTreeUri(context, docUri)!! else DocumentFile.fromSingleUri(context, docUri)!!
 
                     if (isDir) {
+                        android.util.Log.v("VaultSync", "  [DIR] $relPath")
                         results.put(JSONObject().apply {
                             put("name", name)
                             put("relPath", relPath)
@@ -298,6 +276,8 @@ class FileScanner(private val context: Context) {
                         })
                         walkSaf(id, relPath, depth + 1)
                     } else {
+                        val sync = shouldSyncFile(sid, relPath, name)
+                        if (sync) android.util.Log.v("VaultSync", "  [FILE] $relPath (MATCH)")
                         if (shouldSyncFile(sid, relPath, name)) {
                             var fSize = cursor.getLong(3)
                             var fLast = cursor.getLong(4)
@@ -393,6 +373,7 @@ class FileScanner(private val context: Context) {
         allowedExtensions: Set<String>, 
         combinedIgnores: Set<String>
     ): JSONArray {
+        android.util.Log.d("VaultSync", "🔍 SCAN: Starting Local Recursive Scan for $systemId at $path")
         val results = JSONArray()
         val sid = systemId.lowercase()
         val isSwitch = sid == "switch" || sid == "eden"
@@ -453,6 +434,7 @@ class FileScanner(private val context: Context) {
     }
 
     fun checkSafExtensionsRecursive(rootUri: Uri, currentDocId: String, extensions: List<String>, depth: Int): Boolean {
+        android.util.Log.d("VaultSync", "🔍 ROM_SCAN: Checking depth=$depth docId=$currentDocId extensions=$extensions")
         if (depth > MAX_EXTENSION_SCAN_DEPTH) return false
         val treeUri = try {
             val treeId = DocumentsContract.getTreeDocumentId(rootUri)

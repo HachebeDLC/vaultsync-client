@@ -117,6 +117,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        android.util.Log.d("VaultSync", "📲 METHOD CALL: ${call.method}")
         when (call.method) {
             "getAndroidVersion" -> result.success(Build.VERSION.SDK_INT)
             "acquirePowerLock" -> {
@@ -301,6 +302,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                             FileScanner.SAVE_EXTENSIONS, combinedIgnores
                         )
                 }
+                android.util.Log.d("VaultSync", "🔍 SCAN: Completed for $systemId. Found ${scanResults.length()} items.")
                 mainHandler.post { result.success(scanResults.toString()) }
             } catch (e: Exception) {
                 android.util.Log.e("VaultSync", "Scan failed: ${e.message}", e)
