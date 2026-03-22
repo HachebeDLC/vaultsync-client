@@ -92,9 +92,9 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           
           // If the path was never set, OR if we just found an explicit EmuDeck route, 
           // we should override it to fix any previously incorrect fallback setups.
-          final isEmuDeckRoute = p.toLowerCase().contains('emulation/saves');
+          final isEmuDeckRoute = mappedEmuId != null && p.toLowerCase().contains('emulation/saves');
           
-          if (currentPath == null || (isEmuDeckRoute && !currentPath.toLowerCase().contains('emulation/saves'))) {
+          if (currentPath == null || (isEmuDeckRoute && !(currentPath?.toLowerCase().contains('emulation/saves') ?? false))) {
             final supportedEmus = sysConf.emulators.where((e) => PlatformUtils.isEmulatorSupported(e.uniqueId)).toList();
             
             EmulatorInfo? selectedEmu;
@@ -107,7 +107,13 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
             }
             
             await service.setSystemEmulator(sid, selectedEmu.uniqueId);
-            await service.setSystemPath(sid, p);
+            
+            if (mappedEmuId != null && mappedEmuId.isNotEmpty) {
+              await service.setSystemPath(sid, p);
+            } else {
+              final suggested = await service.suggestSavePath(selectedEmu, sid);
+              await service.setSystemPath(sid, suggested);
+            }
           }
         }
       }
