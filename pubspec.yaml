@@ -1,7 +1,7 @@
 name: vaultsync_client
 description: High-performance, hardware-encrypted emulator save synchronization.
 publish_to: 'none'
-version: 1.2.2+49
+version: 1.2.2+50
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -61,3 +61,4 @@ flutter:
   assets:
     - assets/systems/
     - assets/vaultsync_icon.png
+    - assets/vaultsync_icon.ico

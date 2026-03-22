@@ -18,7 +18,7 @@ class DesktopTrayService {
     if (!Platform.isWindows && !Platform.isLinux) return;
 
     String path = Platform.isWindows
-        ? 'assets/vaultsync_icon.png'
+        ? 'assets/vaultsync_icon.ico'
         : 'assets/vaultsync_icon.png';
 
     await _systemTray.initSystemTray(
