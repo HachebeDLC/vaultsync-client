@@ -35,7 +35,10 @@ class LifecycleSyncService with WidgetsBindingObserver {
       if (!(prefs.getBool('intelligent_sync') ?? false)) return;
 
       // 1. Check if we have permission
-      final bool hasPermission = await _platform.invokeMethod('hasUsageStatsPermission');
+      bool hasPermission = false;
+      if (Platform.isAndroid) {
+        hasPermission = await _platform.invokeMethod('hasUsageStatsPermission') ?? false;
+      }
       if (!hasPermission) return;
 
       // 2. Define emulator packages to watch
@@ -55,9 +58,12 @@ class LifecycleSyncService with WidgetsBindingObserver {
       ];
 
       // 3. Get recently closed emulator
-      final String? closedPackage = await _platform.invokeMethod('getRecentlyClosedEmulator', {
-        'packages': emulatorPackages,
-      });
+      String? closedPackage;
+      if (Platform.isAndroid) {
+        closedPackage = await _platform.invokeMethod('getRecentlyClosedEmulator', {
+          'packages': emulatorPackages,
+        });
+      }
 
       if (closedPackage != null) {
         print('Lifecycle: Detected recently active emulator $closedPackage. Triggering sync.');

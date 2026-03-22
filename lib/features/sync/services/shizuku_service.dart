@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,6 +33,7 @@ class ShizukuService {
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
 
   Future<ShizukuStatus> getStatus() async {
+    if (!Platform.isAndroid) return ShizukuStatus(isRunning: false, isAuthorized: false);
     print('🛡️ SHIZUKU: Requesting status from native...');
     try {
       final Map<dynamic, dynamic> result = await _platform.invokeMethod('checkShizukuStatus');
@@ -40,11 +42,12 @@ class ShizukuService {
       return status;
     } on PlatformException catch (e) {
       print('🛡️ SHIZUKU ERROR: ${e.message}');
-      return ShizukuStatus(isRunning: false, isAuthorized: false, error: e.message);
+      return ShizukuStatus(isRunning: false, isAuthorized: false);
     }
   }
 
   Future<bool> requestPermission() async {
+    if (!Platform.isAndroid) return false;
     print('🛡️ SHIZUKU: Requesting permission...');
     try {
       final bool result = await _platform.invokeMethod('requestShizukuPermission');
@@ -57,6 +60,7 @@ class ShizukuService {
   }
 
   Future<void> openApp() async {
+    if (!Platform.isAndroid) return;
     try {
       await _platform.invokeMethod('openShizukuApp');
     } catch (e) {

@@ -111,7 +111,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
   Future<void> _grantUsageStats() async {
-    await _platform.invokeMethod('openUsageStatsSettings');
+    if (Platform.isAndroid) {
+      await _platform.invokeMethod('openUsageStatsSettings');
+    }
     Future.delayed(const Duration(seconds: 2), _loadSettings);
   }
 

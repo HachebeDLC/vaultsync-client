@@ -88,7 +88,11 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
 
       // 4. Shizuku Status
       _log('🛡️ Checking Shizuku...');
-      final shizuku = await _platform.invokeMethod<Map>('checkShizukuStatus');
+      Map? shizuku;
+      if (Platform.isAndroid) {
+        try { shizuku = await _platform.invokeMethod<Map>('checkShizukuStatus'); } catch (_) {}
+      }
+      
       if (shizuku != null) {
         _log('Running: ${shizuku['running']}, Authorized: ${shizuku['authorized']}');
       } else {
@@ -98,17 +102,21 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       // 5. Native Cache Speed
       _log('🚀 Benchmarking Native Cache...');
       const pspPath = '/storage/emulated/0/PSP/SAVEDATA';
-      final sw = Stopwatch()..start();
-      try {
-        await _platform.invokeMethod('scanRecursive', {'path': pspPath, 'systemId': 'diag', 'ignoredFolders': []});
-        final t1 = sw.elapsedMilliseconds;
-        sw.reset(); sw.start();
-        await _platform.invokeMethod('scanRecursive', {'path': pspPath, 'systemId': 'diag', 'ignoredFolders': []});
-        final t2 = sw.elapsedMilliseconds;
-        _log('⏱️ Cold Scan: ${t1}ms | Cached: ${t2}ms');
-        if (t2 < t1) _log('✅ Cache speedup confirmed.');
-      } catch (_) {
-        _log('⚠️ Skip Cache Test: $pspPath not found.');
+      if (Platform.isAndroid) {
+        final sw = Stopwatch()..start();
+        try {
+          await _platform.invokeMethod('scanRecursive', {'path': pspPath, 'systemId': 'diag', 'ignoredFolders': []});
+          final t1 = sw.elapsedMilliseconds;
+          sw.reset(); sw.start();
+          await _platform.invokeMethod('scanRecursive', {'path': pspPath, 'systemId': 'diag', 'ignoredFolders': []});
+          final t2 = sw.elapsedMilliseconds;
+          _log('⏱️ Cold Scan: ${t1}ms | Cached: ${t2}ms');
+          if (t2 < t1) _log('✅ Cache speedup confirmed.');
+        } catch (_) {
+          _log('⚠️ Skip Cache Test: $pspPath not found.');
+        }
+      } else {
+        _log('ℹ️ Skip Cache Test: Not on Android.');
       }
 
     } catch (e) {

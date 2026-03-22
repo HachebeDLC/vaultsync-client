@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'sync_service.dart';
@@ -55,12 +56,16 @@ class BackgroundSyncService {
   }
 
   Future<void> startMonitoring() async {
-    await _platform.invokeMethod('startMonitoring', {
-      'packages': _packageToSystem.keys.toList(),
-    });
+    if (Platform.isAndroid) {
+      await _platform.invokeMethod('startMonitoring', {
+        'packages': _packageToSystem.keys.toList(),
+      });
+    }
   }
 
   Future<void> stopMonitoring() async {
-    await _platform.invokeMethod('stopMonitoring');
+    if (Platform.isAndroid) {
+      await _platform.invokeMethod('stopMonitoring');
+    }
   }
 }

@@ -46,7 +46,7 @@ class SyncService {
   Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false, bool isBackground = false}) async {
     if (isBackground) {
       await _showNotification('VaultSync', 'Performing background maintenance...');
-      await _platform.invokeMethod('acquirePowerLock');
+      if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
     }
 
     try {
@@ -138,7 +138,7 @@ class SyncService {
     } finally { 
       if (isBackground) {
         await _clearNotification();
-        await _platform.invokeMethod('releasePowerLock');
+        if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
       }
     }
   }
@@ -147,7 +147,7 @@ class SyncService {
   Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false, bool isBackground = false}) async {
     if (isBackground) {
       await _showNotification('VaultSync', 'Syncing $systemId...');
-      await _platform.invokeMethod('acquirePowerLock');
+      if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
     }
     try {
       // Pre-flight check: Shizuku status
@@ -203,7 +203,7 @@ class SyncService {
     } finally { 
       if (isBackground) {
         await _clearNotification();
-        await _platform.invokeMethod('releasePowerLock');
+        if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
       }
     }
   }

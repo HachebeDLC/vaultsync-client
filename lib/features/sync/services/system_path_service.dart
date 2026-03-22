@@ -173,7 +173,7 @@ class SystemPathService {
 
   Future<int> _getAndroidVersion() async {
     if (!Platform.isAndroid) return 0;
-    try { return await _platform.invokeMethod<int>('getAndroidVersion') ?? 0; }
+    try { return await _platform.invokeMethod<int>("getAndroidVersion") ?? 0; }
     catch (_) { return 0; }
   }
 
@@ -254,7 +254,7 @@ class SystemPathService {
        return "$root/$sub";
     }
 
-    final Map<String, (String path, String standaloneId, String raId)> emuMap = {
+    final Map<String, (String, String, String)> emuMap = {
       "ps2": (wikiPath("pcsx2"), "ps2.pcsx2.desktop", "ps2.ra.pcsx2"),
       "psx": (wikiPath("duckstation"), "ps1.duckstation.desktop", "psx.ra.swanstation"),
       "ps1": (wikiPath("duckstation"), "ps1.duckstation.desktop", "psx.ra.swanstation"),
@@ -265,35 +265,35 @@ class SystemPathService {
       "nds": (wikiPath("melonds"), "ds.melonds.desktop", "ds.ra.melondsds"),
       "ds": (wikiPath("melonds"), "ds.melonds.desktop", "ds.ra.melondsds"),
       "gba": (wikiPath("mgba"), "gba.mgba.desktop", "gba.ra.mgba"),
-      "gbc": (wikiPath("mgba"), "gbc.mgba.desktop", "gbc.ra.sameboy"),
-      "gb": (wikiPath("mgba"), "gb.mgba.desktop", "gb.ra.sameboy"),
+      "gbc": (wikiPath("retroarch"), "gbc.mgba.desktop", "gbc.ra.sameboy"),
+      "gb": (wikiPath("retroarch"), "gb.mgba.desktop", "gb.ra.sameboy"),
       "wiiu": (wikiPath("Cemu"), "wiiu.cemu.desktop", ""),
       "ps3": (wikiPath("rpcs3"), "ps3.rpcs3.desktop", ""),
       "ps4": (wikiPath("shadps4"), "ps4.shadps4.desktop", ""),
-      "vita": (wikiPath("Vita3K", sub: ""), "vita.vita3k.desktop", ""),
-      "xbox": (wikiPath("xemu", sub: ""), "xbox.xemu.desktop", ""),
-      "xbox360": (wikiPath("xenia", sub: ""), "xbox360.xenia.desktop", ""),
+      "vita": (wikiPath("Vita3K"), "vita.vita3k.desktop", ""),
+      "xbox": (wikiPath("xemu"), "xbox.xemu.desktop", ""),
+      "xbox360": (wikiPath("xenia"), "xbox360.xenia.desktop", ""),
       "scummvm": (wikiPath("scummvm"), "scummvm.scummvm.desktop", ""),
-      "primehack": (wikiPath("primehack", sub: ""), "primehack.dolphin.desktop", ""),
+      "primehack": (wikiPath("primehack", sub: "GC"), "primehack.dolphin.desktop", ""),
       "mame": (wikiPath("MAME"), "mame.mame.desktop", "mame.ra.mame"),
       "arcade": (wikiPath("MAME"), "arcade.mame.desktop", "mame.ra.fbneo"),
-      "n64": (wikiPath("rmg"), "n64.rmg.desktop", "n64.ra.mupen64plus_next_gles3"),
+      "n64": (wikiPath("retroarch"), "n64.rmg.desktop", "n64.ra.mupen64plus_next_gles3"),
       "dc": (wikiPath("flycast"), "dc.flycast.desktop", "dc.ra.flycast"),
       "dreamcast": (wikiPath("flycast"), "dc.flycast.desktop", "dc.ra.flycast"),
       "model2": (wikiPath("model2", sub: ""), "model2.emulator.desktop", ""),
-      "model3": (wikiPath("model3", sub: ""), "model3.supermodel.desktop", ""),
+      "model3": (wikiPath("supermodel"), "model3.supermodel.desktop", ""),
       "jag": (wikiPath("bigpemu"), "jag.bigpemu.desktop", ""),
+      "azahar": (wikiPath("azahar"), "3ds.azahar.android", ""),
+      "switch": (wikiPath("yuzu"), "switch.yuzu.desktop", "switch.ryujinx.desktop"),
+      "eden": (wikiPath("yuzu"), "switch.yuzu.desktop", "switch.ryujinx.desktop"),
     };
-
-    if (sid == "switch" || sid == "eden") {
-       final storageBase = base.replaceFirst("/saves", "/storage");
-       final yuzuStorage = "$storageBase/yuzu/nand/user/save";
-       if (Directory(yuzuStorage).existsSync()) return { "path": yuzuStorage, "emulatorId": "switch.yuzu.desktop" };
-       return { "path": wikiPath("ryujinx"), "emulatorId": "switch.ryujinx.desktop" };
-    }
 
     final config = emuMap[sid];
     if (config != null) {
+      if (sid == "switch" || sid == "eden") {
+        if (Directory(wikiPath("yuzu")).existsSync()) return { "path": wikiPath("yuzu"), "emulatorId": "switch.yuzu.desktop" };
+        return { "path": wikiPath("ryujinx"), "emulatorId": "switch.ryujinx.desktop" };
+      }
       if (Directory(config.$1).existsSync() || config.$3.isEmpty) {
         return { "path": config.$1, "emulatorId": config.$2 };
       }
