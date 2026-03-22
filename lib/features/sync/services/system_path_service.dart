@@ -123,7 +123,7 @@ class SystemPathService {
       }
       return '${_getDesktopHome()}/RetroArch/saves';
     }
-    return '/storage/emulated/0/RetroArch/saves';
+    return standaloneDefaults[systemId.toLowerCase()] ?? '/storage/emulated/0/RetroArch/saves';
   }
 
   Future<String> suggestSavePathById(String systemId) async {

@@ -94,7 +94,19 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           // we should override it to fix any previously incorrect fallback setups.
           final isEmuDeckRoute = mappedEmuId != null && p.toLowerCase().contains('emulation/saves');
           
-          if (currentPath == null || (isEmuDeckRoute && !(currentPath?.toLowerCase().contains('emulation/saves') ?? false))) {
+          // Logic for overriding:
+          // 1. Current path is null (brand new system).
+          // 2. We found an EmuDeck route but current path is NOT an EmuDeck route.
+          // 3. We are on Android and current path points to the scanned ROM folder (broken route).
+          bool shouldOverride = currentPath == null;
+          if (!shouldOverride && isEmuDeckRoute && !(currentPath?.toLowerCase().contains('emulation/saves') ?? false)) {
+            shouldOverride = true;
+          }
+          if (!shouldOverride && Platform.isAndroid && currentPath == p) {
+            shouldOverride = true;
+          }
+
+          if (shouldOverride) {
             final supportedEmus = sysConf.emulators.where((e) => PlatformUtils.isEmulatorSupported(e.uniqueId)).toList();
             
             EmulatorInfo? selectedEmu;
