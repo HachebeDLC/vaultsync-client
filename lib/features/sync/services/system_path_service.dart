@@ -29,11 +29,21 @@ class SystemPathService {
   EmulatorRepository getEmulatorRepository() => _emulatorRepository;
 
   static const Map<String, String> standaloneDefaults = {
-    'ps2': '/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards',
-    'ppsspp': '/storage/emulated/0/PSP/SAVEDATA',
-    'dolphin': '/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files',
-    'citra': '/storage/emulated/0/Citra',
-    'yuzu': '/storage/emulated/0/Android/data/org.yuzu.yuzu_emu/files',
+    "ps2": "/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards",
+    "psp": "/storage/emulated/0/PSP/SAVEDATA",
+    "ppsspp": "/storage/emulated/0/PSP/SAVEDATA",
+    "gc": "/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files",
+    "wii": "/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files",
+    "dolphin": "/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files",
+    "3ds": "/storage/emulated/0/Azahar",
+    "azahar": "/storage/emulated/0/Azahar",
+    "citra": "/storage/emulated/0/Citra",
+    "switch": "/storage/emulated/0/Android/data/dev.eden.eden_emulator/files/nand/user/save",
+    "eden": "/storage/emulated/0/Android/data/dev.eden.eden_emulator/files/nand/user/save",
+    "yuzu": "/storage/emulated/0/Android/data/org.yuzu.yuzu_emu/files",
+    "nds": "/storage/emulated/0/Android/data/me.arun.melonds/files",
+    "ds": "/storage/emulated/0/Android/data/me.arun.melonds/files",
+    "melonds": "/storage/emulated/0/Android/data/me.arun.melonds/files",
   };
 
   String _getDesktopHome() {
