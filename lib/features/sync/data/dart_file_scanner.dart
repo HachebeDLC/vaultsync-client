@@ -54,7 +54,7 @@ class DartFileScanner {
       try {
         final list = await dir.list().toList();
         for (final entity in list) {
-          final fileName = entity.path.split('/').last;
+          final fileName = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
           final relPath = currentRelPath.isEmpty ? fileName : '$currentRelPath/$fileName';
           
           if (_hardcodedIgnores.contains(fileName.toLowerCase()) || ignoreSet.contains(relPath.toLowerCase())) {

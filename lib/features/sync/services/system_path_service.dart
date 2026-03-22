@@ -223,7 +223,7 @@ class SystemPathService {
     try {
       await for (final entity in dir.list(recursive: true)) {
         if (entity is File) {
-          final fileName = entity.path.split('/').last.toLowerCase();
+          final fileName = entity.uri.pathSegments.where((s) => s.isNotEmpty).last.toLowerCase();
           if (fileName.startsWith('.')) continue;
           final ext = fileName.contains('.') ? fileName.split('.').last : '';
           if (ext.isNotEmpty && extSet.contains(ext)) return true;
@@ -241,7 +241,7 @@ class SystemPathService {
         final dir = Directory(parent);
         if (!dir.existsSync()) return "$parent/$target";
         for (final entity in dir.listSync()) {
-          final name = entity.path.split('/').last;
+          final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
           if (name.toLowerCase() == target.toLowerCase()) return entity.path;
         }
       } catch (_) {}
@@ -356,7 +356,7 @@ class SystemPathService {
       final List<FileSystemEntity> list = await romsDir.list().toList();
       for (final system in systems) {
         final matchingDirs = list.whereType<Directory>().where((d) {
-          final name = d.path.split('/').last.toLowerCase();
+          final name = d.uri.pathSegments.where((s) => s.isNotEmpty).last.toLowerCase();
           return name == system.system.id.toLowerCase() || name == system.system.name.toLowerCase() || system.system.folders.map((f) => f.toLowerCase()).contains(name);
         });
         for (final d in matchingDirs) {
