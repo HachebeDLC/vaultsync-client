@@ -29,6 +29,8 @@ final syncRepositoryProvider = Provider<SyncRepository>((ref) {
   return SyncRepository(apiClient, pathService, FileCache(), networkService, pathResolver);
 });
 
+/// Repository responsible for orchestrating the synchronization of emulator save data
+/// between the local filesystem and the VaultSync server.
 class SyncRepository {
   final ApiClient _apiClient;
   final SystemPathService _pathService;
@@ -314,10 +316,12 @@ class SyncRepository {
     );
   }
 
+  /// Deletes a specific file from the server storage.
   Future<void> deleteRemoteFile(String path) async { 
     await _apiClient.delete('/api/v1/files', body: {'filename': path}); 
   }
 
+  /// Retrieves the historical version list for a given remote file.
   Future<List<Map<String, dynamic>>> getFileVersions(String remotePath) async { 
     final response = await _apiClient.get('/api/v1/versions?path=$remotePath'); 
     return List<Map<String, dynamic>>.from(response['versions'] ?? []); 
@@ -327,10 +331,12 @@ class SyncRepository {
     await _networkService.restoreVersion(remotePath, versionId, localBasePath, relPath, fileSize);
   }
 
+  /// Wipes all cloud data associated with a specific system (e.g. 'ps2').
   Future<void> deleteSystemCloudData(String systemId) async { 
     await _apiClient.delete('/api/v1/systems/$systemId'); 
   }
 
+  /// Fetches all active sync conflicts (files present in multiple devices with differing hashes).
   Future<List<Map<String, dynamic>>> getAllRemoteConflicts() async { 
     try { 
       final response = await _apiClient.get('/api/v1/conflicts'); 
@@ -338,6 +344,7 @@ class SyncRepository {
     } catch(_) { return []; } 
   }
 
+  /// Performs a shallow scan of the local filesystem for a specific system's saves.
   Future<Map<String, dynamic>> scanLocalFiles(String path, String systemId) async {
     List<dynamic> list;
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {

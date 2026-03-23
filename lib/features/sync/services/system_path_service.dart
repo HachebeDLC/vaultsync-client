@@ -18,6 +18,8 @@ final systemPathsProvider = FutureProvider<Map<String, String>>((ref) async {
   return service.getAllSystemPaths();
 });
 
+/// Service responsible for resolving platform-specific emulator paths and 
+/// identifying game save locations.
 class SystemPathService {
   final EmulatorRepository _emulatorRepository;
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
@@ -65,6 +67,7 @@ class SystemPathService {
     return path;
   }
 
+  /// Retrieves all user-configured system paths from local storage.
   Future<Map<String, String>> getAllSystemPaths() async {
     if (_cachedPaths != null) return _cachedPaths!;
     final prefs = await SharedPreferences.getInstance();
@@ -78,11 +81,13 @@ class SystemPathService {
     return paths;
   }
 
+  /// Returns the configured path for a specific `systemId`.
   Future<String?> getSystemPath(String systemId) async {
     final paths = await getAllSystemPaths();
     return paths[systemId];
   }
 
+  /// Persists a custom save path for a given `systemId`.
   Future<void> setSystemPath(String systemId, String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString("system_path_$systemId", path);
@@ -106,6 +111,7 @@ class SystemPathService {
     return prefs.getInt("storage_version") ?? 0;
   }
 
+  /// Suggests a default save path based on the detected emulator and system ID.
   Future<String> suggestSavePath(EmulatorInfo emulator, String systemId) async {
     await _ensureConfigLoaded();
     final emuDeckSaves = await getEmuDeckSavesPath();
@@ -301,6 +307,7 @@ class SystemPathService {
     return { 'path': wikiPath('retroarch'), 'emulatorId': retroArchCores?[sid] ?? '' };
   }
 
+  /// Resolves the 'effective' path for Android, handling POSIX, SAF, and Shizuku abstraction.
   Future<String> getEffectivePath(String systemId) async {
     final rawPath = await getSystemPath(systemId);
     if (rawPath == null) return await suggestSavePathById(systemId);
@@ -325,6 +332,7 @@ class SystemPathService {
     return posixPath;
   }
 
+  /// Automatically scans a ROM library to detect systems and their save locations.
   Future<List<Map<String, String>>> scanLibrary(String inputPath) async {
     final results = <Map<String, String>>[];
     try {

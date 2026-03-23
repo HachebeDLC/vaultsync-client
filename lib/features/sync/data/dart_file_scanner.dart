@@ -1,5 +1,6 @@
 import 'dart:io';
 
+/// Utility for recursively scanning the local filesystem for emulator-specific save files.
 class DartFileScanner {
   static const _syncEverythingSids = {'switch', 'eden'};
   
@@ -39,6 +40,8 @@ class DartFileScanner {
     return ext.isNotEmpty && _saveExtensions.contains(ext);
   }
 
+  /// Recursively walks the directory at `rootPath` and returns a metadata list of 
+  /// files that match the synchronization rules for `systemId`.
   static Future<List<Map<String, dynamic>>> scanRecursive(String rootPath, String systemId, List<String> ignoredFolders) async {
     final sid = systemId.toLowerCase();
     final results = <Map<String, dynamic>>[];

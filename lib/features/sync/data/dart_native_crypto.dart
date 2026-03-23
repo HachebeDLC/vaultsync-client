@@ -5,6 +5,8 @@ import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:pointycastle/export.dart';
 
+/// High-performance cryptographic engine providing hardware-accelerated 
+/// AES-256-CBC encryption and delta-sync block hashing in Dart.
 class DartNativeCrypto {
   static const int smallBlockSize = 256 * 1024;
   static const int largeBlockSize = 1024 * 1024;
@@ -19,6 +21,7 @@ class DartNativeCrypto {
   
   static final _magicBytes = utf8.encode(magicHeader);
 
+  /// Returns standard file metadata (size and lastModified) for a given local path.
   static Future<Map<String, dynamic>?> getFileInfo(String path) async {
     final file = File(path);
     if (!await file.exists()) return null;
@@ -29,6 +32,7 @@ class DartNativeCrypto {
     };
   }
 
+  /// Computes a full-file SHA-256 hash for identification purposes.
   static Future<String> calculateHash(String path) async {
     final file = File(path);
     final firstHash = await sha256.bind(file.openRead()).first;
@@ -39,6 +43,8 @@ class DartNativeCrypto {
     return secondHash.toString();
   }
 
+  /// Computes a JSON list of SHA-256 hashes for every 1MB block of the file.
+  /// If `masterKey` is provided, hashes are computed over the encrypted blocks.
   static Future<String> calculateBlockHashes(String path, {String? masterKey}) async {
     final file = File(path);
     final raf = await file.open(mode: FileMode.read);
@@ -81,6 +87,7 @@ class DartNativeCrypto {
     return json.encode(hashes);
   }
 
+  /// Orchestrates a high-speed multi-threaded block upload of a file to the server.
   static Future<void> uploadFileNative(Map<String, dynamic> args) async {
     final url = args['url'] as String;
     final token = args['token'] as String?;
@@ -181,6 +188,7 @@ class DartNativeCrypto {
     if (finRes.statusCode != 200) throw Exception('Finalization failed: HTTP ${finRes.statusCode}');
   }
 
+  /// Performs a chunked, streaming download and decryption of a file from the server.
   static Future<void> downloadFileNative(Map<String, dynamic> args) async {
     final url = args['url'] as String;
     final token = args['token'] as String?;

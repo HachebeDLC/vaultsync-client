@@ -1,10 +1,12 @@
 import '../../../core/services/api_client.dart';
 
+/// Handles user authentication, registration, and master key management.
 class AuthRepository {
   final ApiClient _apiClient;
 
   AuthRepository(this._apiClient);
 
+  /// Authenticates a user with email and password, and derives the local master key.
   Future<User?> login(String email, String password) async {
     try {
       final response = await _apiClient.post('/login', body: {
@@ -29,6 +31,7 @@ class AuthRepository {
     }
   }
 
+  /// Registers a new user and establishes their initial encryption salt.
   Future<User?> register(String email, String password, String username) async {
     try {
       final response = await _apiClient.post('/register', body: {
@@ -54,10 +57,12 @@ class AuthRepository {
     }
   }
 
+  /// Wipes the local session token and logs out the user.
   Future<void> logout() async {
     await _apiClient.clearToken();
   }
   
+  /// Validates the current session token against the server.
   Future<User?> checkAuth() async {
     try {
       final token = await _apiClient.getToken();
@@ -87,6 +92,7 @@ class AuthRepository {
   }
 }
 
+/// Represents an authenticated user account.
 class User {
   final String id;
   final String email;
