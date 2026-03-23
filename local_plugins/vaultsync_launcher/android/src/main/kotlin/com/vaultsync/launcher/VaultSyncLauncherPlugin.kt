@@ -504,8 +504,13 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         executor.execute {
             try {
                 if (localFilename.contains("..")) throw Exception("Invalid path")
+                if (localFilename.isEmpty() || localFilename.endsWith("/")) {
+                    android.util.Log.w("VaultSync", "Skipping download of directory path: $localFilename")
+                    mainHandler.post { result.success(true) }
+                    return@execute
+                }
                 
-                val secretKey = masterKey?.let { 
+                val secretKey = masterKey?.let {
                     val keyBytes = android.util.Base64.decode(it, android.util.Base64.URL_SAFE).sliceArray(0 until 32)
                     javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
                 }
@@ -516,20 +521,24 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 networkClient.openDownloadConnection(url, token, reqBody).use { connection ->
                     if (connection.responseCode != 200) throw Exception("Download failed: HTTP ${connection.responseCode}")
 
-                    var targetPath: String? = null
-                    var safTmp: DocumentFile? = null
-                    var parentDir: DocumentFile? = null
-
                     when {
                         isShizukuPath(uriStr) -> {
-                            targetPath = getCleanPath(uriStr)
+                            val baseDir = getCleanPath(uriStr)
+                            val finalPath = File(baseDir, localFilename).absolutePath
                             val shizukuService = getShizukuServiceSync()
-                            val tmpPath = "${targetPath}.vstmp"
-                            shizukuService.openFile(tmpPath, "rw")?.let { pfd ->
-                                pfd.use { FileOutputStream(it.fileDescriptor).use { fos -> 
-                                    processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices)
-                                }}
+                            
+                            val pfd = shizukuService.openFile(finalPath, "rw")
+                            if (pfd != null) {
+                                pfd.use { descriptor ->
+                                    FileOutputStream(descriptor.fileDescriptor).use { fos ->
+                                        fos.channel.truncate(0)
+                                        processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices)
+                                    }
+                                }
+                            } else {
+                                throw Exception("Could not open Shizuku file: $finalPath")
                             }
+                            if (updatedAt != null) setFileTimestampInternal("shizuku://$finalPath", updatedAt)
                         }
                         uriStr.startsWith("content://") -> {
                             val treeUri = Uri.parse(uriStr)
@@ -541,55 +550,38 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                                 currentDir = fileScanner.getOrCreateDirectory(currentDir, pathParts[i])
                             }
                             
-                            parentDir = currentDir
                             val finalName = pathParts.last()
-                            safTmp = currentDir.createFile("application/octet-stream", "${finalName}.vstmp") ?: throw Exception("Failed to create tmp file")
+                            val targetFile = fileScanner.getOrCreateFile(currentDir, finalName, "application/octet-stream")
                             
-                            context!!.contentResolver.openFileDescriptor(safTmp.uri, "rw")?.use { pfd ->
-                                FileOutputStream(pfd.fileDescriptor).use { fos ->
-                                    processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices)
+                            val pfd = context!!.contentResolver.openFileDescriptor(targetFile.uri, "rw")
+                            if (pfd != null) {
+                                pfd.use { descriptor ->
+                                    FileOutputStream(descriptor.fileDescriptor).use { fos ->
+                                        fos.channel.truncate(0)
+                                        processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices)
+                                    }
                                 }
+                            } else {
+                                throw Exception("Could not open SAF file descriptor")
                             }
+                            if (updatedAt != null) setFileTimestampInternal(targetFile.uri.toString(), updatedAt)
                         }
                         else -> {
-                            targetPath = localFilename
-                            val file = File(targetPath)
-                            file.parentFile?.mkdirs()
-                            RandomAccessFile(File("${targetPath}.vstmp"), "rw").use { raf ->
+                            val finalFile = File(File(uriStr), localFilename)
+                            finalFile.parentFile?.mkdirs()
+                            
+                            if (finalFile.exists() && finalFile.isDirectory) {
+                                finalFile.deleteRecursively()
+                            }
+                            
+                            RandomAccessFile(finalFile, "rw").use { raf ->
+                                raf.setLength(0)
                                 processDownloadStream(connection.inputStream, raf.channel, secretKey, patchIndices)
                             }
-                        }
-                    }
-
-                    // Finalize Download (Rename)
-                    when {
-                        isShizukuPath(uriStr) -> {
-                            getShizukuServiceSync().renameFile("${targetPath}.vstmp", targetPath!!)
-                            if (updatedAt != null) setFileTimestampInternal("shizuku://$targetPath", updatedAt)
-                        }
-                        safTmp != null -> {
-                            val finalName = localFilename.split("/").last()
-                            val existingFile = fileScanner.findFileStrict(parentDir!!, finalName)
-                            existingFile?.delete()
-                            
-                            if (!safTmp.renameTo(finalName)) {
-                                val newFinal = parentDir.createFile("application/octet-stream", finalName) ?: throw Exception("Final rename failed")
-                                context!!.contentResolver.openInputStream(safTmp.uri)?.use { input ->
-                                    context!!.contentResolver.openOutputStream(newFinal.uri)?.use { out -> input.copyTo(out) }
-                                }
-                                safTmp.delete()
-                            }
-                        }
-                        else -> {
-                            val tmpFile = File("${targetPath}.vstmp")
-                            val finalFile = File(targetPath!!)
-                            if (finalFile.exists()) finalFile.delete()
-                            tmpFile.renameTo(finalFile)
-                            if (updatedAt != null) setFileTimestampInternal(targetPath, updatedAt)
+                            if (updatedAt != null) setFileTimestampInternal(finalFile.absolutePath, updatedAt)
                         }
                     }
                 }
-
                 mainHandler.post { result.success(true) }
             } catch (e: Exception) {
                 android.util.Log.e("VaultSync", "Download failed: ${e.message}", e)

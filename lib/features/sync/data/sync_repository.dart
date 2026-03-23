@@ -121,9 +121,19 @@ class SyncRepository {
 
     // 6. 3DS (Azahar / Citra) Logic
     if (sid == '3ds' || sid == 'citra' || sid == 'azahar') {
+       final titleIdx = parts.indexOf('00040000');
+       if (titleIdx != -1 && titleIdx < parts.length - 1) {
+           return 'saves/${parts.sublist(titleIdx + 1).join('/')}';
+       }
        final anchorIdx = parts.indexWhere((p) => ['nand', 'sdmc', 'sysdata'].contains(p.toLowerCase()));
        if (anchorIdx != -1) return parts.sublist(anchorIdx).join('/');
        return '';
+    }
+
+    // 7. PSP (PPSSPP) Logic
+    if (sid == 'psp' || sid == 'ppsspp') {
+       final anchorIdx = parts.indexWhere((p) => ['savedata', 'ppsspp_state'].contains(p.toLowerCase()));
+       if (anchorIdx != -1) return parts.sublist(anchorIdx).join('/');
     }
 
     return localRelPath;
@@ -159,7 +169,18 @@ class SyncRepository {
     }
 
     if (sid == '3ds' || sid == 'citra' || sid == 'azahar') {
-       // Azahar root usually doesn't have 'files/'
+       if (cloudRelPath.startsWith('saves/')) {
+          final suffix = cloudRelPath.substring(6);
+          final prefix = hasFilesDir ? 'files/' : '';
+          return '${prefix}sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/00040000/$suffix';
+       }
+       return cloudRelPath;
+    }
+
+    if (sid == 'psp' || sid == 'ppsspp') {
+       if (!cloudRelPath.startsWith('SAVEDATA') && !cloudRelPath.startsWith('PPSSPP_STATE')) {
+          return 'SAVEDATA/$cloudRelPath';
+       }
        return cloudRelPath;
     }
 
@@ -200,8 +221,6 @@ class SyncRepository {
   }
 Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynamic> localList) {
   final Map<String, Map<String, dynamic>> localFiles = {};
-  final sid = systemId.toLowerCase();
-  final isSwitch = sid == 'switch' || sid == 'eden';
 
   // Check if this is a package root (contains 'files/' folder)
   final bool isPkgRoot = localList.any((f) => f['relPath'] == 'files' || f['relPath'].startsWith('files/'));
@@ -260,21 +279,25 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     final response = await _apiClient.get('/api/v1/files', queryParams: {'prefix': isSwitch ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId)});
     final List<dynamic> allRemoteFiles = response['files'] ?? [];
     
-    // Switch Pollution Filter: Ignore anything that doesn't start with a Title ID (16 hex chars)
-    // or looks like a system path (nand/, config/, etc.)
-    final remoteFilesList = isSwitch 
-      ? allRemoteFiles.where((f) {
-          final path = f['path'] as String;
-          final rel = path.startsWith('switch/') ? path.substring(7) : path;
-          // Title IDs are 16 hex chars. Check if the first segment looks like one.
-          final firstSegment = rel.split('/').first;
-          // Standard Switch Title ID: 16 hex chars. 
-          // Also ignore common polluted folders like 'nand', 'config', 'files', 'gpu_drivers'
-          final isTitleId = RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(firstSegment);
-          final isSystemPath = ['nand', 'config', 'files', 'gpu_drivers'].contains(firstSegment.toLowerCase());
-          return isTitleId && !isSystemPath;
-        }).toList()
-      : allRemoteFiles;
+    // Remote Cloud Pollution Filter
+    final remoteFilesList = allRemoteFiles.where((f) {
+      final path = f['path'] as String;
+      final rel = path.contains('/') ? path.split('/').skip(1).join('/') : path;
+      final firstSegment = rel.split('/').first.toLowerCase();
+
+      if (isSwitch) {
+         final isTitleId = RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(firstSegment);
+         final isSystemPath = ['nand', 'config', 'files', 'gpu_drivers'].contains(firstSegment);
+         return isTitleId && !isSystemPath;
+      }
+      
+      if (sid == '3ds' || sid == 'azahar') {
+         // For 3DS, only show things in our clean 'saves/' folder
+         return rel.startsWith('saves/');
+      }
+
+      return true;
+    }).toList();
 
     final bool isRetroArch = localPath.toLowerCase().contains('retroarch');
     final String cloudPrefix = isSwitch ? 'switch' : (isRetroArch ? 'RetroArch' : systemId);

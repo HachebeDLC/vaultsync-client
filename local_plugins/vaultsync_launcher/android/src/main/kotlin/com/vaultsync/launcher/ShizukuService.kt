@@ -139,13 +139,21 @@ class ShizukuService : IShizukuService.Stub() {
 
     override fun openFile(path: String, mode: String): ParcelFileDescriptor? {
         val file = File(path)
-        if (mode.contains("w") && file.parentFile != null && !file.parentFile.exists()) { 
-            file.parentFile.mkdirs() 
+        
+        if (mode.contains("w")) {
+            if (file.exists() && file.isDirectory) {
+                file.deleteRecursively()
+            }
+            if (file.parentFile != null && !file.parentFile.exists()) {
+                file.parentFile.mkdirs()
+            }
         }
         val pfdMode = when (mode) {
             "r" -> ParcelFileDescriptor.MODE_READ_ONLY
             "w" -> ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE
+            "wt" -> ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE
             "rw" -> ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_CREATE
+            "rwt" -> ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE
             else -> ParcelFileDescriptor.MODE_READ_ONLY
         }
         return try { 

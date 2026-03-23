@@ -5,6 +5,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:vaultsync_client/features/emulation/presentation/dashboard_screen.dart';
 import 'package:vaultsync_client/features/sync/domain/sync_provider.dart';
 import 'package:vaultsync_client/features/sync/services/system_path_service.dart';
+import 'package:vaultsync_client/core/errors/error_mapper.dart';
 
 class MockSyncNotifier extends StateNotifier<SyncState> with Mock implements SyncNotifier {
   MockSyncNotifier() : super(SyncState());
@@ -32,7 +33,9 @@ void main() {
     expect(find.textContaining('sync errors detected'), findsNothing);
 
     // Update state with errors
-    mockSyncNotifier.state = SyncState(syncErrors: ['Error 1']);
+    mockSyncNotifier.state = SyncState(syncErrors: [
+      UserFacingError(title: 'Error', message: 'Message 1'),
+    ]);
     await tester.pump();
 
     expect(find.textContaining('1 sync errors detected'), findsOneWidget);

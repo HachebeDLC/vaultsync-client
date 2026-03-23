@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:path/path.dart' as p;
 
 void main() async {
   final dir = Directory('/media/hachebe/usb/Emulation/roms/psp');

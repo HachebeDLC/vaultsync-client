@@ -5,7 +5,8 @@
     "folders": [
       "gc",
       "GameCube",
-      "Nintendo GameCube"
+      "Nintendo GameCube",
+      "dolphin"
     ],
     "extensions": [
       "ciso",

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
@@ -55,6 +56,7 @@ class LifecycleSyncService with WidgetsBindingObserver {
         'com.flycast.emulator',
         'org.yuzu.yuzu_emu',
         'org.yuzu.yuzu_emu.early_access',
+        'me.magnum.melonds',
       ];
 
       // 3. Get recently closed emulator

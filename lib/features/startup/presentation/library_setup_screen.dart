@@ -90,20 +90,30 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           // Auto-selected mapped emulator from EmuDeck detection
           final mappedEmuId = f['emulatorId'];
           
-          // If the path was never set, OR if we just found an explicit EmuDeck route, 
-          // we should override it to fix any previously incorrect fallback setups.
-          final isEmuDeckRoute = mappedEmuId != null && p.toLowerCase().contains('emulation/saves');
+          // ── Override Logic ──────────────────────────────────────────
+          // We override the current path if:
+          // 1. It is a brand new system (currentPath == null).
+          // 2. We found a high-priority EmuDeck route but the current one isn’t.
+          // 3. We are on Android and the current path is just the ROM folder (Broken Legacy).
+          // 4. We are on Android, current path is generic RetroArch, but a standalone exists.
           
-          // Logic for overriding:
-          // 1. Current path is null (brand new system).
-          // 2. We found an EmuDeck route but current path is NOT an EmuDeck route.
-          // 3. We are on Android and current path points to the scanned ROM folder (broken route).
           bool shouldOverride = currentPath == null;
+          final isEmuDeckRoute = mappedEmuId != null && p.toLowerCase().contains('emulation/saves');
+
           if (!shouldOverride && isEmuDeckRoute && !(currentPath?.toLowerCase().contains('emulation/saves') ?? false)) {
             shouldOverride = true;
           }
-          if (!shouldOverride && Platform.isAndroid && currentPath == p) {
-            shouldOverride = true;
+          
+          if (!shouldOverride && Platform.isAndroid) {
+            final isBrokenLegacy = (currentPath == p);
+            final isGenericRA = (currentPath?.contains('RetroArch/saves') ?? false);
+            final isOldMelonDS = (currentPath?.contains('me.arun.melonds') ?? false);
+            final isStandalone = (mappedEmuId == null); // Flat scan on Android is assumed standalone
+            
+            if (isBrokenLegacy || (isGenericRA && isStandalone) || isOldMelonDS) {
+               shouldOverride = true;
+               print('🛠️ SETUP: Forcing override of legacy Android path for $sid');
+            }
           }
 
           if (shouldOverride) {

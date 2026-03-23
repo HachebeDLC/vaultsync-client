@@ -4,7 +4,8 @@
     "name": "Nintendo Switch",
     "folders": [
       "switch",
-      "Nintendo Switch"
+      "Nintendo Switch",
+      "eden"
     ],
     "extensions": [
       "nca",

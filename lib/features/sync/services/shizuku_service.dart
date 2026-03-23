@@ -67,4 +67,13 @@ class ShizukuService {
       print('⚠️ SHIZUKU: Could not open app: $e');
     }
   }
+
+  Future<int> getAndroidVersion() async {
+    if (!Platform.isAndroid) return 0;
+    try {
+      return await _platform.invokeMethod<int>('getAndroidVersion') ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
 }

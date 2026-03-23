@@ -46,8 +46,8 @@ class SyncService {
   Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false, bool isBackground = false}) async {
     if (isBackground) {
       await _showNotification('VaultSync', 'Performing background maintenance...');
-      if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
     }
+    if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
 
     try {
       final paths = await _pathService.getAllSystemPaths();
@@ -135,20 +135,19 @@ class SyncService {
         actionLabel: actionLabel
       );
       onError?.call(userError.toString());
-    } finally { 
+    } finally {
       if (isBackground) {
         await _clearNotification();
-        if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
       }
-    }
-  }
+      if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
+    }  }
 
   /// Synchronizes a specific system path.
   Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false, bool isBackground = false}) async {
     if (isBackground) {
       await _showNotification('VaultSync', 'Syncing $systemId...');
-      if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
     }
+    if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
     try {
       // Pre-flight check: Shizuku status
       Map? shizukuStatus;
@@ -200,13 +199,12 @@ class SyncService {
         actionLabel: actionLabel
       );
       onError?.call(userError.toString());
-    } finally { 
+    } finally {
       if (isBackground) {
         await _clearNotification();
-        if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
       }
-    }
-  }
+      if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
+    }  }
   /// Resolves the effective local save path(s) for [systemId].
   /// Returns multiple paths for RetroArch (saves + states directories).
   Future<List<String>> _resolveEffectivePaths(String systemId) async {
@@ -251,6 +249,15 @@ class SyncService {
   String? getFilterForGame(String systemId, String gameId) {
     if ({'ps2', 'dc', 'dreamcast', 'ngc', 'gc', 'dolphin'}.contains(systemId.toLowerCase())) return null;
     return gameId.contains('.') ? gameId.substring(0, gameId.lastIndexOf('.')) : gameId;
+  }
+
+  /// Maps a local system ID to its cloud directory name.
+  String getCloudId(String systemId, {String? gameId}) {
+    final sid = systemId.toLowerCase();
+    if (sid == 'switch' || sid == 'eden') return 'switch';
+    if (sid == '3ds' || sid == 'azahar' || sid == 'citra') return '3ds';
+    if (sid == 'gc' || sid == 'wii' || sid == 'dolphin') return 'dolphin';
+    return systemId;
   }
 
   /// Returns the base directory where saves for [systemId] are located.

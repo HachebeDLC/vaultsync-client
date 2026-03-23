@@ -170,6 +170,14 @@ class FileScanner(private val context: Context) {
         synchronized(safLock) {
             val existing = findFileStrict(parent, name)
             if (existing != null && existing.isFile) return existing
+            
+            if (existing != null && existing.isDirectory) {
+                android.util.Log.w("VaultSync", "📁 SAF: Found directory $name where file expected. Deleting...")
+                if (!existing.delete()) {
+                    android.util.Log.e("VaultSync", "📁 SAF: Failed to delete directory $name!")
+                }
+            }
+            
             val created = parent.createFile(mime, name) ?: throw Exception("CreateFile failed for '$name'")
 
             val parentUriStr = parent.uri.toString()

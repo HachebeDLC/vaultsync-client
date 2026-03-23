@@ -1,13 +1,10 @@
 import 'dart:io';
-import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_selector/file_selector.dart';
 import '../../emulation/data/emulator_repository.dart';
 import '../../emulation/domain/emulator_config.dart';
-import '../data/dart_file_scanner.dart';
-import '../../../core/utils/platform_utils.dart';
 
 final systemPathServiceProvider = Provider<SystemPathService>((ref) {
   final emulatorRepo = ref.watch(emulatorRepositoryProvider);
@@ -41,9 +38,9 @@ class SystemPathService {
     "switch": "/storage/emulated/0/Android/data/dev.eden.eden_emulator/files/nand/user/save",
     "eden": "/storage/emulated/0/Android/data/dev.eden.eden_emulator/files/nand/user/save",
     "yuzu": "/storage/emulated/0/Android/data/org.yuzu.yuzu_emu/files",
-    "nds": "/storage/emulated/0/Android/data/me.arun.melonds/files",
-    "ds": "/storage/emulated/0/Android/data/me.arun.melonds/files",
-    "melonds": "/storage/emulated/0/Android/data/me.arun.melonds/files",
+    "nds": "/storage/emulated/0/Android/data/me.magnum.melonds/files",
+    "ds": "/storage/emulated/0/Android/data/me.magnum.melonds/files",
+    "melonds": "/storage/emulated/0/Android/data/me.magnum.melonds/files",
   };
 
   String _getDesktopHome() {
@@ -236,7 +233,10 @@ class SystemPathService {
           final fileName = entity.uri.pathSegments.where((s) => s.isNotEmpty).last.toLowerCase();
           if (fileName.startsWith('.')) continue;
           final ext = fileName.contains('.') ? fileName.split('.').last : '';
-          if (ext.isNotEmpty && extSet.contains(ext)) return true;
+          if (ext.isNotEmpty && extSet.contains(ext)) {
+            print("🎮 SCAN: Found valid ROM: $fileName");
+            return true;
+          }
         }
       }
     } catch (_) {}
@@ -335,15 +335,32 @@ class SystemPathService {
     final rawPath = await getSystemPath(systemId);
     if (rawPath == null) return await suggestSavePathById(systemId);
     if (!Platform.isAndroid) return rawPath;
+
     final androidVersion = await _getAndroidVersion();
     final prefs = await SharedPreferences.getInstance();
     final useShizuku = prefs.getBool('use_shizuku') ?? false;
-    if (useShizuku && androidVersion >= 34 && rawPath.toLowerCase().contains('android/data')) return 'shizuku://$rawPath';
-    if (rawPath.toLowerCase().contains('android/data')) {
-       final persistedUri = prefs.getString("saf_uri_$rawPath");
-       if (persistedUri != null) return persistedUri;
+
+    // Convert to POSIX to evaluate its true location
+    final posixPath = _convertToPosix(rawPath);
+
+    // 1. Prioritize Shizuku for ALL internal storage paths if enabled
+    if (useShizuku && posixPath.startsWith('/storage/emulated/0/')) {
+       return 'shizuku://$posixPath';
     }
-    return _convertToPosix(rawPath);
+
+    // 2. Fallback to SAF for restricted Android/data if Shizuku isn't used
+    if (posixPath.toLowerCase().contains('android/data')) {
+       if (rawPath.startsWith('content://')) return rawPath; // Already SAF
+       final persistedUri = prefs.getString("saf_uri_$posixPath");
+       if (persistedUri != null) return persistedUri;
+       // If no persisted URI, return rawPath and let it fail or request permission later
+       return rawPath; 
+    }
+    
+    // 3. For standard user directories (Azahar, PPSSPP, RetroArch),
+    // VaultSync's MANAGE_EXTERNAL_STORAGE permission allows direct, bug-free POSIX access.
+    // We explicitly strip the 'content://' wrapper to avoid Android 16 SAF EISDIR bugs.
+    return posixPath;
   }
 
   Future<List<Map<String, String>>> scanLibrary(String inputPath) async {
@@ -363,11 +380,27 @@ class SystemPathService {
         emuDeckSaves = Directory("${Directory(path).parent.path}/saves");
       }
       final systems = await _emulatorRepository.loadSystems();
+      print("🔍 SCAN: Listing directory content...");
       final List<FileSystemEntity> list = await romsDir.list().toList();
+      print("🔍 SCAN: Found ${list.length} items in root.");
+      for (var entity in list) {
+        if (entity is Directory) {
+          final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).lastOrNull ?? entity.path.split("/").last;
+          print("📁 SCAN: Top-level folder found: $name");
+        }
+      }
+      
       for (final system in systems) {
         final matchingDirs = list.whereType<Directory>().where((d) {
-          final name = d.uri.pathSegments.where((s) => s.isNotEmpty).last.toLowerCase();
-          return name == system.system.id.toLowerCase() || name == system.system.name.toLowerCase() || system.system.folders.map((f) => f.toLowerCase()).contains(name);
+          final name = d.uri.pathSegments.where((s) => s.isNotEmpty).lastOrNull?.toLowerCase() ?? 
+                       d.path.split("/").last.toLowerCase();
+          
+          final isMatch = name == system.system.id.toLowerCase() || 
+                         name == system.system.name.toLowerCase() || 
+                         system.system.folders.map((f) => f.toLowerCase()).contains(name);
+          
+          if (isMatch) print("📍 SCAN: Found directory match for ${system.system.id}: $name");
+          return isMatch;
         });
         for (final d in matchingDirs) {
           if (await _hasValidRoms(d, system.system.extensions)) {

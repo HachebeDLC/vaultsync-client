@@ -19,14 +19,24 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   ShizukuStatus? _shizukuStatus;
   bool _shizukuEnabled = false;
+  int _androidVersion = 0;
 
   @override
   void initState() {
     super.initState();
     Future.microtask(() {
       ref.read(syncProvider.notifier).refreshConflicts();
+      _loadAndroidInfo();
       _checkBridgeHealth();
     });
+  }
+
+  Future<void> _loadAndroidInfo() async {
+    if (!Platform.isAndroid) return;
+    final version = await ref.read(shizukuServiceProvider).getAndroidVersion();
+    if (mounted) {
+      setState(() => _androidVersion = version);
+    }
   }
 
   Future<void> _checkBridgeHealth() async {
@@ -40,6 +50,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         _shizukuEnabled = enabled;
         _shizukuStatus = status;
       });
+    }
+  }
+
+  Future<void> _enableShizuku() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('use_shizuku', true);
+    if (mounted) {
+      setState(() => _shizukuEnabled = true);
+      ref.invalidate(systemPathsProvider);
+      _checkBridgeHealth();
     }
   }
 
@@ -112,7 +132,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // ACTIONABLE BRIDGE ALERT
     Widget? bridgeAlert;
-    if (_shizukuEnabled && _shizukuStatus != null) {
+    if (Platform.isAndroid && !_shizukuEnabled && _androidVersion > 33) { // Android 14+ (API > 33)
+       bridgeAlert = _buildActionAlert(
+         'Recommended: Setup Bridge', 
+         'Shizuku is required for full speed on Android $_androidVersion',
+         Icons.bolt, 
+         Colors.blue.shade700,
+         onAction: _enableShizuku,
+         actionLabel: 'SETUP',
+       );
+    } else if (_shizukuEnabled && _shizukuStatus != null) {
        if (!_shizukuStatus!.isRunning) {
           bridgeAlert = _buildActionAlert(
             'Shizuku is not running', 

@@ -40,7 +40,7 @@ void main() {
     expect(toggleFinder, findsOneWidget);
 
     if (Platform.isAndroid || Platform.isIOS) {
-      when(() => mockBackgroundSyncService.enableAutoSync()).thenAnswer((_) async => Future.value());
+      when(() => mockBackgroundSyncService.startMonitoring()).thenAnswer((_) async => Future.value());
     } else {
       when(() => mockDesktopBackgroundSyncService.startAutoSync()).thenReturn(null);
     }
@@ -49,7 +49,7 @@ void main() {
     await tester.pumpAndSettle();
 
     if (Platform.isAndroid || Platform.isIOS) {
-      verify(() => mockBackgroundSyncService.enableAutoSync()).called(1);
+      verify(() => mockBackgroundSyncService.startMonitoring()).called(1);
     } else {
       verify(() => mockDesktopBackgroundSyncService.startAutoSync()).called(1);
     }

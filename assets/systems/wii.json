@@ -4,7 +4,8 @@
     "name": "Nintendo Wii",
     "folders": [
       "wii",
-      "Nintendo Wii"
+      "Nintendo Wii",
+      "dolphin"
     ],
     "extensions": [
       "ciso",
