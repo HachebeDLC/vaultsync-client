@@ -534,7 +534,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                             if (pfd != null) {
                                 pfd.use { descriptor ->
                                     FileOutputStream(descriptor.fileDescriptor).use { fos ->
-                                        fos.channel.truncate(0)
+                                        if (patchIndices == null) fos.channel.truncate(0)
                                         processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices, fileSize)
                                     }
                                 }
@@ -560,7 +560,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                             if (pfd != null) {
                                 pfd.use { descriptor ->
                                     FileOutputStream(descriptor.fileDescriptor).use { fos ->
-                                        fos.channel.truncate(0)
+                                        if (patchIndices == null) fos.channel.truncate(0)
                                         processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices, fileSize)
                                     }
                                 }
@@ -578,8 +578,8 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                             }
                             
                             RandomAccessFile(finalFile, "rw").use { raf ->
-                                raf.setLength(0)
-                                processDownloadStream(connection.inputStream, raf.channel, secretKey, patchIndices)
+                                if (patchIndices == null) raf.setLength(0)
+                                processDownloadStream(connection.inputStream, raf.channel, secretKey, patchIndices, fileSize)
                             }
                             if (updatedAt != null) setFileTimestampInternal(finalFile.absolutePath, updatedAt)
                         }
@@ -596,6 +596,26 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     private fun processDownloadStream(inputStream: InputStream, output: FileChannel, secretKey: javax.crypto.spec.SecretKeySpec?, patchIndices: List<Int>?, fileSize: Long) {
         val plainBlockSize = CryptoEngine.getBlockSize(fileSize)
         val expectedBlockSize = if (secretKey != null) CryptoEngine.getEncryptedBlockSize(fileSize) else plainBlockSize
+
+        // Zero-Copy Optimization: For unencrypted downloads, use transferFrom to bypass JVM heap
+        if (secretKey == null) {
+            java.nio.channels.Channels.newChannel(inputStream).use { source ->
+                if (patchIndices == null) {
+                    output.transferFrom(source, 0, Long.MAX_VALUE)
+                } else {
+                    for (index in patchIndices) {
+                        val offset = index.toLong() * plainBlockSize
+                        var transferred = 0L
+                        while (transferred < plainBlockSize) {
+                            val r = output.transferFrom(source, offset + transferred, plainBlockSize - transferred)
+                            if (r <= 0) break
+                            transferred += r
+                        }
+                    }
+                }
+            }
+            return
+        }
         val ringBuffer = ByteBuffer.allocate(expectedBlockSize * 2)
         val block = ByteArray(expectedBlockSize)
         val decryptedBuffer = ByteArray(expectedBlockSize + 32)
