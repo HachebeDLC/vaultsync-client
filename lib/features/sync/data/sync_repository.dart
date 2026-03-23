@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:http/http.dart' as http;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,31 +8,40 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'file_cache.dart';
 import 'dart_file_scanner.dart';
 import 'dart_native_crypto.dart';
+import '../services/sync_network_service.dart';
+import '../services/sync_path_resolver.dart';
 import '../services/system_path_service.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/api_client_provider.dart';
 
+final syncPathResolverProvider = Provider<SyncPathResolver>((ref) => SyncPathResolver());
+
+final syncNetworkServiceProvider = Provider<SyncNetworkService>((ref) {
+  final apiClient = ref.watch(apiClientProvider);
+  return SyncNetworkService(apiClient);
+});
+
 final syncRepositoryProvider = Provider<SyncRepository>((ref) {
   final apiClient = ref.watch(apiClientProvider);
   final pathService = ref.watch(systemPathServiceProvider);
-  return SyncRepository(apiClient, pathService, FileCache());
+  final networkService = ref.watch(syncNetworkServiceProvider);
+  final pathResolver = ref.watch(syncPathResolverProvider);
+  return SyncRepository(apiClient, pathService, FileCache(), networkService, pathResolver);
 });
 
 class SyncRepository {
   final ApiClient _apiClient;
   final SystemPathService _pathService;
   final FileCache _fileCache;
+  final SyncNetworkService _networkService;
+  final SyncPathResolver _pathResolver;
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
   final _syncLock = Mutex();
 
   String? _cachedDeviceName;
   List<dynamic> _lastScanList = [];
 
-  SyncRepository(this._apiClient, this._pathService, this._fileCache);
-
-  Future<String?> _getMasterKey() async {
-     return await _apiClient.getEncryptionKey();
-  }
+  SyncRepository(this._apiClient, this._pathService, this._fileCache, this._networkService, this._pathResolver);
 
   Future<String> _getDeviceName() async {
     if (_cachedDeviceName != null) return _cachedDeviceName!;
@@ -70,171 +78,22 @@ class SyncRepository {
     return prefs.getString(key) == remoteHash;
   }
 
-  String _getCloudRelPath(String systemId, String localRelPath) {
-    final sid = systemId.toLowerCase();
-    final parts = localRelPath.split('/');
-    
-    // 1. Switch / Eden Logic (Flattened)
-    if (sid == 'switch' || sid == 'eden') {
-      final titleIdx = parts.indexWhere((p) => RegExp(r'^0100[0-9A-Fa-f]{12}$').hasMatch(p));
-      if (titleIdx != -1) return parts.sublist(titleIdx).join('/');
-      return '';
-    } 
-    
-    // 2. PS2 / DuckStation Logic (Anchor on memcards)
-    if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2' || sid == 'pcsx2' || sid == 'duckstation') {
-      final anchorIdx = parts.indexWhere((p) => ['memcards', 'memcard', 'sstates', 'gamesettings'].contains(p.toLowerCase()));
-      if (anchorIdx != -1) return parts.sublist(anchorIdx).join('/');
-      return '';
-    }
+  Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynamic> localList) {
+    final Map<String, Map<String, dynamic>> localFiles = {};
 
-    // 3. Wii Logic (Surgical Flattening)
-    if (sid == 'wii') {
-      final anchorIdx = parts.indexOf('00010000');
-      if (anchorIdx != -1 && anchorIdx < parts.length - 1) {
-        return parts.sublist(anchorIdx + 1).join('/'); // Produces 'GameID/data/...'
+    // Check if this is a package root (contains 'files/' folder)
+    final bool isPkgRoot = localList.any((f) => f['relPath'] == 'files' || f['relPath'].startsWith('files/'));
+
+    for (var f in localList) {
+      if (f['isDirectory'] == true) continue;
+      final String originalRelPath = f['relPath'];
+
+      // FILTER: If we are at package root, ignore any save files that aren't in the correct subfolders
+      if (isPkgRoot && !originalRelPath.contains('/')) {
+           final ext = originalRelPath.split('.').last.toLowerCase();
+           if (['ps2', 'srm', 'sav', 'save', 'state'].contains(ext)) continue;
       }
-      return ''; // Strictly ignore everything NOT in the game saves folder
-    }
-
-    // 4. GameCube Logic (Preserve GC/ prefix)
-    if (sid == 'gc') {
-      final gcIdx = parts.indexWhere((p) => p.toLowerCase() == 'gc');
-      if (gcIdx != -1) {
-        return parts.sublist(gcIdx).join('/'); // Produces 'GC/...'
-      }
-      return ''; // Strictly ignore everything NOT in the GC folder
-    }
-
-    // 5. Dolphin (Generic) - Handle both if the system name is just 'dolphin'
-    if (sid == 'dolphin') {
-      if (localRelPath.toLowerCase().contains('/wii/title/00010000/')) {
-         final idx = parts.indexOf('00010000');
-         return 'Wii/${parts.sublist(idx + 1).join('/')}';
-      }
-      if (localRelPath.toLowerCase().contains('/gc/')) {
-         final idx = parts.indexWhere((p) => p.toLowerCase() == 'gc');
-         return parts.sublist(idx).join('/');
-      }
-      return '';
-    }
-
-    // 6. 3DS (Azahar / Citra) Logic
-    if (sid == '3ds' || sid == 'citra' || sid == 'azahar') {
-       final titleIdx = parts.indexOf('00040000');
-       if (titleIdx != -1 && titleIdx < parts.length - 1) {
-           return 'saves/${parts.sublist(titleIdx + 1).join('/')}';
-       }
-       final anchorIdx = parts.indexWhere((p) => ['nand', 'sdmc', 'sysdata'].contains(p.toLowerCase()));
-       if (anchorIdx != -1) return parts.sublist(anchorIdx).join('/');
-       return '';
-    }
-
-    // 7. PSP (PPSSPP) Logic
-    if (sid == 'psp' || sid == 'ppsspp') {
-       final anchorIdx = parts.indexWhere((p) => ['savedata', 'ppsspp_state'].contains(p.toLowerCase()));
-       if (anchorIdx != -1) return parts.sublist(anchorIdx).join('/');
-    }
-
-    return localRelPath;
-  }
-
-  String _getLocalRelPath(String systemId, String cloudRelPath, Map<String, dynamic> localFiles) {
-    if (localFiles.containsKey(cloudRelPath)) return localFiles[cloudRelPath]['originalRelPath'] ?? cloudRelPath;
-    
-    final sid = systemId.toLowerCase();
-    final hasFilesDir = localFiles.values.any((f) => (f['relPath'] as String).startsWith('files/'));
-
-    if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2' || sid == 'pcsx2' || sid == 'duckstation') {
-       final prefix = hasFilesDir ? 'files/' : '';
-       if (!cloudRelPath.startsWith('memcards') && !cloudRelPath.startsWith('sstates')) {
-          return '${prefix}memcards/$cloudRelPath';
-       }
-       return '$prefix$cloudRelPath';
-    }
-
-    if (sid == 'wii') {
-       final prefix = hasFilesDir ? 'files/' : '';
-       return '${prefix}Wii/title/00010000/$cloudRelPath';
-    }
-
-    if (sid == 'gc') {
-       final prefix = hasFilesDir ? 'files/' : '';
-       return '$prefix$cloudRelPath';
-    }
-
-    if (sid == 'dolphin') {
-       final prefix = hasFilesDir ? 'files/' : '';
-       return '$prefix$cloudRelPath';
-    }
-
-    if (sid == '3ds' || sid == 'citra' || sid == 'azahar') {
-       if (cloudRelPath.startsWith('saves/')) {
-          final suffix = cloudRelPath.substring(6);
-          final prefix = hasFilesDir ? 'files/' : '';
-          return '${prefix}sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/00040000/$suffix';
-       }
-       return cloudRelPath;
-    }
-
-    if (sid == 'psp' || sid == 'ppsspp') {
-       if (!cloudRelPath.startsWith('SAVEDATA') && !cloudRelPath.startsWith('PPSSPP_STATE')) {
-          return 'SAVEDATA/$cloudRelPath';
-       }
-       return cloudRelPath;
-    }
-
-    if (sid == 'switch' || sid == 'eden') {
-       final cloudTitleId = cloudRelPath.split('/').first;
-       
-       // 1. Try to find where this TitleID ALREADY lives locally
-       for (final f in localFiles.values) {
-           final localPath = f['originalRelPath'] as String;
-           if (localPath.contains(cloudTitleId)) {
-               final localParts = localPath.split('/');
-               final idx = localParts.indexOf(cloudTitleId);
-               final base = localParts.sublist(0, idx).join('/');
-               return base.isEmpty ? cloudRelPath : '$base/$cloudRelPath';
-           }
-       }
-       
-       // 2. Fallback: Find the FIRST valid 32-char Profile ID on the device (from directory scanner)
-       String profileId = '00000000000000000000000000000000';
-       final profileRegex = RegExp(r'^[0-9A-Fa-f]{32}$');
-       
-       // We'll search both files AND directories in the raw scan list
-       for (final f in _lastScanList) {
-           final path = f['relPath'] as String;
-           for (final segment in path.split('/')) {
-               if (profileRegex.hasMatch(segment) && segment != '00000000000000000000000000000000') {
-                   profileId = segment;
-                   break;
-               }
-           }
-           if (profileId != '00000000000000000000000000000000') break;
-       }
-       
-       final prefix = hasFilesDir ? 'files/' : '';
-       return '${prefix}nand/user/save/0000000000000000/$profileId/$cloudRelPath';
-    }
-    return cloudRelPath;
-  }
-Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynamic> localList) {
-  final Map<String, Map<String, dynamic>> localFiles = {};
-
-  // Check if this is a package root (contains 'files/' folder)
-  final bool isPkgRoot = localList.any((f) => f['relPath'] == 'files' || f['relPath'].startsWith('files/'));
-
-  for (var f in localList) {
-    if (f['isDirectory'] == true) continue;
-    final String originalRelPath = f['relPath'];
-
-    // FILTER: If we are at package root, ignore any save files that aren't in the correct subfolders
-    if (isPkgRoot && !originalRelPath.contains('/')) {
-         final ext = originalRelPath.split('.').last.toLowerCase();
-         if (['ps2', 'srm', 'sav', 'save', 'state'].contains(ext)) continue;
-    }
-      final String cloudRelPath = _getCloudRelPath(systemId, originalRelPath);
+      final String cloudRelPath = _pathResolver.getCloudRelPath(systemId, originalRelPath);
       if (cloudRelPath.isEmpty || cloudRelPath.endsWith('/')) continue;
       
       final existing = localFiles[cloudRelPath];
@@ -270,7 +129,6 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
   }
 
   /// Calculates the difference between local and remote files for a given system.
-  /// Returns a list of file status maps (Synced, Modified, Local Only, Remote Only).
   Future<List<Map<String, dynamic>>> diffSystem(String systemId, String localPath, {List<String>? ignoredFolders}) async {
     final prefs = await SharedPreferences.getInstance();
     final effectivePath = await _pathService.getEffectivePath(systemId);
@@ -292,7 +150,6 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
       }
       
       if (sid == '3ds' || sid == 'azahar') {
-         // For 3DS, only show things in our clean 'saves/' folder
          return rel.startsWith('saves/');
       }
 
@@ -328,8 +185,6 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
           final int localTs = (localInfo['lastModified'] as num).toInt() ~/ 1000;
           final int remoteTs = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
           if (localInfo['size'] != remoteInfo['size'] || localTs != remoteTs) {
-            // PROXY: For display, we assume modified if size/mtime differ. 
-            // We only hash during the actual sync turn to avoid UI lag.
             status = 'Modified';
           }
         }
@@ -342,7 +197,6 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
   }
 
   /// Synchronizes a system's save files between the local device and the server.
-  /// Uses delta-syncing for large files and convergent encryption.
   Future<void> syncSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, String? filenameFilter, bool fastSync = false, bool Function()? isCancelled}) async {
     await _syncLock.protect(() async {
       final prefs = await SharedPreferences.getInstance();
@@ -366,7 +220,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
             onProgress?.call('Sync Cancelled');
             break;
           }
-          if (relPath.isEmpty) continue; // Skip unmappable paths
+          if (relPath.isEmpty) continue;
           final remotePath = '$cloudPrefix/$relPath';
           if (filenameFilter != null && !remotePath.contains(filenameFilter)) continue;
           final localInfo = localFiles[relPath];
@@ -377,7 +231,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
             await uploadFile(localInfo['uri'], remotePath, systemId: systemId, relPath: relPath, prefs: prefs);
           } else if (localInfo == null && remoteInfo != null) {
             onProgress?.call('Downloading $relPath...');
-            final destRelPath = _getLocalRelPath(systemId, relPath, localFiles);
+            final destRelPath = _pathResolver.getLocalRelPath(systemId, relPath, localFiles, _lastScanList);
             await downloadFile(remotePath, effectivePath, destRelPath, systemId: systemId, updatedAt: remoteInfo['updated_at'], serverBlocks: remoteInfo['blocks'], prefs: prefs, fileSize: (remoteInfo['size'] as num).toInt());
           } else if (localInfo != null && remoteInfo != null) {
             final String remoteHash = remoteInfo['hash'];
@@ -391,7 +245,6 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
               continue;
             }
 
-            // Check SQLite Cache before hashing
             String? localHash = await _fileCache.getCachedHash(localInfo['uri'], localSize, localTs);
             if (localHash == null) {
                 localHash = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
@@ -427,140 +280,57 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
       } catch (e) { 
         print('❌ SYNC ERROR: $e'); 
         onError?.call(e.toString()); 
-        
-        // Rethrow critical auth or network errors to abort the entire sync run
-        if (e is ApiException && (e.statusCode == 401 || e.statusCode == 403)) {
-          rethrow;
-        } else if (e is SocketException || e is http.ClientException) {
-          rethrow;
-        }
+        rethrow;
       } 
     });
   }
 
-  /// Encrypts and uploads a file to the server using native hardware acceleration.
   Future<void> uploadFile(dynamic localPathOrFile, String remotePath, {required String systemId, required String relPath, required SharedPreferences prefs, String? plainHash, bool force = false}) async {
     final path = localPathOrFile is File ? localPathOrFile.path : localPathOrFile.toString();
-
-    final Map? info = (Platform.isLinux || Platform.isWindows || Platform.isMacOS) 
-        ? await DartNativeCrypto.getFileInfo(path)
-        : await _platform.invokeMapMethod('getFileInfo', {'uri': path});
-
-    if (info == null) return;
-    final int size = info['size'];
-    final int updatedAt = info['lastModified'] ?? 0;
-
-    final String hash = plainHash ?? (
-      (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
-        ? await DartNativeCrypto.calculateHash(path)
-        : (await _platform.invokeMethod<String>('calculateHash', {'path': path}) ?? 'unknown')
+    await _networkService.uploadFile(
+      path, 
+      remotePath, 
+      systemId: systemId, 
+      relPath: relPath, 
+      deviceName: await _getDeviceName(),
+      onRecordSuccess: (sid, rp, h) => _recordSyncSuccess(prefs, sid, rp, h),
+      plainHash: plainHash, 
+      force: force
     );
-
-    final masterKey = await _getMasterKey();
-    final baseUrl = await _apiClient.getBaseUrl();
-    final token = await _apiClient.getToken();
-
-    List<int>? dirtyIndices;
-    if (size > 1024 * 1024) {
-      final String blockHashesJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
-          ? await DartNativeCrypto.calculateBlockHashes(path, masterKey: masterKey)
-          : await _platform.invokeMethod('calculateBlockHashes', {'path': path, 'masterKey': masterKey});
-
-      try {
-        final checkResult = await _apiClient.post('/api/v1/blocks/check', body: {'path': remotePath, 'blocks': json.decode(blockHashesJson)});
-        final List missing = checkResult['missing'] ?? [];
-        if (missing.isEmpty && !force) { _recordSyncSuccess(prefs, systemId, relPath, hash); return; }
-        dirtyIndices = List<int>.from(missing);
-      } catch (e) { print('⚠️ Delta check failed: $e'); }
-    }
-
-    final uploadArgs = { 'url': '$baseUrl/api/v1/upload', 'token': token, 'masterKey': masterKey, 'remotePath': remotePath, 'uri': path, 'hash': hash, 'deviceName': await _getDeviceName(), 'updatedAt': updatedAt, 'dirtyIndices': dirtyIndices };
-
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      await DartNativeCrypto.uploadFileNative(uploadArgs);
-    } else {
-      await _platform.invokeMethod('uploadFileNative', uploadArgs);
-    }
-
-    _recordSyncSuccess(prefs, systemId, relPath, hash);
   }
 
-  /// Downloads and decrypts a file (or specific blocks) from the server.
   Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, required int fileSize, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
-    final baseUrl = await _apiClient.getBaseUrl();
-    final token = await _apiClient.getToken();
-    final masterKey = await _getMasterKey();
-    List<int>? patchIndices;
-    if (localUri != null && serverBlocks != null) {
-       try {
-       final String localBlocksJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
-           ? await DartNativeCrypto.calculateBlockHashes(localUri, masterKey: masterKey)
-           : await _platform.invokeMethod('calculateBlockHashes', {'path': localUri, 'masterKey': masterKey});
-
-       final List localHashes = json.decode(localBlocksJson);
-       final List remoteHashes = serverBlocks is String ? json.decode(serverBlocks) : serverBlocks;
-       final dirty = <int>[];
-       for (int i = 0; i < remoteHashes.length; i++) { if (i >= localHashes.length || localHashes[i] != remoteHashes[i]) { dirty.add(i); } }
-       if (dirty.isNotEmpty && dirty.length < remoteHashes.length) { patchIndices = dirty; }
-       } catch (e) {
-         print('⚠️ Block Hash calculation failed for $localUri. Falling back to full download. Error: $e');
-       }
-    }
-    final downloadUrl = (patchIndices != null) ? '$baseUrl/api/v1/blocks/download' : '$baseUrl/api/v1/download';
-
-    final downloadArgs = { 'url': downloadUrl, 'token': token, 'masterKey': masterKey, 'remoteFilename': remotePath, 'uri': localBasePath, 'localFilename': relPath, 'updatedAt': updatedAt, 'patchIndices': patchIndices, 'fileSize': fileSize };
-
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      await DartNativeCrypto.downloadFileNative(downloadArgs);
-    } else {
-      await _platform.invokeMethod('downloadFileNative', downloadArgs);
-    }
-
-    if (remoteHash != null) {
-      _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
-    }  
+    await _networkService.downloadFile(
+      remotePath, 
+      localBasePath, 
+      relPath, 
+      systemId: systemId, 
+      fileSize: fileSize, 
+      onRecordSuccess: (sid, rp, h) => _recordSyncSuccess(prefs, sid, rp, h),
+      remoteHash: remoteHash, 
+      updatedAt: updatedAt, 
+      serverBlocks: serverBlocks, 
+      localUri: localUri
+    );
   }
 
-  /// Deletes a file from the server.
   Future<void> deleteRemoteFile(String path) async { 
     await _apiClient.delete('/api/v1/files', body: {'filename': path}); 
   }
 
-  /// Fetches the version history for a specific remote file.
   Future<List<Map<String, dynamic>>> getFileVersions(String remotePath) async { 
     final response = await _apiClient.get('/api/v1/versions?path=$remotePath'); 
     return List<Map<String, dynamic>>.from(response['versions'] ?? []); 
   }
 
-  /// Restores a specific version of a file from the server.
   Future<void> restoreVersion(String remotePath, String versionId, String localBasePath, String relPath, int fileSize) async {
-    final baseUrl = await _apiClient.getBaseUrl();
-    final token = await _apiClient.getToken();
-    final masterKey = await _getMasterKey();
-
-    final args = {
-      'url': '$baseUrl/api/v1/versions/restore',
-      'token': token,
-      'masterKey': masterKey,
-      'remoteFilename': remotePath,
-      'versionId': versionId,
-      'uri': localBasePath,
-      'localFilename': relPath,
-      'fileSize': fileSize
-    };
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      await DartNativeCrypto.downloadFileNative(args);
-    } else {
-      await _platform.invokeMethod('downloadFileNative', args);
-    }
+    await _networkService.restoreVersion(remotePath, versionId, localBasePath, relPath, fileSize);
   }
 
-  /// Deletes all cloud data associated with a specific system.
   Future<void> deleteSystemCloudData(String systemId) async { 
     await _apiClient.delete('/api/v1/systems/$systemId'); 
   }
 
-  /// Retrieves a list of all active sync conflicts from the server.
   Future<List<Map<String, dynamic>>> getAllRemoteConflicts() async { 
     try { 
       final response = await _apiClient.get('/api/v1/conflicts'); 
@@ -568,7 +338,6 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
     } catch(_) { return []; } 
   }
 
-  /// Scans the local filesystem for files belonging to a specific system.
   Future<Map<String, dynamic>> scanLocalFiles(String path, String systemId) async {
     List<dynamic> list;
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {

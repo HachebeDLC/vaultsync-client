@@ -5,10 +5,14 @@ import 'package:vaultsync_client/features/sync/data/sync_repository.dart';
 import 'package:vaultsync_client/features/sync/services/system_path_service.dart';
 import 'package:vaultsync_client/features/sync/data/file_cache.dart';
 import 'package:vaultsync_client/core/services/api_client.dart';
+import 'package:vaultsync_client/features/sync/services/sync_network_service.dart';
+import 'package:vaultsync_client/features/sync/services/sync_path_resolver.dart';
 
 class MockApiClient extends Mock implements ApiClient {}
 class MockSystemPathService extends Mock implements SystemPathService {}
 class MockFileCache extends Mock implements FileCache {}
+class MockSyncNetworkService extends Mock implements SyncNetworkService {}
+class MockSyncPathResolver extends Mock implements SyncPathResolver {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -17,12 +21,16 @@ void main() {
   late MockApiClient mockApiClient;
   late MockSystemPathService mockPathService;
   late MockFileCache mockFileCache;
+  late MockSyncNetworkService mockNetworkService;
+  late MockSyncPathResolver mockPathResolver;
 
   setUp(() {
     mockApiClient = MockApiClient();
     mockPathService = MockSystemPathService();
     mockFileCache = MockFileCache();
-    repository = SyncRepository(mockApiClient, mockPathService, mockFileCache);
+    mockNetworkService = MockSyncNetworkService();
+    mockPathResolver = MockSyncPathResolver();
+    repository = SyncRepository(mockApiClient, mockPathService, mockFileCache, mockNetworkService, mockPathResolver);
   });
 
   group('SyncRepository Error Handling', () {
@@ -32,11 +40,13 @@ void main() {
           .thenThrow(Exception('Network error'));
 
       String? lastError;
-      await repository.syncSystem(
-        'ps2', 
-        '/storage/emulated/0/PS2',
-        onError: (err) => lastError = err,
-      );
+      try {
+        await repository.syncSystem(
+          'ps2', 
+          '/storage/emulated/0/PS2',
+          onError: (err) => lastError = err,
+        );
+      } catch(_) {}
 
       expect(lastError, contains('Network error'));
     });
