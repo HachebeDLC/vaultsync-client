@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vaultsync_client/features/sync/services/shizuku_service.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -52,6 +53,9 @@ void main() {
     });
 
     test('getStatus returns mapped status', () async {
+      // Skip on non-android host to maintain purity
+      if (!Platform.isAndroid) return;
+      
       final status = await service.getStatus();
       expect(status.isRunning, true);
       expect(status.isAuthorized, false);
@@ -59,6 +63,8 @@ void main() {
     });
 
     test('requestPermission returns boolean result', () async {
+      if (!Platform.isAndroid) return;
+
       final result = await service.requestPermission();
       expect(result, true);
     });

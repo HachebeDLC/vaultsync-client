@@ -136,10 +136,22 @@ class SystemPathService {
   Future<String> suggestSavePathById(String systemId) async {
     final emuDeckSaves = await getEmuDeckSavesPath();
     if (emuDeckSaves != null) return _getEmuDeckConfig(emuDeckSaves, systemId)['path']!;
+    
+    final sid = systemId.toLowerCase();
     if (Platform.isWindows || Platform.isLinux) {
+      // Try specific standalone keys
+      final desktopPath = _getDesktopDefault(sid, sid);
+      if (desktopPath != null) return desktopPath;
+      
+      // Try alias keys (e.g. psp -> ppsspp)
+      if (sid == 'psp') {
+        final pspPath = _getDesktopDefault('ppsspp', sid);
+        if (pspPath != null) return pspPath;
+      }
+      
       return '${_getDesktopHome()}/RetroArch/saves';
     }
-    return standaloneDefaults[systemId.toLowerCase()] ?? '/storage/emulated/0/RetroArch/saves';
+    return standaloneDefaults[sid] ?? '/storage/emulated/0/RetroArch/saves';
   }
 
   Future<String?> getLibraryPath() async {

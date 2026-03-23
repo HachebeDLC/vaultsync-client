@@ -34,10 +34,10 @@ void main() {
 
     // Update state with errors
     mockSyncNotifier.state = SyncState(syncErrors: [
-      UserFacingError(title: 'Error', message: 'Message 1'),
+      UserFacingError(title: 'Custom Error Title', message: 'Message 1'),
     ]);
     await tester.pump();
 
-    expect(find.textContaining('1 sync errors detected'), findsOneWidget);
+    expect(find.textContaining('Custom Error Title'), findsOneWidget);
   });
 }

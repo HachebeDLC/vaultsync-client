@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vaultsync_client/features/sync/data/sync_repository.dart';
 import 'package:vaultsync_client/features/sync/services/system_path_service.dart';
 import 'package:vaultsync_client/features/sync/data/file_cache.dart';
@@ -10,6 +11,8 @@ class MockSystemPathService extends Mock implements SystemPathService {}
 class MockFileCache extends Mock implements FileCache {}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
   late SyncRepository repository;
   late MockApiClient mockApiClient;
   late MockSystemPathService mockPathService;

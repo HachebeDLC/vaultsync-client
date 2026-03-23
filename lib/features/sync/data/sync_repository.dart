@@ -359,6 +359,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
         final localFiles = _processLocalFiles(systemId, localList);
 
         final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
+        final List<Map<String, dynamic>> pendingCacheUpdates = [];
 
         for (final relPath in cloudRelPaths) {
           if (isCancelled?.call() == true) {
@@ -396,7 +397,15 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
                 localHash = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
                     ? await DartNativeCrypto.calculateHash(localInfo['uri'])
                     : await _platform.invokeMethod<String>('calculateHash', {'path': localInfo['uri']});
-                if (localHash != null) await _fileCache.updateCache(localInfo['uri'], localSize, localTs, localHash);
+                
+                if (localHash != null) {
+                  pendingCacheUpdates.add({
+                    'path': localInfo['uri'],
+                    'size': localSize,
+                    'lastModified': localTs,
+                    'hash': localHash,
+                  });
+                }
             }
 
             if (localHash == remoteHash) { _recordSyncSuccess(prefs, systemId, relPath, remoteHash); continue; }
@@ -409,6 +418,11 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
             }
           }
         }
+        
+        if (pendingCacheUpdates.isNotEmpty) {
+           await _fileCache.updateCacheBatch(pendingCacheUpdates);
+        }
+        
         await _commitSyncJournal(prefs);
       } catch (e) { 
         print('❌ SYNC ERROR: $e'); 

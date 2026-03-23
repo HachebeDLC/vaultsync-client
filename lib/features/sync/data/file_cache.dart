@@ -30,6 +30,10 @@ class FileCache {
     return await openDatabase(
       path,
       version: 2,
+      onConfigure: (db) async {
+        await db.execute('PRAGMA journal_mode = WAL');
+        await db.execute('PRAGMA synchronous = NORMAL');
+      },
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE cache(
@@ -47,6 +51,20 @@ class FileCache {
         }
       },
     );
+  }
+
+  Future<void> updateCacheBatch(List<Map<String, dynamic>> entries) async {
+    if (entries.isEmpty) return;
+    final db = await database;
+    await db.transaction((txn) async {
+      for (final entry in entries) {
+        await txn.insert(
+          'cache',
+          entry,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
   }
 
   Future<String?> getCachedHash(String path, int size, int lastModified) async {

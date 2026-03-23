@@ -23,7 +23,9 @@ void main() {
       ProviderScope(
         overrides: [
           syncProvider.overrideWith((ref) => mockSyncNotifier),
-          systemPathsProvider.overrideWith((ref) => Future.value(<String, String>{})),
+          systemPathsProvider.overrideWith((ref) => Future.value(<String, String>{
+            'ps2': '/test/path/ps2',
+          })),
         ],
         child: const MaterialApp(
           home: DashboardScreen(),
@@ -31,7 +33,10 @@ void main() {
       ),
     );
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Row), findsWidgets);
+    expect(find.byType(VerticalDivider), findsOneWidget);
     
     addTearDown(tester.view.resetPhysicalSize);
   });

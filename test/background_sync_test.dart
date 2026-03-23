@@ -8,6 +8,7 @@ class MockSyncService extends Mock implements SyncService {}
 class MockSystemPathService extends Mock implements SystemPathService {}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late BackgroundSyncService service;
   late MockSyncService mockSyncService;
   late MockSystemPathService mockPathService;

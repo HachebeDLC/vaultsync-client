@@ -9,6 +9,7 @@ import '../../../core/services/api_client_provider.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../../sync/services/system_path_service.dart';
 import '../../sync/services/background_sync_service.dart';
+import '../../sync/services/desktop_background_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -105,6 +106,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       } else {
         print('🕒 SCHEDULER: Cancelling periodic sync');
         await Workmanager().cancelByUniqueName("periodic-sync");
+      }
+    } else if (Platform.isWindows || Platform.isLinux) {
+      if (value) {
+        ref.read(desktopBackgroundSyncServiceProvider).startAutoSync(interval: const Duration(hours: 6));
+      } else {
+        ref.read(desktopBackgroundSyncServiceProvider).stopAutoSync();
       }
     } else {
       print('🕒 SCHEDULER: Background sync is not supported on this platform');

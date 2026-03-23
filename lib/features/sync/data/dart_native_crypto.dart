@@ -213,77 +213,14 @@ class DartNativeCrypto {
 
     final expectedBlockSize = keyBytes != null ? encryptedBlockSize : blockSize;
     
-    int currentIdx = 0;
-    final bytesBuffer = BytesBuilder();
-
-    await for (final chunk in response.stream) {
-      bytesBuffer.add(chunk);
-      
-      while (bytesBuffer.length >= expectedBlockSize) {
-        final block = bytesBuffer.takeBytes();
-        final currentChunk = block.sublist(0, expectedBlockSize);
-        
-        if (block.length > expectedBlockSize) {
-          bytesBuffer.add(block.sublist(expectedBlockSize));
-        }
-        
-        List<int> decryptedData;
-        if (keyBytes != null) {
-          if (currentChunk.length < 7 + 16) {
-             decryptedData = currentChunk;
-          } else {
-             bool match = true;
-             for (int i = 0; i < 7; i++) {
-               if (currentChunk[i] != _magicBytes[i]) { match = false; break; }
-             }
-             if (!match) {
-               decryptedData = currentChunk;
-             } else {
-               final iv = Uint8List.fromList(currentChunk.sublist(7, 7 + 16));
-               final ciphertext = Uint8List.fromList(currentChunk.sublist(7 + 16));
-               final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(false, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
-               decryptedData = cipher.process(ciphertext);
-             }
-          }
-        } else {
-          decryptedData = currentChunk;
-        }
-        
-        final blockIndex = patchIndices != null ? patchIndices[currentIdx] : currentIdx;
-        await raf.setPosition(blockIndex * blockSize);
-        await raf.writeFrom(decryptedData);
-        currentIdx++;
-      }
-    }
-    
-    if (bytesBuffer.isNotEmpty) {
-      final currentChunk = bytesBuffer.takeBytes();
-      List<int> decryptedData;
-      if (keyBytes != null) {
-        if (currentChunk.length < 7 + 16) {
-           decryptedData = currentChunk;
-        } else {
-           bool match = true;
-           for (int i = 0; i < 7; i++) {
-             if (currentChunk[i] != _magicBytes[i]) { match = false; break; }
-           }
-           if (!match) {
-             decryptedData = currentChunk;
-           } else {
-             final iv = Uint8List.fromList(currentChunk.sublist(7, 7 + 16));
-             final ciphertext = Uint8List.fromList(currentChunk.sublist(7 + 16));
-             final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(false, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
-             decryptedData = cipher.process(ciphertext);
-           }
-        }
-      } else {
-        decryptedData = currentChunk;
-      }
-      
-      final blockIndex = patchIndices != null ? patchIndices[currentIdx] : currentIdx;
-      await raf.setPosition(blockIndex * blockSize);
-      await raf.writeFrom(decryptedData);
-    }
+    await processDownloadStream(
+      response.stream,
+      raf,
+      keyBytes,
+      patchIndices,
+      expectedBlockSize,
+      blockSize,
+    );
     
     await raf.close();
     if (await file.exists()) await file.delete();
@@ -293,5 +230,72 @@ class DartNativeCrypto {
       // Dart's File.setLastModified expects a DateTime object
       await file.setLastModified(DateTime.fromMillisecondsSinceEpoch(updatedAt));
     }
+  }
+
+  static Future<void> processDownloadStream(
+    Stream<List<int>> stream,
+    RandomAccessFile raf,
+    Uint8List? keyBytes,
+    List<int>? patchIndices,
+    int expectedBlockSize,
+    int blockSize
+  ) async {
+    int currentIdx = 0;
+    final ringBuffer = Uint8List(expectedBlockSize * 2);
+    int bufferLen = 0;
+
+    await for (final chunk in stream) {
+      int chunkOffset = 0;
+      while (chunkOffset < chunk.length) {
+        final spaceAvailable = ringBuffer.length - bufferLen;
+        if (spaceAvailable == 0) throw Exception("Buffer overflow");
+        
+        final toCopy = (chunk.length - chunkOffset) < spaceAvailable ? (chunk.length - chunkOffset) : spaceAvailable;
+        ringBuffer.setRange(bufferLen, bufferLen + toCopy, chunk.sublist(chunkOffset, chunkOffset + toCopy));
+        bufferLen += toCopy;
+        chunkOffset += toCopy;
+
+        while (bufferLen >= expectedBlockSize) {
+          final currentChunk = Uint8List.view(ringBuffer.buffer, 0, expectedBlockSize);
+          List<int> decryptedData = _decryptBlock(currentChunk, keyBytes);
+          
+          final blockIndex = patchIndices != null ? patchIndices[currentIdx] : currentIdx;
+          await raf.setPosition(blockIndex * blockSize);
+          await raf.writeFrom(decryptedData);
+          currentIdx++;
+
+          final remaining = bufferLen - expectedBlockSize;
+          if (remaining > 0) {
+            ringBuffer.setRange(0, remaining, ringBuffer, expectedBlockSize);
+          }
+          bufferLen = remaining;
+        }
+      }
+    }
+    
+    if (bufferLen > 0) {
+      final currentChunk = Uint8List.view(ringBuffer.buffer, 0, bufferLen);
+      List<int> decryptedData = _decryptBlock(currentChunk, keyBytes);
+      final blockIndex = patchIndices != null ? patchIndices[currentIdx] : currentIdx;
+      await raf.setPosition(blockIndex * blockSize);
+      await raf.writeFrom(decryptedData);
+    }
+  }
+
+  static List<int> _decryptBlock(Uint8List currentChunk, Uint8List? keyBytes) {
+    if (keyBytes != null) {
+      if (currentChunk.length < 7 + 16) return Uint8List.fromList(currentChunk);
+      bool match = true;
+      for (int i = 0; i < 7; i++) {
+        if (currentChunk[i] != _magicBytes[i]) { match = false; break; }
+      }
+      if (!match) return Uint8List.fromList(currentChunk);
+      
+      final iv = Uint8List.fromList(currentChunk.sublist(7, 7 + 16));
+      final ciphertext = Uint8List.fromList(currentChunk.sublist(7 + 16));
+      final cipher = PaddedBlockCipher("AES/CBC/PKCS7")..init(false, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
+      return cipher.process(ciphertext);
+    }
+    return Uint8List.fromList(currentChunk);
   }
 }

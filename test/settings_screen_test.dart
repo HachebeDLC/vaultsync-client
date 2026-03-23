@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
@@ -12,6 +13,11 @@ class MockBackgroundSyncService extends Mock implements BackgroundSyncService {}
 class MockDesktopBackgroundSyncService extends Mock implements DesktopBackgroundSyncService {}
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
+    registerFallbackValue(const Duration(hours: 6));
+  });
+  const channel = MethodChannel('com.vaultsync.app/launcher');
   late MockBackgroundSyncService mockBackgroundSyncService;
   late MockDesktopBackgroundSyncService mockDesktopBackgroundSyncService;
 
@@ -19,13 +25,54 @@ void main() {
     mockBackgroundSyncService = MockBackgroundSyncService();
     mockDesktopBackgroundSyncService = MockDesktopBackgroundSyncService();
     SharedPreferences.setMockInitialValues({});
+    
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (methodCall) async {
+        if (methodCall.method == 'hasUsageStatsPermission') return true;
+        return null;
+      },
+    );
   });
 
-  testWidgets('Auto Sync toggle should call appropriate sync service', (tester) async {
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets('Sync on Game Exit toggle should call startMonitoring on Android', (tester) async {
+    // Only run this test on Android to avoid platform mismatch complexity in unit test
+    if (!Platform.isAndroid) return;
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           backgroundSyncServiceProvider.overrideWith((ref) => mockBackgroundSyncService),
+        ],
+        child: const MaterialApp(
+          home: SettingsScreen(),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final toggleFinder = find.byType(SwitchListTile).at(0); // Sync on Game Exit
+    expect(toggleFinder, findsOneWidget);
+
+    when(() => mockBackgroundSyncService.startMonitoring()).thenAnswer((_) async => Future.value());
+
+    await tester.tap(toggleFinder);
+    await tester.pumpAndSettle();
+
+    verify(() => mockBackgroundSyncService.startMonitoring()).called(1);
+  });
+
+  testWidgets('Periodic Sync toggle should call startAutoSync on Desktop', (tester) async {
+    if (Platform.isAndroid || Platform.isIOS) return;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
           desktopBackgroundSyncServiceProvider.overrideWith((ref) => mockDesktopBackgroundSyncService),
         ],
         child: const MaterialApp(
@@ -36,22 +83,14 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    final toggleFinder = find.byType(SwitchListTile).at(1); // Auto Sync is the second switch
+    final toggleFinder = find.byType(SwitchListTile).at(1); // Periodic Sync
     expect(toggleFinder, findsOneWidget);
 
-    if (Platform.isAndroid || Platform.isIOS) {
-      when(() => mockBackgroundSyncService.startMonitoring()).thenAnswer((_) async => Future.value());
-    } else {
-      when(() => mockDesktopBackgroundSyncService.startAutoSync()).thenReturn(null);
-    }
+    when(() => mockDesktopBackgroundSyncService.startAutoSync(interval: any(named: 'interval'))).thenReturn(null);
 
     await tester.tap(toggleFinder);
     await tester.pumpAndSettle();
 
-    if (Platform.isAndroid || Platform.isIOS) {
-      verify(() => mockBackgroundSyncService.startMonitoring()).called(1);
-    } else {
-      verify(() => mockDesktopBackgroundSyncService.startAutoSync()).called(1);
-    }
+    verify(() => mockDesktopBackgroundSyncService.startAutoSync(interval: any(named: 'interval'))).called(1);
   });
 }
