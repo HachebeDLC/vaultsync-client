@@ -20,10 +20,23 @@ fun ByteArray.toHex(): String {
 class CryptoEngine {
     companion object {
         const val MAGIC_HEADER = "NEOSYNC"
-        const val BLOCK_SIZE = 1024 * 1024
+        const val SMALL_BLOCK_SIZE = 256 * 1024
+        const val LARGE_BLOCK_SIZE = 1024 * 1024
+        const val BLOCK_THRESHOLD = 10 * 1024 * 1024
         const val IV_SIZE = 16
         const val PADDING_SIZE = 16
         const val OVERHEAD = 7 + IV_SIZE + PADDING_SIZE // Magic (7) + IV (16) + Padding (16)
+        
+        fun getBlockSize(fileSize: Long): Int {
+            return if (fileSize >= BLOCK_THRESHOLD) LARGE_BLOCK_SIZE else SMALL_BLOCK_SIZE
+        }
+        
+        fun getEncryptedBlockSize(fileSize: Long): Int {
+            return getBlockSize(fileSize) + OVERHEAD
+        }
+        
+        // Backward compatibility constants if needed elsewhere
+        const val BLOCK_SIZE = 1024 * 1024
         const val ENCRYPTED_BLOCK_SIZE = BLOCK_SIZE + OVERHEAD
     }
 

@@ -45,7 +45,7 @@ class _VersionHistoryScreenState extends ConsumerState<VersionHistoryScreen> {
     }
   }
 
-  Future<void> _restore(String versionId, int displayNum) async {
+  Future<void> _restore(String versionId, int displayNum, int fileSize) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -54,7 +54,7 @@ class _VersionHistoryScreenState extends ConsumerState<VersionHistoryScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true), 
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
             child: const Text('RESTORE'),
           ),
@@ -66,10 +66,11 @@ class _VersionHistoryScreenState extends ConsumerState<VersionHistoryScreen> {
       setState(() => _isLoading = true);
       try {
         await ref.read(syncRepositoryProvider).restoreVersion(
-          widget.remotePath, 
-          versionId, 
-          widget.localBasePath, 
-          widget.relPath
+          widget.remotePath,
+          versionId,
+          widget.localBasePath,
+          widget.localRelPath,
+          fileSize,
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Version restored successfully!')));
@@ -146,7 +147,7 @@ class _VersionHistoryScreenState extends ConsumerState<VersionHistoryScreen> {
                                 ],
                               ),
                               trailing: OutlinedButton(
-                                onPressed: () => _restore(versionId, displayNum),
+                                onPressed: () => _restore(versionId, displayNum, v['size']),
                                 child: const Text('RESTORE'),
                               ),
                             ),

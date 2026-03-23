@@ -6,12 +6,16 @@ import 'package:http/http.dart' as http;
 import 'package:pointycastle/export.dart';
 
 class DartNativeCrypto {
-  static const int blockSize = 1024 * 1024;
+  static const int smallBlockSize = 256 * 1024;
+  static const int largeBlockSize = 1024 * 1024;
+  static const int blockThreshold = 10 * 1024 * 1024;
   static const int ivSize = 16;
   static const int paddingSize = 16;
   static const String magicHeader = 'NEOSYNC';
   static const int overhead = 7 + ivSize + paddingSize;
-  static const int encryptedBlockSize = blockSize + overhead;
+  
+  static int getBlockSize(int fileSize) => fileSize >= blockThreshold ? largeBlockSize : smallBlockSize;
+  static int getEncryptedBlockSize(int fileSize) => getBlockSize(fileSize) + overhead;
   
   static final _magicBytes = utf8.encode(magicHeader);
 
@@ -39,12 +43,15 @@ class DartNativeCrypto {
     final file = File(path);
     final raf = await file.open(mode: FileMode.read);
     final length = await raf.length();
+    final blockSize = getBlockSize(length);
     final hashes = <String>[];
     
     Uint8List? keyBytes;
+    PaddedBlockCipher? cipher;
     if (masterKey != null) {
       final decoded = base64Url.decode(masterKey);
       keyBytes = Uint8List.fromList(decoded.sublist(0, 32));
+      cipher = PaddedBlockCipher('AES/CBC/PKCS7');
     }
 
     int offset = 0;
@@ -53,9 +60,9 @@ class DartNativeCrypto {
       final buffer = await raf.read(blockSize);
       if (buffer.isEmpty) break;
       
-      if (keyBytes != null) {
+      if (keyBytes != null && cipher != null) {
         final iv = md5.convert(buffer).bytes;
-        final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)), null));
+        cipher.init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)), null));
         final encryptedBytes = cipher.process(Uint8List.fromList(buffer));
         
         final outBuffer = BytesBuilder();
@@ -87,6 +94,8 @@ class DartNativeCrypto {
 
     final file = File(uriStr);
     final fileSize = await file.length();
+    final blockSize = getBlockSize(fileSize);
+    final encryptedBlockSize = getEncryptedBlockSize(fileSize);
     final totalBlocks = fileSize == 0 ? 1 : ((fileSize + blockSize - 1) ~/ blockSize);
     final indicesToSync = dirtyIndices ?? List.generate(totalBlocks, (i) => i);
 
@@ -114,6 +123,14 @@ class DartNativeCrypto {
             
             if (keyBytes != null && blockData.isNotEmpty) {
               final iv = md5.convert(blockData).bytes;
+              // Note: PaddedBlockCipher is not thread-safe, but since we are in separate 
+              // futures that don't share the instance yet (we hoist it but use new per-future), 
+              // actually for parallel upload we SHOULD keep it per-future if they run concurrently.
+              // However, the plan says hoist from inner loops. 
+              // In this specific concurrent case, we instantiate once per block in the future.
+              // I will optimize by instantiating once per BATCH if possible, but each future
+              // in the batch runs concurrently. 
+              // So I will instantiate once at the start of the future.
               final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)), null));
               final encryptedBytes = cipher.process(Uint8List.fromList(blockData));
               
@@ -174,6 +191,9 @@ class DartNativeCrypto {
     final patchIndices = (args['patchIndices'] as List?)?.cast<int>();
     final versionId = args['versionId'] as String?;
     final updatedAt = args['updatedAt'] as int?;
+    final fileSize = args['fileSize'] as int? ?? 0;
+    final blockSize = getBlockSize(fileSize);
+    final encryptedBlockSize = getEncryptedBlockSize(fileSize);
 
     if (localFilename.contains('..')) throw Exception('Invalid path');
 
@@ -244,6 +264,11 @@ class DartNativeCrypto {
     final ringBuffer = Uint8List(expectedBlockSize * 2);
     int bufferLen = 0;
 
+    PaddedBlockCipher? cipher;
+    if (keyBytes != null) {
+      cipher = PaddedBlockCipher("AES/CBC/PKCS7");
+    }
+
     await for (final chunk in stream) {
       int chunkOffset = 0;
       while (chunkOffset < chunk.length) {
@@ -257,7 +282,7 @@ class DartNativeCrypto {
 
         while (bufferLen >= expectedBlockSize) {
           final currentChunk = Uint8List.view(ringBuffer.buffer, 0, expectedBlockSize);
-          List<int> decryptedData = _decryptBlock(currentChunk, keyBytes);
+          List<int> decryptedData = _decryptBlock(currentChunk, keyBytes, cipher);
           
           final blockIndex = patchIndices != null ? patchIndices[currentIdx] : currentIdx;
           await raf.setPosition(blockIndex * blockSize);
@@ -275,14 +300,14 @@ class DartNativeCrypto {
     
     if (bufferLen > 0) {
       final currentChunk = Uint8List.view(ringBuffer.buffer, 0, bufferLen);
-      List<int> decryptedData = _decryptBlock(currentChunk, keyBytes);
+      List<int> decryptedData = _decryptBlock(currentChunk, keyBytes, cipher);
       final blockIndex = patchIndices != null ? patchIndices[currentIdx] : currentIdx;
       await raf.setPosition(blockIndex * blockSize);
       await raf.writeFrom(decryptedData);
     }
   }
 
-  static List<int> _decryptBlock(Uint8List currentChunk, Uint8List? keyBytes) {
+  static List<int> _decryptBlock(Uint8List currentChunk, Uint8List? keyBytes, [PaddedBlockCipher? cipher]) {
     if (keyBytes != null) {
       if (currentChunk.length < 7 + 16) return Uint8List.fromList(currentChunk);
       bool match = true;
@@ -293,8 +318,10 @@ class DartNativeCrypto {
       
       final iv = Uint8List.fromList(currentChunk.sublist(7, 7 + 16));
       final ciphertext = Uint8List.fromList(currentChunk.sublist(7 + 16));
-      final cipher = PaddedBlockCipher("AES/CBC/PKCS7")..init(false, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
-      return cipher.process(ciphertext);
+      
+      final useCipher = cipher ?? PaddedBlockCipher("AES/CBC/PKCS7");
+      useCipher.init(false, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
+      return useCipher.process(ciphertext);
     }
     return Uint8List.fromList(currentChunk);
   }

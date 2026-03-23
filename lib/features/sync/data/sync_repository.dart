@@ -378,7 +378,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
           } else if (localInfo == null && remoteInfo != null) {
             onProgress?.call('Downloading $relPath...');
             final destRelPath = _getLocalRelPath(systemId, relPath, localFiles);
-            await downloadFile(remotePath, effectivePath, destRelPath, systemId: systemId, updatedAt: remoteInfo['updated_at'], serverBlocks: remoteInfo['blocks'], prefs: prefs);
+            await downloadFile(remotePath, effectivePath, destRelPath, systemId: systemId, updatedAt: remoteInfo['updated_at'], serverBlocks: remoteInfo['blocks'], prefs: prefs, fileSize: (remoteInfo['size'] as num).toInt());
           } else if (localInfo != null && remoteInfo != null) {
             final String remoteHash = remoteInfo['hash'];
             if (_isJournaledSynced(prefs, systemId, relPath, remoteHash)) continue;
@@ -414,7 +414,7 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
               await uploadFile(localInfo['uri'], remotePath, systemId: systemId, relPath: relPath, plainHash: localHash, prefs: prefs);
             } else {
               onProgress?.call('Patching $relPath (Cloud Newer)...');
-              await downloadFile(remotePath, effectivePath, localInfo['originalRelPath'], systemId: systemId, updatedAt: remoteInfo['updated_at'], serverBlocks: remoteInfo['blocks'], localUri: localInfo['uri'], prefs: prefs);
+              await downloadFile(remotePath, effectivePath, localInfo['originalRelPath'], systemId: systemId, updatedAt: remoteInfo['updated_at'], serverBlocks: remoteInfo['blocks'], localUri: localInfo['uri'], prefs: prefs, fileSize: (remoteInfo['size'] as num).toInt());
             }
           }
         }
@@ -486,12 +486,13 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
   }
 
   /// Downloads and decrypts a file (or specific blocks) from the server.
-  Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
+  Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, required int fileSize, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
     final baseUrl = await _apiClient.getBaseUrl();
     final token = await _apiClient.getToken();
     final masterKey = await _getMasterKey();
     List<int>? patchIndices;
     if (localUri != null && serverBlocks != null) {
+       try {
        final String localBlocksJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
            ? await DartNativeCrypto.calculateBlockHashes(localUri, masterKey: masterKey)
            : await _platform.invokeMethod('calculateBlockHashes', {'path': localUri, 'masterKey': masterKey});
@@ -501,10 +502,13 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
        final dirty = <int>[];
        for (int i = 0; i < remoteHashes.length; i++) { if (i >= localHashes.length || localHashes[i] != remoteHashes[i]) { dirty.add(i); } }
        if (dirty.isNotEmpty && dirty.length < remoteHashes.length) { patchIndices = dirty; }
+       } catch (e) {
+         print('⚠️ Block Hash calculation failed for $localUri. Falling back to full download. Error: $e');
+       }
     }
     final downloadUrl = (patchIndices != null) ? '$baseUrl/api/v1/blocks/download' : '$baseUrl/api/v1/download';
 
-    final downloadArgs = { 'url': downloadUrl, 'token': token, 'masterKey': masterKey, 'remoteFilename': remotePath, 'uri': localBasePath, 'localFilename': relPath, 'updatedAt': updatedAt, 'patchIndices': patchIndices };
+    final downloadArgs = { 'url': downloadUrl, 'token': token, 'masterKey': masterKey, 'remoteFilename': remotePath, 'uri': localBasePath, 'localFilename': relPath, 'updatedAt': updatedAt, 'patchIndices': patchIndices, 'fileSize': fileSize };
 
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       await DartNativeCrypto.downloadFileNative(downloadArgs);
@@ -529,21 +533,21 @@ Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynam
   }
 
   /// Restores a specific version of a file from the server.
-  Future<void> restoreVersion(String remotePath, String versionId, String localBasePath, String relPath) async {
+  Future<void> restoreVersion(String remotePath, String versionId, String localBasePath, String relPath, int fileSize) async {
     final baseUrl = await _apiClient.getBaseUrl();
     final token = await _apiClient.getToken();
     final masterKey = await _getMasterKey();
-    
-    final args = { 
-      'url': '$baseUrl/api/v1/versions/restore', 
-      'token': token, 
-      'masterKey': masterKey, 
-      'remoteFilename': remotePath, 
-      'versionId': versionId, 
-      'uri': localBasePath, 
-      'localFilename': relPath 
-    };
 
+    final args = {
+      'url': '$baseUrl/api/v1/versions/restore',
+      'token': token,
+      'masterKey': masterKey,
+      'remoteFilename': remotePath,
+      'versionId': versionId,
+      'uri': localBasePath,
+      'localFilename': relPath,
+      'fileSize': fileSize
+    };
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       await DartNativeCrypto.downloadFileNative(args);
     } else {

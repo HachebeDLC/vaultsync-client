@@ -418,21 +418,23 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     private fun processUploadBlocks(fileChannel: FileChannel, fileSize: Long, dirtyIndices: List<Int>?, secretKey: javax.crypto.spec.SecretKeySpec?, url: String, token: String?, remotePath: String) {
-        val totalBlocks = if (fileSize == 0L) 1 else ((fileSize + CryptoEngine.BLOCK_SIZE - 1) / CryptoEngine.BLOCK_SIZE).toInt()
+        val blockSize = CryptoEngine.getBlockSize(fileSize)
+        val encryptedBlockSize = CryptoEngine.getEncryptedBlockSize(fileSize)
+        val totalBlocks = if (fileSize == 0L) 1 else ((fileSize + blockSize - 1) / blockSize).toInt()
         val indicesToSync = dirtyIndices ?: (0 until totalBlocks).toList()
 
         val futures = mutableListOf<java.util.concurrent.Future<*>>()
         
         // Memory Optimization: Reuse large buffers across threads to reduce GC pressure
         val readBuffers = object : ThreadLocal<ByteBuffer>() {
-            override fun initialValue() = ByteBuffer.allocate(CryptoEngine.BLOCK_SIZE)
+            override fun initialValue() = ByteBuffer.allocate(blockSize)
         }
         val encryptedBuffers = object : ThreadLocal<ByteArray>() {
-            override fun initialValue() = ByteArray(CryptoEngine.ENCRYPTED_BLOCK_SIZE)
+            override fun initialValue() = ByteArray(encryptedBlockSize)
         }
 
         for (index in indicesToSync) {
-            val offset = index.toLong() * CryptoEngine.BLOCK_SIZE
+            val offset = index.toLong() * blockSize
             
             futures.add(syncExecutor.submit {
                 val readBuffer = readBuffers.get()!!
@@ -441,7 +443,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 val bytesRead = synchronized(fileChannel) {
                     fileChannel.position(offset)
                     var totalRead = 0
-                    while (totalRead < CryptoEngine.BLOCK_SIZE) {
+                    while (totalRead < blockSize) {
                         val r = fileChannel.read(readBuffer)
                         if (r == -1) break
                         totalRead += r
@@ -500,6 +502,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         val localFilename = call.argument<String>("localFilename")!!
         val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong()
         val patchIndices = call.argument<List<Int>>("patchIndices")
+        val fileSize = (call.argument<Any>("fileSize") as? Number)?.toLong() ?: 0L
 
         executor.execute {
             try {
@@ -532,7 +535,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                                 pfd.use { descriptor ->
                                     FileOutputStream(descriptor.fileDescriptor).use { fos ->
                                         fos.channel.truncate(0)
-                                        processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices)
+                                        processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices, fileSize)
                                     }
                                 }
                             } else {
@@ -558,7 +561,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                                 pfd.use { descriptor ->
                                     FileOutputStream(descriptor.fileDescriptor).use { fos ->
                                         fos.channel.truncate(0)
-                                        processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices)
+                                        processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices, fileSize)
                                     }
                                 }
                             } else {
@@ -590,8 +593,9 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         }
     }
 
-    private fun processDownloadStream(inputStream: InputStream, output: FileChannel, secretKey: javax.crypto.spec.SecretKeySpec?, patchIndices: List<Int>?) {
-        val expectedBlockSize = if (secretKey != null) CryptoEngine.ENCRYPTED_BLOCK_SIZE else CryptoEngine.BLOCK_SIZE
+    private fun processDownloadStream(inputStream: InputStream, output: FileChannel, secretKey: javax.crypto.spec.SecretKeySpec?, patchIndices: List<Int>?, fileSize: Long) {
+        val plainBlockSize = CryptoEngine.getBlockSize(fileSize)
+        val expectedBlockSize = if (secretKey != null) CryptoEngine.getEncryptedBlockSize(fileSize) else plainBlockSize
         val ringBuffer = ByteBuffer.allocate(expectedBlockSize * 2)
         val block = ByteArray(expectedBlockSize)
         val decryptedBuffer = ByteArray(expectedBlockSize + 32)
@@ -614,7 +618,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                         expectedBlockSize
                     }
                     val blockIndex = if (patchIndices != null) patchIndices[currentIdx].toLong() else currentIdx.toLong()
-                    val offset = blockIndex * CryptoEngine.BLOCK_SIZE
+                    val offset = blockIndex * plainBlockSize
                     output.position(offset)
                     output.write(ByteBuffer.wrap(decryptedBuffer, 0, decryptedLength))
                     currentIdx++
