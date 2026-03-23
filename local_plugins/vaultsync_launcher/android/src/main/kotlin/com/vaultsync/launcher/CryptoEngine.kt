@@ -52,14 +52,14 @@ class CryptoEngine {
     }
 
     fun calculateHash(data: ByteArray, length: Int): String {
-        val digest = sha256ThreadLocal.get()!!
+        val digest = sha256ThreadLocal.get() ?: throw IllegalStateException("ThreadLocal sha256ThreadLocal.get() returned null")
         digest.reset()
         digest.update(data, 0, length)
         return digest.digest().toHex()
     }
 
     fun calculateMd5(data: ByteArray, length: Int): ByteArray {
-        val digest = md5ThreadLocal.get()!!
+        val digest = md5ThreadLocal.get() ?: throw IllegalStateException("ThreadLocal md5ThreadLocal.get() returned null")
         digest.reset()
         digest.update(data, 0, length)
         return digest.digest()
@@ -80,7 +80,7 @@ class CryptoEngine {
         val iv = calculateMd5(blockData, dataLength)
         val ivSpec = IvParameterSpec(iv)
         
-        val cipher = encryptCipherThreadLocal.get()!!
+        val cipher = encryptCipherThreadLocal.get() ?: throw IllegalStateException("ThreadLocal encryptCipherThreadLocal.get() returned null")
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec)
         
         System.arraycopy(magicBytes, 0, output, 0, 7)
@@ -117,7 +117,7 @@ class CryptoEngine {
         System.arraycopy(encryptedBlock, 7, iv, 0, IV_SIZE)
         val ivSpec = IvParameterSpec(iv)
         
-        val cipher = decryptCipherThreadLocal.get()!!
+        val cipher = decryptCipherThreadLocal.get() ?: throw IllegalStateException("ThreadLocal decryptCipherThreadLocal.get() returned null")
         cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
         return cipher.doFinal(encryptedBlock, 7 + IV_SIZE, encryptedLength - (7 + IV_SIZE), output, 0)
     }

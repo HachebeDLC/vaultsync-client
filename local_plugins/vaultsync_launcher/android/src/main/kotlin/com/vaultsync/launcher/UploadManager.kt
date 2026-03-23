@@ -20,12 +20,12 @@ class UploadManager(
     private val getShizukuServiceSync: () -> IShizukuService
 ) {
     fun handleUploadFile(call: MethodCall, result: MethodChannel.Result) {
-        val url = call.argument<String>("url")!!
+        val url = call.argument<String>("url") ?: throw IllegalArgumentException("url is missing")
         val token = call.argument<String>("token")
         val masterKey = call.argument<String>("masterKey")
-        val remotePath = call.argument<String>("remotePath")!!
-        val uriStr = call.argument<String>("uri")!!
-        val hash = call.argument<String>("hash")!!
+        val remotePath = call.argument<String>("remotePath") ?: throw IllegalArgumentException("remotePath is missing")
+        val uriStr = call.argument<String>("uri") ?: throw IllegalArgumentException("uri is missing")
+        val hash = call.argument<String>("hash") ?: throw IllegalArgumentException("hash is missing")
         val deviceName = call.argument<String>("deviceName") ?: "Android"
         val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong() ?: 0L
         val dirtyIndices = call.argument<List<Int>>("dirtyIndices")
@@ -96,7 +96,7 @@ class UploadManager(
             val offset = index.toLong() * blockSize
             
             futures.add(syncExecutor.submit {
-                val readBuffer = readBuffers.get()!!
+                val readBuffer = readBuffers.get() ?: throw IllegalStateException("Read buffer null")
                 readBuffer.clear()
                 
                 val bytesRead = synchronized(fileChannel) {
@@ -116,7 +116,7 @@ class UploadManager(
                 val dataLength = if (bytesRead < 0) 0 else bytesRead
                 
                 if (secretKey != null && dataLength > 0) {
-                    val encryptedBuffer = encryptedBuffers.get()!!
+                    val encryptedBuffer = encryptedBuffers.get() ?: throw IllegalStateException("Encrypted buffer null")
                     val encryptedLength = cryptoEngine.encryptBlock(blockData, dataLength, secretKey, encryptedBuffer)
                     postBlock(url, token, remotePath, index, encryptedBuffer, 0, encryptedLength, encryptedBlockSize)
                 } else {

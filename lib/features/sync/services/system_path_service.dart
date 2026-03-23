@@ -247,7 +247,9 @@ class SystemPathService {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      print('⚠️ SCAN: Error checking ROMs in ${dir.path}: $e');
+    }
     return false;
   }
 
@@ -264,7 +266,9 @@ class SystemPathService {
           final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
           if (name.toLowerCase() == target.toLowerCase()) return entity.path;
         }
-      } catch (_) {}
+      } catch (e) {
+        print('⚠️ EMUDECK: Error finding folder $target in $parent: $e');
+      }
       return "$parent/$target";
     }
 

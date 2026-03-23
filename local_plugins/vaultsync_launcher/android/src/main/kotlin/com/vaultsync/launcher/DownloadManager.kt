@@ -27,12 +27,12 @@ class DownloadManager(
     private val setFileTimestampInternal: (String, Long) -> Unit
 ) {
     fun handleDownloadFile(call: MethodCall, result: MethodChannel.Result) {
-        val url = call.argument<String>("url")!!
+        val url = call.argument<String>("url") ?: throw IllegalArgumentException("url is missing")
         val token = call.argument<String>("token")
         val masterKey = call.argument<String>("masterKey")
-        val remoteFilename = call.argument<String>("remoteFilename")!!
-        val uriStr = call.argument<String>("uri")!!
-        val localFilename = call.argument<String>("localFilename")!!
+        val remoteFilename = call.argument<String>("remoteFilename") ?: throw IllegalArgumentException("remoteFilename is missing")
+        val uriStr = call.argument<String>("uri") ?: throw IllegalArgumentException("uri is missing")
+        val localFilename = call.argument<String>("localFilename") ?: throw IllegalArgumentException("localFilename is missing")
         val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong()
         val patchIndices = call.argument<List<Int>>("patchIndices")
         val fileSize = (call.argument<Any>("fileSize") as? Number)?.toLong() ?: 0L
@@ -78,7 +78,7 @@ class DownloadManager(
                         }
                         uriStr.startsWith("content://") -> {
                             val treeUri = Uri.parse(uriStr)
-                            val rootDoc = DocumentFile.fromTreeUri(context, treeUri)!!
+                            val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: throw Exception("Invalid tree URI")
                             
                             val pathParts = localFilename.split("/")
                             var currentDir = rootDoc

@@ -91,7 +91,9 @@ class DartFileScanner {
             }
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        print('⚠️ SCAN: Skipped ${dir.path} due to error: $e');
+      }
     }
 
     await walk(rootDir, "", 0);
