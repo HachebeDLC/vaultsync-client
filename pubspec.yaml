@@ -62,3 +62,4 @@ flutter:
     - assets/systems/
     - assets/vaultsync_icon.png
     - assets/vaultsync_icon.ico
+    - assets/config/path_config.json
