@@ -140,7 +140,7 @@ class SyncNotifier extends StateNotifier<SyncState> {
 
   Future<void> resolveConflict(Map<String, dynamic> conflict, bool keepLocal) async {
     try {
-      await _syncService.resolveConflict(conflict, keepLocal);
+      await _syncService.resolveConflict(conflict['path'], keepLocal);
       await refreshConflicts();
     } catch (e) {
       state = state.copyWith(status: 'Error resolving conflict: $e');

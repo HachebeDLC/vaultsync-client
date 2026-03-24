@@ -27,12 +27,12 @@ class DownloadManager(
     private val setFileTimestampInternal: (String, Long) -> Unit
 ) {
     fun handleDownloadFile(call: MethodCall, result: MethodChannel.Result) {
-        val url = call.argument<String>("url") ?: throw IllegalArgumentException("url is missing")
+        val url = call.argument<String>("url") ?: return result.error("ARG_MISSING", "url is missing", null)
         val token = call.argument<String>("token")
         val masterKey = call.argument<String>("masterKey")
-        val remoteFilename = call.argument<String>("remoteFilename") ?: throw IllegalArgumentException("remoteFilename is missing")
-        val uriStr = call.argument<String>("uri") ?: throw IllegalArgumentException("uri is missing")
-        val localFilename = call.argument<String>("localFilename") ?: throw IllegalArgumentException("localFilename is missing")
+        val remoteFilename = call.argument<String>("remoteFilename") ?: return result.error("ARG_MISSING", "remoteFilename is missing", null)
+        val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri is missing", null)
+        val localFilename = call.argument<String>("localFilename") ?: return result.error("ARG_MISSING", "localFilename is missing", null)
         val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong()
         val patchIndices = call.argument<List<Int>>("patchIndices")
         val fileSize = (call.argument<Any>("fileSize") as? Number)?.toLong() ?: 0L
@@ -130,6 +130,7 @@ class DownloadManager(
         val plainBlockSize = CryptoEngine.getBlockSize(fileSize)
         val expectedBlockSize = if (secretKey != null) CryptoEngine.getEncryptedBlockSize(fileSize) else plainBlockSize
 
+        // Zero-Copy Optimization: For unencrypted downloads, use transferFrom to bypass JVM heap
         if (secretKey == null) {
             java.nio.channels.Channels.newChannel(inputStream).use { source ->
                 if (patchIndices == null) {
@@ -138,8 +139,8 @@ class DownloadManager(
                     for (index in patchIndices) {
                         val offset = index.toLong() * plainBlockSize
                         var transferred = 0L
-                        while (transferred < plainBlockSize) {
-                            val r = output.transferFrom(source, offset + transferred, plainBlockSize - transferred)
+                        while (transferred < plainBlockSize.toLong()) {
+                            val r = output.transferFrom(source, offset + transferred, plainBlockSize.toLong() - transferred)
                             if (r <= 0) break
                             transferred += r
                         }

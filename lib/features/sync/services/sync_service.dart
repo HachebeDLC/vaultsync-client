@@ -42,7 +42,18 @@ class SyncService {
 
   Future<void> _clearNotification() async { await _notifications.cancel(999); }
 
-  /// Runs a full synchronization for all configured systems.
+  Future<void> triggerQueueProcessing() async {
+    if (Platform.isAndroid) {
+      await Workmanager().registerOneOffTask(
+        "process-queue-${DateTime.now().millisecondsSinceEpoch}",
+        "processQueue",
+        constraints: Constraints(networkType: NetworkType.connected),
+      );
+    } else {
+      Future.microtask(() => _repository.processManualQueue());
+    }
+  }
+
   Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false, bool isBackground = false}) async {
     if (isBackground) {
       await _showNotification('VaultSync', 'Performing background maintenance...');
@@ -57,7 +68,6 @@ class SyncService {
         return;
       }
 
-      // Pre-flight check: Shizuku status
       Map? shizukuStatus;
       try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (_) {}
       final bool shizukuRunning = shizukuStatus?['running'] == true;
@@ -66,25 +76,19 @@ class SyncService {
       final Set<String> syncedPaths = {};
 
       for (final entry in paths.entries) {
-        if (isCancelled?.call() == true) { 
-          onProgress?.call('Sync Cancelled'); 
-          return; 
-        }
+        if (isCancelled?.call() == true) { onProgress?.call('Sync Cancelled'); return; }
         final systemId = entry.key;
         if (isBackground) await _showNotification('VaultSync', 'Syncing $systemId...');
         onProgress?.call('Syncing $systemId...');
 
         final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
         final ignoredFolders = systemConfig?.system.ignoredFolders;
-
         final effectivePaths = await _resolveEffectivePaths(systemId);
 
         for (final path in effectivePaths) {
-          // Use a system-aware key to allow shared directories (like Dolphin) to sync for both Wii and GC
           final syncKey = '${systemId}_$path';
           if (syncedPaths.contains(syncKey)) continue;
 
-          // Shizuku Safeguard: If path requires Shizuku but it's not ready, skip with a log
           if (path.startsWith('shizuku://')) {
             if (!shizukuRunning || !shizukuAuthorized) {
               final reason = !shizukuRunning ? 'Shizuku not running' : 'Shizuku not authorized';
@@ -114,42 +118,22 @@ class SyncService {
         }
         _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Synchronized');
       }
+      await triggerQueueProcessing();
       onProgress?.call('Sync Complete!');
     } catch(e) {
       final userError = ErrorMapper.map(e);
-      
-      String? actionLabel;
-      switch (userError.action) {
-        case SyncAction.login: actionLabel = 'Login'; break;
-        case SyncAction.openShizuku: actionLabel = 'Fix Shizuku'; break;
-        case SyncAction.checkNetwork: actionLabel = 'Retry'; break;
-        case SyncAction.reselectFolder: actionLabel = 'Settings'; break;
-        default: break;
-      }
-
-      _ref?.read(syncLogProvider.notifier).addLog(
-        'All', 
-        userError.message, 
-        isError: true, 
-        errorTitle: userError.title,
-        actionLabel: actionLabel
-      );
+      _ref?.read(syncLogProvider.notifier).addLog('All', userError.message, isError: true, errorTitle: userError.title);
       onError?.call(userError.toString());
     } finally {
-      if (isBackground) {
-        await _clearNotification();
-      }
+      if (isBackground) await _clearNotification();
       if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
-    }  }
-
-  /// Synchronizes a specific system path.
-  Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false, bool isBackground = false}) async {
-    if (isBackground) {
-      await _showNotification('VaultSync', 'Syncing $systemId...');
     }
+  }
+
+  Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false, bool isBackground = false}) async {
+    if (isBackground) await _showNotification('VaultSync', 'Syncing $systemId...');
     if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
     try {
-      // Pre-flight check: Shizuku status
       Map? shizukuStatus;
       try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (_) {}
       final bool shizukuRunning = shizukuStatus?['running'] == true;
@@ -157,13 +141,10 @@ class SyncService {
 
       final effectivePaths = await _resolveEffectivePaths(systemId);
       for (final path in effectivePaths) {
-        // Shizuku Safeguard
-        if (path.startsWith('shizuku://')) {
-          if (!shizukuRunning || !shizukuAuthorized) {
-             final reason = !shizukuRunning ? 'Shizuku not running' : 'Shizuku not authorized';
-             _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Skipped: $reason', isError: true);
-             continue;
-          }
+        if (path.startsWith('shizuku://') && (!shizukuRunning || !shizukuAuthorized)) {
+          final reason = !shizukuRunning ? 'Shizuku not running' : 'Shizuku not authorized';
+          _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Skipped: $reason', isError: true);
+          continue;
         }
 
         final hasPermission = await _pathService.ensureSafPermission(path);
@@ -178,109 +159,44 @@ class SyncService {
           fastSync: fastSync
         );
       }
+      await triggerQueueProcessing();
       _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Success');
     } catch(e) {
       final userError = ErrorMapper.map(e);
-      
-      String? actionLabel;
-      switch (userError.action) {
-        case SyncAction.login: actionLabel = 'Login'; break;
-        case SyncAction.openShizuku: actionLabel = 'Fix Shizuku'; break;
-        case SyncAction.checkNetwork: actionLabel = 'Retry'; break;
-        case SyncAction.reselectFolder: actionLabel = 'Settings'; break;
-        default: break;
-      }
-
-      _ref?.read(syncLogProvider.notifier).addLog(
-        systemId, 
-        userError.message, 
-        isError: true, 
-        errorTitle: userError.title,
-        actionLabel: actionLabel
-      );
+      _ref?.read(syncLogProvider.notifier).addLog(systemId, userError.message, isError: true, errorTitle: userError.title);
       onError?.call(userError.toString());
     } finally {
-      if (isBackground) {
-        await _clearNotification();
-      }
+      if (isBackground) await _clearNotification();
       if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
-    }  }
-  /// Resolves the effective local save path(s) for [systemId].
-  /// Returns multiple paths for RetroArch (saves + states directories).
-  Future<List<String>> _resolveEffectivePaths(String systemId) async {
-    final effectivePath = await _pathService.getEffectivePath(systemId);
-    if (effectivePath.toLowerCase().contains('retroarch')) {
-      final raPaths = await _pathService.getRetroArchPaths();
-      final List<String> paths = [];
-      if (raPaths['saves'] != null) paths.add(raPaths['saves']!);
-      if (raPaths['states'] != null) paths.add(raPaths['states']!);
-      // Fallback if both null (unlikely but safe)
-      if (paths.isEmpty) paths.add(effectivePath);
-      return paths;
     }
-    return [effectivePath];
   }
 
-  /// Synchronizes cloud saves for a specific game before launching the emulator.
   Future<void> syncGameBeforeLaunch(String systemId, String gameId, {Function(String)? onProgress, Function(String)? onError}) async {
-    onProgress?.call('Checking cloud saves for $gameId...');
-    final basePath = await getSystemBasePath(systemId, gameId: gameId);
-    if (basePath == null) return;
-    final allSystems = await _pathService.getEmulatorRepository().loadSystems();
-    final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
-    final filter = getFilterForGame(systemId, gameId);
-    final cloudId = (systemId.toLowerCase() == 'switch') ? 'switch' : systemId;
-    await _repository.syncSystem(cloudId, basePath, ignoredFolders: systemConfig?.system.ignoredFolders, onProgress: onProgress, onError: onError, filenameFilter: filter);
+    final path = await _pathService.getEffectivePath(systemId);
+    await _repository.syncSystem(systemId, path, filenameFilter: gameId, onProgress: onProgress, onError: onError);
   }
 
-  /// Registers a one-off background task to upload saves after an emulator is closed.
   Future<void> syncGameAfterClose(String systemId, String gameId) async {
-    if (Platform.isAndroid || Platform.isIOS) {
-      await Workmanager().registerOneOffTask(
-        "upload-${DateTime.now().millisecondsSinceEpoch}", 
-        "uploadTask",
-        inputData: {'systemId': systemId, 'gameId': gameId},
-        constraints: Constraints(networkType: NetworkType.connected),
-      );
+    final path = await _pathService.getEffectivePath(systemId);
+    await _repository.syncSystem(systemId, path, filenameFilter: gameId);
+    await triggerQueueProcessing();
+  }
+
+  Future<List<Map<String, dynamic>>> getConflicts() async {
+    return await _repository.getAllRemoteConflicts();
+  }
+
+  Future<List<String>> _resolveEffectivePaths(String systemId) async {
+    if (systemId == 'RetroArch') {
+      final paths = await _pathService.getRetroArchPaths();
+      return [paths['saves']!, paths['states']!];
     }
+    return [await _pathService.getEffectivePath(systemId)];
   }
 
-  /// Returns a filename filter for a specific game, used to narrow down sync scope.
-  String? getFilterForGame(String systemId, String gameId) {
-    if ({'ps2', 'dc', 'dreamcast', 'ngc', 'gc', 'dolphin'}.contains(systemId.toLowerCase())) return null;
-    return gameId.contains('.') ? gameId.substring(0, gameId.lastIndexOf('.')) : gameId;
-  }
-
-  /// Maps a local system ID to its cloud directory name.
-  String getCloudId(String systemId, {String? gameId}) {
-    final sid = systemId.toLowerCase();
-    if (sid == 'switch' || sid == 'eden') return 'switch';
-    if (sid == '3ds' || sid == 'azahar' || sid == 'citra') return '3ds';
-    if (sid == 'gc' || sid == 'wii' || sid == 'dolphin') return 'dolphin';
-    return systemId;
-  }
-
-  /// Returns the base directory where saves for [systemId] are located.
-  Future<String?> getSystemBasePath(String systemId, {String? gameId}) async {
-    if (systemId.toLowerCase() == 'switch' && gameId != null) {
-      return await _pathService.getSwitchSavePathForGame(systemId, gameId);
-    }
-    final effectivePaths = await _resolveEffectivePaths(systemId);
-    return effectivePaths.isNotEmpty ? effectivePaths.first : null;
-  }
-
-  /// Fetches all active sync conflicts from the repository.
-  Future<List<Map<String, dynamic>>> getConflicts() async => await _repository.getAllRemoteConflicts();
-
-  /// Resolves a sync conflict by either keeping the local version or downloading the remote one.
-  Future<void> resolveConflict(Map<String, dynamic> conflict, bool keepLocal) async {
-    final String conflictPath = conflict['path'];
+  Future<void> resolveConflict(String conflictPath, bool keepLocal) async {
     final info = await _parseConflictInfo(conflictPath);
-    
-    if (info == null) { 
-      await _repository.deleteRemoteFile(conflictPath); 
-      return; 
-    }
+    if (info == null) return;
 
     final localRoot = info.localRoot;
     final localRelPath = info.localRelPath;
@@ -302,7 +218,12 @@ class SyncService {
          }
       }
     } else { 
-      await _repository.downloadFile(originalPath, localRoot, localRelPath, systemId: systemId, prefs: prefs); 
+      final List<Map<String, dynamic>> versions = await _repository.getFileVersions(originalPath);
+      int size = 0;
+      if (versions.isNotEmpty) {
+        size = versions.first['size'] ?? 0;
+      }
+      await _repository.downloadFile(originalPath, localRoot, localRelPath, systemId: systemId, prefs: prefs, fileSize: size); 
     }
     await _repository.deleteRemoteFile(conflictPath);
   }
@@ -352,8 +273,6 @@ class SyncService {
   }
 }
 
-/// Parsed representation of a sync conflict path.
-/// Holds the resolved system, roots, and canonical path for use in conflict resolution.
 class _ConflictInfo {
   final String systemId;
   final String localRoot;

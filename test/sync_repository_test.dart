@@ -7,12 +7,14 @@ import 'package:vaultsync_client/features/sync/data/file_cache.dart';
 import 'package:vaultsync_client/core/services/api_client.dart';
 import 'package:vaultsync_client/features/sync/services/sync_network_service.dart';
 import 'package:vaultsync_client/features/sync/services/sync_path_resolver.dart';
+import 'package:vaultsync_client/features/sync/data/sync_state_database.dart';
 
 class MockApiClient extends Mock implements ApiClient {}
 class MockSystemPathService extends Mock implements SystemPathService {}
 class MockFileCache extends Mock implements FileCache {}
 class MockSyncNetworkService extends Mock implements SyncNetworkService {}
 class MockSyncPathResolver extends Mock implements SyncPathResolver {}
+class MockSyncStateDatabase extends Mock implements SyncStateDatabase {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +25,7 @@ void main() {
   late MockFileCache mockFileCache;
   late MockSyncNetworkService mockNetworkService;
   late MockSyncPathResolver mockPathResolver;
+  late MockSyncStateDatabase mockSyncStateDb;
 
   setUp(() {
     mockApiClient = MockApiClient();
@@ -30,7 +33,8 @@ void main() {
     mockFileCache = MockFileCache();
     mockNetworkService = MockSyncNetworkService();
     mockPathResolver = MockSyncPathResolver();
-    repository = SyncRepository(mockApiClient, mockPathService, mockFileCache, mockNetworkService, mockPathResolver);
+    mockSyncStateDb = MockSyncStateDatabase();
+    repository = SyncRepository(mockApiClient, mockPathService, mockFileCache, mockNetworkService, mockPathResolver, mockSyncStateDb);
   });
 
   group('SyncRepository Error Handling', () {

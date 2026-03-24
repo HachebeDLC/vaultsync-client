@@ -10,6 +10,15 @@ class SyncNetworkService {
 
   SyncNetworkService(this._apiClient);
 
+  Future<List<String>> getBlockHashes(String path, String? masterKey) async {
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      return await DartNativeCrypto.calculateBlockHashes(path, masterKey: masterKey);
+    } else {
+      final String jsonResult = await _platform.invokeMethod('calculateBlockHashes', {'path': path, 'masterKey': masterKey});
+      return List<String>.from(json.decode(jsonResult));
+    }
+  }
+
   Future<void> uploadFile(
     String path, 
     String remotePath, {
@@ -18,6 +27,7 @@ class SyncNetworkService {
     required String deviceName,
     required Function(String, String, String) onRecordSuccess,
     String? plainHash, 
+    List<String>? localBlockHashes,
     bool force = false,
   }) async {
     final Map? info = (Platform.isLinux || Platform.isWindows || Platform.isMacOS) 
@@ -40,12 +50,10 @@ class SyncNetworkService {
 
     List<int>? dirtyIndices;
     if (size > 1024 * 1024) {
-      final String blockHashesJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
-          ? await DartNativeCrypto.calculateBlockHashes(path, masterKey: masterKey)
-          : await _platform.invokeMethod('calculateBlockHashes', {'path': path, 'masterKey': masterKey});
+      final List<String> hashes = localBlockHashes ?? await getBlockHashes(path, masterKey);
 
       try {
-        final checkResult = await _apiClient.post('/api/v1/blocks/check', body: {'path': remotePath, 'blocks': json.decode(blockHashesJson)});
+        final checkResult = await _apiClient.post('/api/v1/blocks/check', body: {'path': remotePath, 'blocks': hashes});
         final List missing = checkResult['missing'] ?? [];
         if (missing.isEmpty && !force) { 
           onRecordSuccess(systemId, relPath, hash); 
@@ -95,11 +103,7 @@ class SyncNetworkService {
     
     if (localUri != null && serverBlocks != null) {
        try {
-       final String localBlocksJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
-           ? await DartNativeCrypto.calculateBlockHashes(localUri, masterKey: masterKey)
-           : await _platform.invokeMethod('calculateBlockHashes', {'path': localUri, 'masterKey': masterKey});
-
-       final List localHashes = json.decode(localBlocksJson);
+       final List<String> localHashes = await getBlockHashes(localUri, masterKey);
        final List remoteHashes = serverBlocks is String ? json.decode(serverBlocks) : serverBlocks;
        final dirty = <int>[];
        for (int i = 0; i < remoteHashes.length; i++) { if (i >= localHashes.length || localHashes[i] != remoteHashes[i]) { dirty.add(i); } }

@@ -69,11 +69,12 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     private fun bindShizukuService() {
-        if (shizukuService != null || isBinding || context == null) return
+        val ctx = context ?: return
+        if (shizukuService != null || isBinding) return
         try {
             if (Shizuku.pingBinder()) {
                 if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-                    val userServiceArgs = Shizuku.UserServiceArgs(ComponentName(context?.packageName ?: "", ShizukuService::class.java.name))
+                    val userServiceArgs = Shizuku.UserServiceArgs(ComponentName(ctx.packageName, ShizukuService::class.java.name))
                         .daemon(false).processNameSuffix("shizuku").debuggable(true).version(4)
                     isBinding = true
                     Shizuku.bindUserService(userServiceArgs, shizukuConnection)
@@ -89,7 +90,11 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         val current = shizukuService
         if (current != null) return current
         if (!isBinding) bindShizukuService()
-        return shizukuServiceFuture.get(3, java.util.concurrent.TimeUnit.SECONDS) ?: throw Exception("Shizuku connection timeout.")
+        return try {
+            shizukuServiceFuture.get(3, java.util.concurrent.TimeUnit.SECONDS) ?: throw Exception("Shizuku connection null")
+        } catch (e: Exception) {
+            throw Exception("Shizuku connection timeout: ${e.message}")
+        }
     }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -127,6 +132,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        val ctx = context ?: return result.error("NO_CONTEXT", "Context is null", null)
         android.util.Log.d("VaultSync", "📲 METHOD CALL: ${call.method}")
         when (call.method) {
             "getAndroidVersion" -> result.success(Build.VERSION.SDK_INT)
@@ -139,18 +145,15 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 result.success(true)
             }
             "openSafDirectoryPicker" -> {
-                if (activity == null) {
-                    result.error("NO_ACTIVITY", "Activity is not available", null)
-                    return
-                }
+                val act = activity ?: return result.error("NO_ACTIVITY", "Activity is not available", null)
                 pendingResult = result
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                activity?.startActivityForResult(intent, PICK_DIRECTORY_REQUEST_CODE)
+                act.startActivityForResult(intent, PICK_DIRECTORY_REQUEST_CODE)
             }
             "checkSafPermission" -> {
-                val uriStr = call.argument<String>("uri") ?: throw IllegalArgumentException("uri is missing")
+                val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
                 val uri = Uri.parse(uriStr)
-                val hasPerm = context?.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission && it.isWritePermission }
+                val hasPerm = ctx.contentResolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission && it.isWritePermission }
                 result.success(hasPerm)
             }
             "hasUsageStatsPermission" -> {
@@ -159,7 +162,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             "openUsageStatsSettings" -> {
                 val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                context?.startActivity(intent)
+                ctx.startActivity(intent)
                 result.success(true)
             }
             "getRecentlyClosedEmulator" -> {
@@ -180,23 +183,23 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 }
             }
             "openShizukuApp" -> {
-                val intent = context?.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                val intent = ctx.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
                 if (intent != null) {
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context?.startActivity(intent)
+                    ctx.startActivity(intent)
                     result.success(true)
                 } else {
                     result.error("SHIZUKU_NOT_FOUND", "Shizuku manager app not installed", null)
                 }
             }
             "checkPathExists" -> {
-                val uriStr = call.argument<String>("uri") ?: throw IllegalArgumentException("uri is missing")
+                val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
                 executor.execute {
                     try {
                         val exists = when {
                             uriStr.startsWith("shizuku://") -> getShizukuServiceSync().getFileSize(getCleanPath(uriStr)) != -1L
                             uriStr.startsWith("content://") -> {
-                                val df = DocumentFile.fromSingleUri(context?, Uri.parse(uriStr))
+                                val df = DocumentFile.fromSingleUri(ctx, Uri.parse(uriStr))
                                 df?.exists() == true
                             }
                             else -> File(uriStr).exists()
@@ -208,12 +211,13 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 }
             }
             "hasFilesWithExtensions" -> {
-                val uriStr = call.argument<String>("uri") ?: throw IllegalArgumentException("uri is missing")
+                val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
                 val extensions = call.argument<List<String>>("extensions") ?: emptyList()
                 executor.execute {
                     try {
                         val uri = Uri.parse(uriStr)
-                        val hasExt = fileScanner.checkSafExtensionsRecursive(uri, DocumentsContract.getDocumentId(uri), extensions, 0)
+                        val docId = DocumentsContract.getDocumentId(uri)
+                        val hasExt = fileScanner.checkSafExtensionsRecursive(uri, docId, extensions, 0)
                         mainHandler.post { result.success(hasExt) }
                     } catch (e: Exception) {
                         mainHandler.post { result.success(false) }
@@ -233,7 +237,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             }
             "startMonitoring" -> {
                 val packages = call.argument<List<String>>("packages") ?: emptyList()
-                val interval = call.argument<Number>("interval")?.toLong() ?: 15000L
+                val interval = (call.argument<Any>("interval") as? Number)?.toLong() ?: 15000L
                 automationEngine.startMonitoring(packages, interval)
                 result.success(true)
             }
@@ -242,7 +246,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 result.success(true)
             }
             "getSwitchSaveRoot" -> {
-                val uriStr = call.argument<String>("uri") ?: throw IllegalArgumentException("uri is missing")
+                val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
                 val root = fileScanner.findSwitchSaveRoot(Uri.parse(uriStr))
                 result.success(root.toString())
             }
@@ -251,7 +255,8 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     private fun handleCalculateHash(call: MethodCall, result: MethodChannel.Result) {
-        val path = call.argument<String>("path") ?: throw IllegalArgumentException("path is missing")
+        val path = call.argument<String>("path") ?: return result.error("ARG_MISSING", "path missing", null)
+        val ctx = context ?: return result.error("NO_CONTEXT", "Context is null", null)
         executor.execute {
             try {
                 val input = when {
@@ -260,7 +265,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                             FileInputStream(it.fileDescriptor)
                         }
                     }
-                    path.startsWith("content://") -> context?.contentResolver.openInputStream(Uri.parse(path))
+                    path.startsWith("content://") -> ctx.contentResolver.openInputStream(Uri.parse(path))
                     else -> File(path).inputStream()
                 }
                 
@@ -281,8 +286,8 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     private fun handleScanRecursive(call: MethodCall, result: MethodChannel.Result) {
-        val path           = call.argument<String>("path")!!
-        val systemId       = call.argument<String>("systemId")!!
+        val path           = call.argument<String>("path") ?: return result.error("ARG_MISSING", "path missing", null)
+        val systemId       = call.argument<String>("systemId") ?: return result.error("ARG_MISSING", "systemId missing", null)
         val ignoredFolders = call.argument<List<String>>("ignoredFolders") ?: emptyList()
 
         executor.execute {
@@ -323,8 +328,9 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     private fun getCleanPath(path: String): String = path.replace("shizuku://", "")
 
     private fun handleCalculateBlockHashes(call: MethodCall, result: MethodChannel.Result) {
-        val path = call.argument<String>("path") ?: throw IllegalArgumentException("path is missing")
+        val path = call.argument<String>("path") ?: return result.error("ARG_MISSING", "path missing", null)
         val masterKey = call.argument<String>("masterKey")
+        val ctx = context ?: return result.error("NO_CONTEXT", "Context is null", null)
         executor.execute {
             try {
                 var fileSize = 0L
@@ -337,10 +343,10 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                     }
                     path.startsWith("content://") -> {
                         val uri = Uri.parse(path)
-                        DocumentFile.fromSingleUri(context?, uri)?.let { df ->
+                        DocumentFile.fromSingleUri(ctx, uri)?.let { df ->
                             fileSize = df.length()
                         }
-                        context?.contentResolver.openInputStream(uri)
+                        ctx.contentResolver.openInputStream(uri)
                     }
                     else -> {
                         val f = File(path)
@@ -382,7 +388,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     private fun handleSetFileTimestamp(call: MethodCall, result: MethodChannel.Result) {
-        val path = call.argument<String>("path") ?: throw IllegalArgumentException("path is missing")
+        val path = call.argument<String>("path") ?: return result.error("ARG_MISSING", "path missing", null)
         val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong() ?: 0L
         executor.execute {
             val success = setFileTimestampInternal(path, updatedAt)
@@ -407,7 +413,8 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     private fun handleGetFileInfo(call: MethodCall, result: MethodChannel.Result) {
-        val uriStr = call.argument<String>("uri") ?: throw IllegalArgumentException("uri is missing")
+        val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
+        val ctx = context ?: return result.error("NO_CONTEXT", "Context is null", null)
         executor.execute {
             try {
                 if (isShizukuPath(uriStr)) {
@@ -420,7 +427,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                         mainHandler.post { result.error("NOT_FOUND", "File not found via Shizuku", null) }
                     }
                 } else if (uriStr.startsWith("content://")) {
-                    val df = DocumentFile.fromSingleUri(context?, Uri.parse(uriStr))
+                    val df = DocumentFile.fromSingleUri(ctx, Uri.parse(uriStr))
                     if (df != null && df.exists()) {
                         mainHandler.post { result.success(mapOf("size" to df.length(), "lastModified" to df.lastModified())) }
                     } else {
@@ -455,11 +462,12 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     override fun onDetachedFromActivity() { activity = null }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
+        val ctx = context ?: return false
         if (requestCode == PICK_DIRECTORY_REQUEST_CODE) {
             if (resultCode == Activity.RESULT_OK && data != null) {
                 val uri = data.data
                 if (uri != null) {
-                    context?.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                     pendingResult?.success(uri.toString())
                 } else {
                     pendingResult?.error("PICK_FAILED", "No URI returned", null)

@@ -1,3 +1,7 @@
+import 'dart:io';
+import '../data/sync_state_database.dart';
+import '../services/sync_network_service.dart';
+import '../services/sync_path_resolver.dart';
 import 'package:workmanager/workmanager.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/notification_service.dart';
@@ -23,7 +27,10 @@ void callbackDispatcher() {
     
     final emulatorRepository = EmulatorRepository();
     final pathService = SystemPathService(emulatorRepository);
-    final syncRepository = SyncRepository(apiClient, pathService, fileCache);
+    final syncNetworkService = SyncNetworkService(apiClient);
+    final syncPathResolver = SyncPathResolver();
+    final syncStateDb = SyncStateDatabase();
+    final syncRepository = SyncRepository(apiClient, pathService, fileCache, syncNetworkService, syncPathResolver, syncStateDb);
     final syncService = SyncService(syncRepository, pathService);
 
     try {
@@ -49,6 +56,15 @@ void callbackDispatcher() {
                 print("Background Upload: $msg");
              }, filenameFilter: filter);
           }
+        }
+      } else if (task == "processQueue") {
+        print("Background: Processing sync job queue...");
+        final jobs = await syncStateDb.getPendingJobs();
+        for (final job in jobs) {
+           final systemId = job['system_id'];
+           final effectivePath = await pathService.getEffectivePath(systemId);
+           // Re-use logic from SyncRepository._processJobQueue but for a single job or all of them
+           await syncRepository.syncSystem(systemId, effectivePath); // This will trigger _processJobQueue
         }
       } else if (task == "periodicSync") {
         // Periodic background check: use fastSync to save battery

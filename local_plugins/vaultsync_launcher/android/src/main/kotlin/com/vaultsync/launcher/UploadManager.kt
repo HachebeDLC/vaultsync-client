@@ -20,12 +20,12 @@ class UploadManager(
     private val getShizukuServiceSync: () -> IShizukuService
 ) {
     fun handleUploadFile(call: MethodCall, result: MethodChannel.Result) {
-        val url = call.argument<String>("url") ?: throw IllegalArgumentException("url is missing")
+        val url = call.argument<String>("url") ?: return result.error("ARG_MISSING", "url is missing", null)
         val token = call.argument<String>("token")
         val masterKey = call.argument<String>("masterKey")
-        val remotePath = call.argument<String>("remotePath") ?: throw IllegalArgumentException("remotePath is missing")
-        val uriStr = call.argument<String>("uri") ?: throw IllegalArgumentException("uri is missing")
-        val hash = call.argument<String>("hash") ?: throw IllegalArgumentException("hash is missing")
+        val remotePath = call.argument<String>("remotePath") ?: return result.error("ARG_MISSING", "remotePath is missing", null)
+        val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri is missing", null)
+        val hash = call.argument<String>("hash") ?: return result.error("ARG_MISSING", "hash is missing", null)
         val deviceName = call.argument<String>("deviceName") ?: "Android"
         val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong() ?: 0L
         val dirtyIndices = call.argument<List<Int>>("dirtyIndices")
@@ -41,27 +41,37 @@ class UploadManager(
                 val openResult = when {
                     isShizukuPath(uriStr) -> {
                         getShizukuServiceSync().openFile(getCleanPath(uriStr), "r")?.let { pfd ->
-                            pfd.use { FileInputStream(it.fileDescriptor).use { fis -> fis.channel.use { channel -> 
-                                fileSize = channel.size()
-                                processUploadBlocks(channel, fileSize, dirtyIndices, secretKey, url, token, remotePath)
-                            }}}
+                            pfd.use { descriptor -> 
+                                FileInputStream(descriptor.fileDescriptor).use { fis -> 
+                                    fis.channel.use { channel -> 
+                                        fileSize = channel.size()
+                                        processUploadBlocks(channel, fileSize, dirtyIndices, secretKey, url, token, remotePath)
+                                    }
+                                }
+                            }
                             true
                         } ?: false
                     }
                     uriStr.startsWith("content://") -> {
                         context.contentResolver.openFileDescriptor(android.net.Uri.parse(uriStr), "r")?.let { pfd ->
-                            pfd.use { FileInputStream(it.fileDescriptor).use { fis -> fis.channel.use { channel -> 
-                                fileSize = channel.size()
-                                processUploadBlocks(channel, fileSize, dirtyIndices, secretKey, url, token, remotePath)
-                            }}}
+                            pfd.use { descriptor -> 
+                                FileInputStream(descriptor.fileDescriptor).use { fis -> 
+                                    fis.channel.use { channel -> 
+                                        fileSize = channel.size()
+                                        processUploadBlocks(channel, fileSize, dirtyIndices, secretKey, url, token, remotePath)
+                                    }
+                                }
+                            }
                             true
                         } ?: false
                     }
                     else -> {
-                        java.io.RandomAccessFile(File(uriStr), "r").use { raf -> raf.channel.use { channel -> 
-                            fileSize = channel.size()
-                            processUploadBlocks(channel, fileSize, dirtyIndices, secretKey, url, token, remotePath)
-                        }}
+                        java.io.RandomAccessFile(File(uriStr), "r").use { raf -> 
+                            raf.channel.use { channel -> 
+                                fileSize = channel.size()
+                                processUploadBlocks(channel, fileSize, dirtyIndices, secretKey, url, token, remotePath)
+                            }
+                        }
                         true
                     }
                 }

@@ -43,9 +43,9 @@ class DartNativeCrypto {
     return secondHash.toString();
   }
 
-  /// Computes a JSON list of SHA-256 hashes for every 1MB block of the file.
+  /// Computes a list of SHA-256 hashes for every 1MB block of the file.
   /// If `masterKey` is provided, hashes are computed over the encrypted blocks.
-  static Future<String> calculateBlockHashes(String path, {String? masterKey}) async {
+  static Future<List<String>> calculateBlockHashes(String path, {String? masterKey}) async {
     final file = File(path);
     final raf = await file.open(mode: FileMode.read);
     final length = await raf.length();
@@ -84,7 +84,7 @@ class DartNativeCrypto {
       offset += buffer.length;
     }
     await raf.close();
-    return json.encode(hashes);
+    return hashes;
   }
 
   /// Orchestrates a high-speed multi-threaded block upload of a file to the server.

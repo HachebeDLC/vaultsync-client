@@ -69,7 +69,7 @@ class _VersionHistoryScreenState extends ConsumerState<VersionHistoryScreen> {
           widget.remotePath,
           versionId,
           widget.localBasePath,
-          widget.localRelPath,
+          widget.relPath,
           fileSize,
         );
         if (mounted) {
