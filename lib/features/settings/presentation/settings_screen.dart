@@ -43,7 +43,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (Platform.isAndroid) {
       try {
         usage = await _platform.invokeMethod<bool>('hasUsageStatsPermission') ?? false;
-      } catch (_) {}
+      } catch (e) { print('⚠️ Settings: checkShizukuStatus failed: $e'); }
     }
 
     if (mounted) {

@@ -69,7 +69,7 @@ class SyncService {
       }
 
       Map? shizukuStatus;
-      try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (_) {}
+      try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (e) { print('⚠️ SyncService: checkShizukuStatus failed: $e'); }
       final bool shizukuRunning = shizukuStatus?['running'] == true;
       final bool shizukuAuthorized = shizukuStatus?['authorized'] == true;
 
@@ -135,7 +135,7 @@ class SyncService {
     if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
     try {
       Map? shizukuStatus;
-      try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (_) {}
+      try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (e) { print('⚠️ SyncService: checkShizukuStatus failed: $e'); }
       final bool shizukuRunning = shizukuStatus?['running'] == true;
       final bool shizukuAuthorized = shizukuStatus?['authorized'] == true;
 

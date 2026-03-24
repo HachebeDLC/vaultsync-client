@@ -272,7 +272,8 @@ class FileScanner(private val context: Context) {
                     val docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
                     
                     // Add to index for O(1) subsequent lookups
-                    currentLevelMap[name] = if (isDir) DocumentFile.fromTreeUri(context, docUri)!! else DocumentFile.fromSingleUri(context, docUri)!!
+                    val df = if (isDir) DocumentFile.fromTreeUri(context, docUri) else DocumentFile.fromSingleUri(context, docUri)
+                    if (df != null) currentLevelMap[name] = df
 
                     if (isDir) {
                         android.util.Log.v("VaultSync", "  [DIR] $relPath")

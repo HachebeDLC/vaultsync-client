@@ -90,7 +90,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       _log('🛡️ Checking Shizuku...');
       Map? shizuku;
       if (Platform.isAndroid) {
-        try { shizuku = await _platform.invokeMethod<Map>('checkShizukuStatus'); } catch (_) {}
+        try { shizuku = await _platform.invokeMethod<Map>('checkShizukuStatus'); } catch (e) { print('⚠️ Diagnostics: checkShizukuStatus failed: $e'); }
       }
       
       if (shizuku != null) {
