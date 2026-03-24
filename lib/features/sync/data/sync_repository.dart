@@ -1,4 +1,3 @@
-import "package:meta/meta.dart";
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,10 +7,13 @@ import 'package:mutex/mutex.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:crypto/crypto.dart';
+import 'package:meta/meta.dart';
 import 'file_cache.dart';
 import 'dart_file_scanner.dart';
 import 'dart_native_crypto.dart';
 import 'sync_state_database.dart';
+import '../domain/notification_models.dart';
+import '../domain/notification_provider.dart';
 import '../services/sync_network_service.dart';
 import '../services/sync_path_resolver.dart';
 import '../services/system_path_service.dart';
@@ -32,7 +34,7 @@ final syncRepositoryProvider = Provider<SyncRepository>((ref) {
   final networkService = ref.watch(syncNetworkServiceProvider);
   final pathResolver = ref.watch(syncPathResolverProvider);
   final syncStateDb = ref.watch(syncStateDatabaseProvider);
-  return SyncRepository(apiClient, pathService, FileCache(), networkService, pathResolver, syncStateDb);
+  return SyncRepository(apiClient, pathService, FileCache(), networkService, pathResolver, syncStateDb, ref);
 });
 
 /// Repository responsible for orchestrating the synchronization of emulator save data
@@ -44,13 +46,14 @@ class SyncRepository {
   final SyncNetworkService _networkService;
   final SyncPathResolver _pathResolver;
   final SyncStateDatabase _syncStateDb;
+  final Ref? _ref;
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
   final _syncLock = Mutex();
 
   String? _cachedDeviceName;
   List<dynamic> _lastScanList = [];
 
-  SyncRepository(this._apiClient, this._pathService, this._fileCache, this._networkService, this._pathResolver, this._syncStateDb);
+  SyncRepository(this._apiClient, this._pathService, this._fileCache, this._networkService, this._pathResolver, this._syncStateDb, [this._ref]);
 
   Future<String> _getDeviceName() async => getDeviceNameInternal();
 
@@ -263,7 +266,12 @@ class SyncRepository {
         }
         await _processJobQueue(systemId, effectivePath, onProgress);
         await _commitSyncJournal(prefs);
-      } catch (e) { print('❌ SYNC ERROR: $e'); onError?.call(e.toString()); rethrow; } 
+      } catch (e) { 
+        print('❌ SYNC ERROR: $e'); 
+        _ref?.read(notificationLogProvider.notifier).addError(e, systemId: systemId);
+        onError?.call(e.toString()); 
+        rethrow; 
+      } 
     });
   }
 
@@ -288,7 +296,11 @@ class SyncRepository {
            await downloadFile(remotePath!, effectivePath, relPath!, systemId: systemId, prefs: prefs, fileSize: job['size'], remoteHash: job['hash'], localUri: path);
         }
         await _syncStateDb.updateStatus(path, 'synced');
-      } catch (e) { print('⚠️ Job failed for $path: $e'); await _syncStateDb.updateStatus(path, 'failed', error: e.toString()); }
+      } catch (e) { 
+        print('⚠️ Job failed for $path: $e'); 
+        _ref?.read(notificationLogProvider.notifier).addError(e, systemId: systemId);
+        await _syncStateDb.updateStatus(path, 'failed', error: e.toString()); 
+      }
     }
   }
 
@@ -374,13 +386,11 @@ class SyncRepository {
     final int size = data['size'];
     final int updatedAt = data['updated_at'];
 
-    // 1. Ignore if we are the origin
     if (originDevice == await getDeviceNameInternal()) {
       print('ℹ️ SSE: Ignoring event from self ($originDevice)');
       return;
     }
 
-    // 2. Check if we have this system configured
     final paths = await _pathService.getAllSystemPaths();
     if (!paths.containsKey(systemId)) {
       print('ℹ️ SSE: Ignoring event for unconfigured system $systemId');
@@ -389,13 +399,10 @@ class SyncRepository {
 
     print('🚀 SSE: Remote update detected for $path. Queueing download...');
     
-    // 3. Resolve local path (using the logic from sync loop)
-    // We don't have localFiles map here, but getLocalRelPath handles it if empty
     final destRelPath = _pathResolver.getLocalRelPath(systemId, path.split('/').skip(1).join('/'), {}, []);
     final effectivePath = await _pathService.getEffectivePath(systemId);
     final destUri = p.join(effectivePath, destRelPath);
 
-    // 4. Upsert as pending_download
     await _syncStateDb.upsertState(
       destUri, 
       size, 
@@ -407,7 +414,11 @@ class SyncRepository {
       relPath: destRelPath
     );
     
-    // 5. Notify listeners (we might need a provider for this later)
+    _ref?.read(notificationLogProvider.notifier).addNotification(
+      title: 'Remote Update',
+      message: 'New save available for ${systemId.toUpperCase()}: ${path.split("/").last}',
+      type: NotificationType.info,
+      systemId: systemId,
+    );
   }
-
 }

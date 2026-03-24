@@ -6,6 +6,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../data/sync_repository.dart';
 import '../domain/sync_log_provider.dart';
+import '../domain/notification_provider.dart';
 import 'system_path_service.dart';
 import '../../../core/errors/error_mapper.dart';
 
@@ -69,7 +70,11 @@ class SyncService {
       }
 
       Map? shizukuStatus;
-      try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (e) { print('⚠️ SyncService: checkShizukuStatus failed: $e'); }
+      try { 
+        shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); 
+      } catch (e) { 
+        print('⚠️ SyncService: checkShizukuStatus failed: $e'); 
+      }
       final bool shizukuRunning = shizukuStatus?['running'] == true;
       final bool shizukuAuthorized = shizukuStatus?['authorized'] == true;
 
@@ -121,6 +126,7 @@ class SyncService {
       await triggerQueueProcessing();
       onProgress?.call('Sync Complete!');
     } catch(e) {
+      _ref?.read(notificationLogProvider.notifier).addError(e, systemId: 'All');
       final userError = ErrorMapper.map(e);
       _ref?.read(syncLogProvider.notifier).addLog('All', userError.message, isError: true, errorTitle: userError.title);
       onError?.call(userError.toString());
@@ -135,7 +141,11 @@ class SyncService {
     if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
     try {
       Map? shizukuStatus;
-      try { shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); } catch (e) { print('⚠️ SyncService: checkShizukuStatus failed: $e'); }
+      try { 
+        shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); 
+      } catch (e) { 
+        print('⚠️ SyncService: checkShizukuStatus failed: $e'); 
+      }
       final bool shizukuRunning = shizukuStatus?['running'] == true;
       final bool shizukuAuthorized = shizukuStatus?['authorized'] == true;
 
@@ -162,6 +172,7 @@ class SyncService {
       await triggerQueueProcessing();
       _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Success');
     } catch(e) {
+      _ref?.read(notificationLogProvider.notifier).addError(e, systemId: systemId);
       final userError = ErrorMapper.map(e);
       _ref?.read(syncLogProvider.notifier).addLog(systemId, userError.message, isError: true, errorTitle: userError.title);
       onError?.call(userError.toString());
@@ -195,37 +206,42 @@ class SyncService {
   }
 
   Future<void> resolveConflict(String conflictPath, bool keepLocal) async {
-    final info = await _parseConflictInfo(conflictPath);
-    if (info == null) return;
+    try {
+      final info = await _parseConflictInfo(conflictPath);
+      if (info == null) return;
 
-    final localRoot = info.localRoot;
-    final localRelPath = info.localRelPath;
-    final systemId = info.systemId;
-    final originalPath = info.originalPath;
+      final localRoot = info.localRoot;
+      final localRelPath = info.localRelPath;
+      final systemId = info.systemId;
+      final originalPath = info.originalPath;
 
-    final prefs = await SharedPreferences.getInstance();
+      final prefs = await SharedPreferences.getInstance();
 
-    if (keepLocal) {
-      if (localRoot.startsWith('content://')) {
-         final files = await _repository.scanLocalFiles(localRoot, systemId);
-         if (files.containsKey(localRelPath)) {
-           await _repository.uploadFile(files[localRelPath]!['uri'], originalPath, systemId: systemId, relPath: localRelPath, force: true, prefs: prefs);
-         }
-      } else {
-         final file = File('$localRoot/$localRelPath');
-         if (await file.exists()) {
-           await _repository.uploadFile(file, originalPath, systemId: systemId, relPath: localRelPath, force: true, prefs: prefs);
-         }
+      if (keepLocal) {
+        if (localRoot.startsWith('content://')) {
+           final files = await _repository.scanLocalFiles(localRoot, systemId);
+           if (files.containsKey(localRelPath)) {
+             await _repository.uploadFile(files[localRelPath]!['uri'], originalPath, systemId: systemId, relPath: localRelPath, force: true, prefs: prefs);
+           }
+        } else {
+           final file = File('$localRoot/$localRelPath');
+           if (await file.exists()) {
+             await _repository.uploadFile(file, originalPath, systemId: systemId, relPath: localRelPath, force: true, prefs: prefs);
+           }
+        }
+      } else { 
+        final List<Map<String, dynamic>> versions = await _repository.getFileVersions(originalPath);
+        int size = 0;
+        if (versions.isNotEmpty) {
+          size = versions.first['size'] ?? 0;
+        }
+        await _repository.downloadFile(originalPath, localRoot, localRelPath, systemId: systemId, prefs: prefs, fileSize: size); 
       }
-    } else { 
-      final List<Map<String, dynamic>> versions = await _repository.getFileVersions(originalPath);
-      int size = 0;
-      if (versions.isNotEmpty) {
-        size = versions.first['size'] ?? 0;
-      }
-      await _repository.downloadFile(originalPath, localRoot, localRelPath, systemId: systemId, prefs: prefs, fileSize: size); 
+      await _repository.deleteRemoteFile(conflictPath);
+    } catch (e) {
+      _ref?.read(notificationLogProvider.notifier).addError(e, systemId: 'Conflict');
+      rethrow;
     }
-    await _repository.deleteRemoteFile(conflictPath);
   }
 
   Future<_ConflictInfo?> _parseConflictInfo(String conflictPath) async {

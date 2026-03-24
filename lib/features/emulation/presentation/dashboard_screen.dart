@@ -8,6 +8,8 @@ import '../../sync/domain/sync_provider.dart';
 import '../../sync/services/system_path_service.dart';
 import '../../sync/services/shizuku_service.dart';
 import '../../../core/errors/error_mapper.dart';
+import '../../sync/domain/notification_provider.dart';
+import '../../sync/presentation/notification_center_sheet.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -17,6 +19,16 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  void _showNotificationCenter() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const NotificationCenterSheet(),
+    );
+    ref.read(notificationLogProvider.notifier).markAllAsRead();
+  }
+
   ShizukuStatus? _shizukuStatus;
   bool _shizukuEnabled = false;
   int _androidVersion = 0;
@@ -169,6 +181,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         scrolledUnderElevation: 0,
         actions: [
           IconButton(icon: const Icon(Icons.search), tooltip: 'Scan Library', onPressed: () => context.push('/library-setup')),
+          Consumer(
+            builder: (context, ref, _) {
+              final unreadCount = ref.watch(notificationLogProvider.notifier).unreadActionableCount;
+              return Badge(
+                isLabelVisible: unreadCount > 0,
+                label: Text(unreadCount.toString()),
+                child: IconButton(
+                  icon: const Icon(Icons.notifications_outlined),
+                  onPressed: _showNotificationCenter,
+                  tooltip: 'Notifications',
+                ),
+              );
+            },
+          ),
           IconButton(icon: const Icon(Icons.settings_outlined), tooltip: 'Settings', onPressed: () => context.push('/settings')),
           const SizedBox(width: 8),
         ],
