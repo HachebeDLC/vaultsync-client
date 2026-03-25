@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:pointycastle/export.dart';
@@ -20,6 +21,15 @@ class DartNativeCrypto {
   static int getEncryptedBlockSize(int fileSize) => getBlockSize(fileSize) + overhead;
   
   static final _magicBytes = utf8.encode(magicHeader);
+  static final _random = Random.secure();
+
+  static Uint8List _generateSecureIV() {
+    final bytes = Uint8List(ivSize);
+    for (int i = 0; i < ivSize; i++) {
+      bytes[i] = _random.nextInt(256);
+    }
+    return bytes;
+  }
 
   /// Returns standard file metadata (size and lastModified) for a given local path.
   static Future<Map<String, dynamic>?> getFileInfo(String path) async {
@@ -53,11 +63,9 @@ class DartNativeCrypto {
     final hashes = <String>[];
     
     Uint8List? keyBytes;
-    PaddedBlockCipher? cipher;
     if (masterKey != null) {
       final decoded = base64Url.decode(masterKey);
       keyBytes = Uint8List.fromList(decoded.sublist(0, 32));
-      cipher = PaddedBlockCipher('AES/CBC/PKCS7');
     }
 
     int offset = 0;
@@ -66,9 +74,11 @@ class DartNativeCrypto {
       final buffer = await raf.read(blockSize);
       if (buffer.isEmpty) break;
       
-      if (keyBytes != null && cipher != null) {
-        final iv = md5.convert(buffer).bytes;
-        cipher.init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)), null));
+      if (keyBytes != null) {
+        final iv = _generateSecureIV();
+        final cipher = PaddedBlockCipher('AES/CBC/PKCS7')
+          ..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
+        
         final encryptedBytes = cipher.process(Uint8List.fromList(buffer));
         
         final outBuffer = BytesBuilder();
@@ -129,16 +139,10 @@ class DartNativeCrypto {
             List<int> uploadData;
             
             if (keyBytes != null && blockData.isNotEmpty) {
-              final iv = md5.convert(blockData).bytes;
-              // Note: PaddedBlockCipher is not thread-safe, but since we are in separate 
-              // futures that don't share the instance yet (we hoist it but use new per-future), 
-              // actually for parallel upload we SHOULD keep it per-future if they run concurrently.
-              // However, the plan says hoist from inner loops. 
-              // In this specific concurrent case, we instantiate once per block in the future.
-              // I will optimize by instantiating once per BATCH if possible, but each future
-              // in the batch runs concurrently. 
-              // So I will instantiate once at the start of the future.
-              final cipher = PaddedBlockCipher('AES/CBC/PKCS7')..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), Uint8List.fromList(iv)), null));
+              final iv = _generateSecureIV();
+              final cipher = PaddedBlockCipher('AES/CBC/PKCS7')
+                ..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
+              
               final encryptedBytes = cipher.process(Uint8List.fromList(blockData));
               
               final outBuffer = BytesBuilder();

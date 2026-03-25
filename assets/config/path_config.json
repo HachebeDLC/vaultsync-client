@@ -1,6 +1,7 @@
 {
   "standaloneDefaults": {
     "ps2": "/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards",
+    "ps1": "/storage/emulated/0/Android/data/com.github.stenzek.duckstation/files/memcards",
     "psp": "/storage/emulated/0/PSP/SAVEDATA",
     "ppsspp": "/storage/emulated/0/PSP/SAVEDATA",
     "gc": "/storage/emulated/0/Android/data/org.dolphinemu.dolphinemu/files",
@@ -14,11 +15,14 @@
     "yuzu": "/storage/emulated/0/Android/data/org.yuzu.yuzu_emu/files",
     "nds": "/storage/emulated/0/Android/data/me.magnum.melonds/files",
     "ds": "/storage/emulated/0/Android/data/me.magnum.melonds/files",
-    "melonds": "/storage/emulated/0/Android/data/me.magnum.melonds/files"
+    "melonds": "/storage/emulated/0/Android/data/me.magnum.melonds/files",
+    "gba": "/storage/emulated/0/Android/data/com.mgba.android/files/saves",
+    "flycast": "/storage/emulated/0/Android/data/com.flycast.emulator/files/data"
   },
   "desktopPaths": {
     "windows": {
       "ps2": "Documents\\PCSX2\\memcards",
+      "psp": "Documents\\PPSSPP\\SAVEDATA",
       "ppsspp": "Documents\\PPSSPP\\SAVEDATA",
       "dolphin": "Documents\\Dolphin Emulator",
       "citra": "AppData\\Roaming\\Citra\\sdmc\\Nintendo 3DS",
@@ -27,6 +31,7 @@
     },
     "linux": {
       "ps2": "$home/.config/PCSX2/memcards",
+      "psp": "$home/.config/ppsspp/PSP/SAVEDATA",
       "ppsspp": "$home/.config/ppsspp/PSP/SAVEDATA",
       "dolphin": "$home/.local/share/dolphin-emu",
       "citra": "$home/.local/share/citra-emu/sdmc/Nintendo 3DS",

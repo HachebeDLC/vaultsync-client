@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 class FileCache {
   static Database? _database;
+  static Completer<Database>? _dbCompleter;
 
   Future<void> init() async {
     await database;
@@ -12,8 +14,20 @@ class FileCache {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
+    
+    if (_dbCompleter != null) return _dbCompleter!.future;
+    
+    _dbCompleter = Completer<Database>();
+    try {
+      _database = await _initDatabase();
+      _dbCompleter!.complete(_database!);
+      return _database!;
+    } catch (e) {
+      final completer = _dbCompleter;
+      _dbCompleter = null;
+      completer?.completeError(e);
+      rethrow;
+    }
   }
 
   Future<Database> _initDatabase() async {
@@ -56,15 +70,15 @@ class FileCache {
   Future<void> updateCacheBatch(List<Map<String, dynamic>> entries) async {
     if (entries.isEmpty) return;
     final db = await database;
-    await db.transaction((txn) async {
-      for (final entry in entries) {
-        await txn.insert(
-          'cache',
-          entry,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      }
-    });
+    final batch = db.batch();
+    for (final entry in entries) {
+      batch.insert(
+        'cache',
+        entry,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   Future<String?> getCachedHash(String path, int size, int lastModified) async {

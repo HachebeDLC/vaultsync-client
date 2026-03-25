@@ -7,7 +7,8 @@ class DartFileScanner {
   static const _saveExtensions = {
     "srm", "state", "auto", "mcd", "mcr", "ps2", "gci", "raw",
     "dsv", "dss", "vms", "vmu", "eep", "sra", "fla", "mpk",
-    "bcr", "ngf", "ngs", "sav", "png", "bak", "vfs"
+    "bcr", "ngf", "ngs", "sav", "png", "bak", "vfs",
+    "nv", "rtc", "mcx", "mc", "dsx"
   };
   
   static const _hardcodedIgnores = {
@@ -29,6 +30,7 @@ class DartFileScanner {
     }
     
     if (sid == "wii") {
+      // Matches 00010000 (disc), 00010001 (channels), 00010002 (system), 00010004 (WiiWare), 00010005 (DLC)
       return relPath.toLowerCase().contains("title/0001000");
     }
     

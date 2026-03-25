@@ -49,7 +49,7 @@ class DiagnosticReportService {
     // Redact URL sensitive parts (keep domain for troubleshooting)
     final redactedUrl = baseUrl.replaceAll(RegExp(r'https?://[^/]+'), 'https://[REDACTED]');
     sb.writeln('- **Server Status**: $redactedUrl');
-    sb.writeln('- **Auth Status**: ${apiClient.isConfigured() ? 'Authenticated' : 'Not Authenticated'}');
+    sb.writeln('- **Auth Status**: ${await apiClient.isConfigured() ? 'Authenticated' : 'Not Authenticated'}');
     
     if (Platform.isAndroid) {
        final status = await shizuku.getStatus();

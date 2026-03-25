@@ -8,40 +8,27 @@ import '../data/sync_repository.dart';
 import '../domain/sync_log_provider.dart';
 import '../domain/notification_provider.dart';
 import 'system_path_service.dart';
+import 'notification_service.dart';
+import 'power_manager_service.dart';
 import '../../../core/errors/error_mapper.dart';
 
 final syncServiceProvider = Provider<SyncService>((ref) {
   final repository = ref.watch(syncRepositoryProvider);
   final pathService = ref.watch(systemPathServiceProvider);
-  return SyncService(repository, pathService, ref);
+  final notificationService = ref.watch(notificationServiceProvider);
+  final powerManager = ref.watch(powerManagerServiceProvider);
+  return SyncService(repository, pathService, notificationService, powerManager, ref);
 });
 
 class SyncService {
   final SyncRepository _repository;
   final SystemPathService _pathService;
+  final NotificationService _notificationService;
+  final PowerManagerService _powerManager;
   final ProviderRef? _ref;
-  final _notifications = FlutterLocalNotificationsPlugin();
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
 
-  SyncService(this._repository, this._pathService, [this._ref]) {
-    _initNotifications();
-  }
-
-  Future<void> _initNotifications() async {
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    await _notifications.initialize(const InitializationSettings(android: android));
-  }
-
-  Future<void> _showNotification(String title, String body) async {
-    const android = AndroidNotificationDetails(
-      'sync_status', 'Sync Status',
-      channelDescription: 'Shows progress of background save sync',
-      importance: Importance.low, priority: Priority.low, showWhen: false, onlyAlertOnce: true,
-    );
-    await _notifications.show(999, title, body, const NotificationDetails(android: android));
-  }
-
-  Future<void> _clearNotification() async { await _notifications.cancel(999); }
+  SyncService(this._repository, this._pathService, this._notificationService, this._powerManager, [this._ref]);
 
   Future<void> triggerQueueProcessing() async {
     if (Platform.isAndroid) {
@@ -57,9 +44,9 @@ class SyncService {
 
   Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false, bool isBackground = false}) async {
     if (isBackground) {
-      await _showNotification('VaultSync', 'Performing background maintenance...');
+      await _notificationService.showSyncStatus('VaultSync', 'Performing background maintenance...');
     }
-    if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
+    await _powerManager.acquireSyncLock();
 
     try {
       final paths = await _pathService.getAllSystemPaths();
@@ -83,7 +70,7 @@ class SyncService {
       for (final entry in paths.entries) {
         if (isCancelled?.call() == true) { onProgress?.call('Sync Cancelled'); return; }
         final systemId = entry.key;
-        if (isBackground) await _showNotification('VaultSync', 'Syncing $systemId...');
+        if (isBackground) await _notificationService.showSyncStatus('VaultSync', 'Syncing $systemId...');
         onProgress?.call('Syncing $systemId...');
 
         final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
@@ -131,14 +118,14 @@ class SyncService {
       _ref?.read(syncLogProvider.notifier).addLog('All', userError.message, isError: true, errorTitle: userError.title);
       onError?.call(userError.toString());
     } finally {
-      if (isBackground) await _clearNotification();
-      if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
+      if (isBackground) await _notificationService.clearSyncStatus();
+      await _powerManager.releaseSyncLock();
     }
   }
 
   Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false, bool isBackground = false}) async {
-    if (isBackground) await _showNotification('VaultSync', 'Syncing $systemId...');
-    if (Platform.isAndroid) await _platform.invokeMethod('acquirePowerLock');
+    if (isBackground) await _notificationService.showSyncStatus('VaultSync', 'Syncing $systemId...');
+    await _powerManager.acquireSyncLock();
     try {
       Map? shizukuStatus;
       try { 
@@ -177,8 +164,8 @@ class SyncService {
       _ref?.read(syncLogProvider.notifier).addLog(systemId, userError.message, isError: true, errorTitle: userError.title);
       onError?.call(userError.toString());
     } finally {
-      if (isBackground) await _clearNotification();
-      if (Platform.isAndroid) await _platform.invokeMethod('releasePowerLock');
+      if (isBackground) await _notificationService.clearSyncStatus();
+      await _powerManager.releaseSyncLock();
     }
   }
 

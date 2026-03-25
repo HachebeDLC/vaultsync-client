@@ -268,6 +268,8 @@ class SystemPathService {
       try {
         final dir = Directory(parent);
         if (!dir.existsSync()) return "$parent/$target";
+        
+        // True case-insensitive lookup: list entities and compare names
         for (final entity in dir.listSync()) {
           final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
           if (name.toLowerCase() == target.toLowerCase()) return entity.path;
@@ -275,6 +277,7 @@ class SystemPathService {
       } catch (e) {
         print('⚠️ EMUDECK: Error finding folder $target in $parent: $e');
       }
+      // Fallback: return fabricated path if not found, preserving the requested casing
       return "$parent/$target";
     }
 
@@ -292,8 +295,10 @@ class SystemPathService {
       final sub = config['sub'] ?? "saves";
       
       if (sid == "switch" || sid == "eden") {
-        if (Directory(wikiPath("yuzu")).existsSync()) return { "path": wikiPath("yuzu"), "emulatorId": "switch.yuzu.desktop" };
-        return { "path": wikiPath("ryujinx"), "emulatorId": "switch.ryujinx.desktop" };
+        // EmuDeck Switch saves are usually at saves/yuzu/ (no extra 'saves' subfolder)
+        final yuzuRoot = wikiPath("yuzu", sub: "");
+        if (Directory(yuzuRoot).existsSync()) return { "path": yuzuRoot, "emulatorId": "switch.yuzu.desktop" };
+        return { "path": wikiPath("ryujinx", sub: ""), "emulatorId": "switch.ryujinx.desktop" };
       }
       
       final mainPath = wikiPath(emulator, sub: sub);

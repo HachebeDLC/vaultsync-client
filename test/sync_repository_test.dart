@@ -8,6 +8,8 @@ import 'package:vaultsync_client/core/services/api_client.dart';
 import 'package:vaultsync_client/features/sync/services/sync_network_service.dart';
 import 'package:vaultsync_client/features/sync/services/sync_path_resolver.dart';
 import 'package:vaultsync_client/features/sync/data/sync_state_database.dart';
+import 'package:vaultsync_client/features/sync/services/file_hash_service.dart';
+import 'package:vaultsync_client/features/sync/services/conflict_resolver.dart';
 
 class MockApiClient extends Mock implements ApiClient {}
 class MockSystemPathService extends Mock implements SystemPathService {}
@@ -15,6 +17,8 @@ class MockFileCache extends Mock implements FileCache {}
 class MockSyncNetworkService extends Mock implements SyncNetworkService {}
 class MockSyncPathResolver extends Mock implements SyncPathResolver {}
 class MockSyncStateDatabase extends Mock implements SyncStateDatabase {}
+class MockFileHashService extends Mock implements FileHashService {}
+class MockConflictResolver extends Mock implements ConflictResolver {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +30,8 @@ void main() {
   late MockSyncNetworkService mockNetworkService;
   late MockSyncPathResolver mockPathResolver;
   late MockSyncStateDatabase mockSyncStateDb;
+  late MockFileHashService mockFileHashService;
+  late MockConflictResolver mockConflictResolver;
 
   setUp(() {
     mockApiClient = MockApiClient();
@@ -34,7 +40,18 @@ void main() {
     mockNetworkService = MockSyncNetworkService();
     mockPathResolver = MockSyncPathResolver();
     mockSyncStateDb = MockSyncStateDatabase();
-    repository = SyncRepository(mockApiClient, mockPathService, mockFileCache, mockNetworkService, mockPathResolver, mockSyncStateDb);
+    mockFileHashService = MockFileHashService();
+    mockConflictResolver = MockConflictResolver();
+    repository = SyncRepository(
+      mockApiClient, 
+      mockPathService, 
+      mockFileCache, 
+      mockNetworkService, 
+      mockPathResolver, 
+      mockSyncStateDb,
+      mockFileHashService,
+      mockConflictResolver,
+    );
   });
 
   group('SyncRepository Error Handling', () {
@@ -48,10 +65,10 @@ void main() {
         await repository.syncSystem(
           'ps2', 
           '/storage/emulated/0/PS2',
-          onError: (err) => lastError = err,
+          onError: (e) => lastError = e,
         );
-      } catch(_) {}
-
+      } catch (_) {}
+      
       expect(lastError, contains('Network error'));
     });
   });

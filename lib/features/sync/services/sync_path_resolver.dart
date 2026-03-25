@@ -101,7 +101,28 @@ class SyncPathResolver {
        if (cloudRelPath.startsWith('saves/')) {
           final suffix = cloudRelPath.substring(6);
           final prefix = hasFilesDir ? 'files/' : '';
-          return '${prefix}sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/00040000/$suffix';
+          
+          // Probing: Find real Console ID and SD ID from scan list
+          String consoleId = '00000000000000000000000000000000';
+          String sdId = '00000000000000000000000000000000';
+          final idRegex = RegExp(r'^[0-9A-Fa-f]{32}$');
+
+          for (final f in lastScanList) {
+             final path = f['relPath'] as String;
+             final parts = path.split('/');
+             final idx = parts.indexOf('Nintendo 3DS');
+             if (idx != -1 && idx + 2 < parts.length) {
+                final cid = parts[idx + 1];
+                final sidPart = parts[idx + 2];
+                if (idRegex.hasMatch(cid) && idRegex.hasMatch(sidPart)) {
+                   consoleId = cid;
+                   sdId = sidPart;
+                   break;
+                }
+             }
+          }
+
+          return '${prefix}sdmc/Nintendo 3DS/$consoleId/$sdId/title/00040000/$suffix';
        }
        return cloudRelPath;
     }

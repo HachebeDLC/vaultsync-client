@@ -56,7 +56,15 @@ class FileScanner(private val context: Context) {
             // RetroArch save-state screenshot thumbnails
             "png",
             // Generic backup/export formats used by several emulators
-            "bak", "vfs"
+            "bak", "vfs",
+            // N64 EEPROM (some RetroArch core variants)
+            "nv",
+            // Real-time clock data (GB/GBC emulators)
+            "rtc",
+            // Alternative PS1 memory cards (DuckStation/ePSXe)
+            "mcx", "mc",
+            // DSi saves
+            "dsx"
         )
     }
 

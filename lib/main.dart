@@ -6,6 +6,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/services/api_client_provider.dart';
+import 'core/services/api_client.dart';
 import 'features/auth/domain/auth_provider.dart';
 import 'features/auth/presentation/auth_screen.dart';
 import 'features/auth/presentation/recovery_setup_screen.dart';
@@ -26,8 +27,16 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     print("🕒 WORKER: Executing background task: $task");
     
-    // Initialize a temporary container for background sync
-    final container = ProviderContainer();
+    // Initialize a lightweight container for background sync.
+    // We override essential providers to avoid instantiating the full UI-heavy graph.
+    final container = ProviderContainer(
+      overrides: [
+        // We can keep default providers if they are lightweight, but 
+        // explicit overrides ensure we don't accidentally pull in UI logic.
+        apiClientProvider.overrideWith((ref) => ApiClient()),
+      ],
+    );
+
     try {
       final apiClient = container.read(apiClientProvider);
       final token = await apiClient.getToken();

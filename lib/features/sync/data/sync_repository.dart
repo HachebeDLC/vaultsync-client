@@ -20,8 +20,30 @@ import '../services/system_path_service.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/api_client_provider.dart';
 
+import '../services/file_hash_service.dart';
+import '../services/conflict_resolver.dart';
+import '../services/notification_service.dart';
+import '../services/power_manager_service.dart';
+
 final syncPathResolverProvider = Provider<SyncPathResolver>((ref) => SyncPathResolver());
 final syncStateDatabaseProvider = Provider<SyncStateDatabase>((ref) => SyncStateDatabase());
+
+final fileHashServiceProvider = Provider<FileHashService>((ref) {
+  return FileHashService(FileCache());
+});
+
+final conflictResolverProvider = Provider<ConflictResolver>((ref) {
+  final pathResolver = ref.watch(syncPathResolverProvider);
+  return ConflictResolver(pathResolver);
+});
+
+final notificationServiceProvider = Provider<NotificationService>((ref) {
+  return NotificationService();
+});
+
+final powerManagerServiceProvider = Provider<PowerManagerService>((ref) {
+  return PowerManagerService();
+});
 
 final syncNetworkServiceProvider = Provider<SyncNetworkService>((ref) {
   final apiClient = ref.watch(apiClientProvider);
@@ -34,7 +56,9 @@ final syncRepositoryProvider = Provider<SyncRepository>((ref) {
   final networkService = ref.watch(syncNetworkServiceProvider);
   final pathResolver = ref.watch(syncPathResolverProvider);
   final syncStateDb = ref.watch(syncStateDatabaseProvider);
-  return SyncRepository(apiClient, pathService, FileCache(), networkService, pathResolver, syncStateDb, ref);
+  final hashService = ref.watch(fileHashServiceProvider);
+  final conflictResolver = ref.watch(conflictResolverProvider);
+  return SyncRepository(apiClient, pathService, FileCache(), networkService, pathResolver, syncStateDb, hashService, conflictResolver, ref);
 });
 
 /// Repository responsible for orchestrating the synchronization of emulator save data
@@ -46,6 +70,8 @@ class SyncRepository {
   final SyncNetworkService _networkService;
   final SyncPathResolver _pathResolver;
   final SyncStateDatabase _syncStateDb;
+  final FileHashService _hashService;
+  final ConflictResolver _conflictResolver;
   final Ref? _ref;
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
   final _syncLock = Mutex();
@@ -53,7 +79,7 @@ class SyncRepository {
   String? _cachedDeviceName;
   List<dynamic> _lastScanList = [];
 
-  SyncRepository(this._apiClient, this._pathService, this._fileCache, this._networkService, this._pathResolver, this._syncStateDb, [this._ref]);
+  SyncRepository(this._apiClient, this._pathService, this._fileCache, this._networkService, this._pathResolver, this._syncStateDb, this._hashService, this._conflictResolver, [this._ref]);
 
   Future<String> _getDeviceName() async => getDeviceNameInternal();
 
@@ -90,31 +116,7 @@ class SyncRepository {
   bool _isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash) {
     final key = 'journal_${systemId}_$relPath';
     if (_pendingJournal.containsKey(key)) return _pendingJournal[key] == remoteHash;
-    return prefs.getString(key) == remoteHash;
-  }
-
-  Map<String, Map<String, dynamic>> _processLocalFiles(String systemId, List<dynamic> localList) {
-    final Map<String, Map<String, dynamic>> localFiles = {};
-    final bool isPkgRoot = localList.any((f) => f['relPath'] == 'files' || f['relPath'].startsWith('files/'));
-
-    for (var f in localList) {
-      if (f['isDirectory'] == true) continue;
-      final String originalRelPath = f['relPath'];
-
-      if (isPkgRoot && !originalRelPath.contains('/')) {
-           final ext = originalRelPath.split('.').last.toLowerCase();
-           if (['ps2', 'srm', 'sav', 'save', 'state'].contains(ext)) continue;
-      }
-      final String cloudRelPath = _pathResolver.getCloudRelPath(systemId, originalRelPath);
-      if (cloudRelPath.isEmpty || cloudRelPath.endsWith('/')) continue;
-      
-      final existing = localFiles[cloudRelPath];
-      if (existing == null || (f['lastModified'] as num) > (existing['lastModified'] as num)) {
-        f['originalRelPath'] = originalRelPath;
-        localFiles[cloudRelPath] = f;
-      }
-    }
-    return localFiles;
+    return _conflictResolver.isJournaledSynced(prefs, systemId, relPath, remoteHash);
   }
 
   final Map<String, (List<dynamic>, DateTime)> _scanCache = {};
@@ -147,7 +149,7 @@ class SyncRepository {
     final isSwitch = sid == 'eden' || sid == 'switch';
     final response = await _apiClient.get('/api/v1/files', queryParams: {'prefix': isSwitch ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId)});
     final List<dynamic> allRemoteFiles = response['files'] ?? [];
-    
+
     final remoteFilesList = allRemoteFiles.where((f) {
       final path = f['path'] as String;
       final rel = path.contains('/') ? path.split('/').skip(1).join('/') : path;
@@ -164,7 +166,7 @@ class SyncRepository {
     final String cloudPrefix = isSwitch ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId);
     final remoteFiles = { for (var f in remoteFilesList) f['path']: f };
     final List<dynamic> localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
-    final localFiles = _processLocalFiles(systemId, localList);
+    final localFiles = _conflictResolver.processLocalFiles(systemId, localList);
 
     final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
     final List<Map<String, dynamic>> results = [];
@@ -190,8 +192,7 @@ class SyncRepository {
       }
       results.add({ 'relPath': relPath, 'remotePath': remotePath, 'status': status, 'type': type, 'localInfo': localInfo, 'remoteInfo': remoteInfo, 'isDirectory': false, 'name': relPath.split('/').last });
     }
-    results.sort((a, b) => (a['relPath'] as String).compareTo(b['relPath'] as String));
-    return results;
+    return _conflictResolver.sortResults(results);
   }
 
   Future<void> syncSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, String? filenameFilter, bool fastSync = false, bool Function()? isCancelled}) async {
@@ -205,7 +206,7 @@ class SyncRepository {
         final List<dynamic> fileList = response['files'] ?? [];
         final remoteFiles = { for (var f in fileList) f['path']: f };
         final List<dynamic> localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
-        final localFiles = _processLocalFiles(systemId, localList);
+        final localFiles = _conflictResolver.processLocalFiles(systemId, localList);
         final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
 
         for (final relPath in cloudRelPaths) {
@@ -226,7 +227,7 @@ class SyncRepository {
                onProgress?.call('Hashing $relPath...');
                final masterKey = await _getMasterKey();
                final blockHashes = await _networkService.getBlockHashes(localInfo['uri'], masterKey);
-               final fullHash = await _getLocalHash(localInfo['uri'], localSize, localTs);
+               final fullHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs);
                await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, fullHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(blockHashes));
             }
           } else if (localInfo == null && remoteInfo != null) {
@@ -248,7 +249,7 @@ class SyncRepository {
             onProgress?.call('Checking $relPath blocks...');
             final masterKey = await _getMasterKey();
             final currentBlockHashes = await _networkService.getBlockHashes(localInfo['uri'], masterKey);
-            final String localHash = await _getLocalHash(localInfo['uri'], localSize, localTs);
+            final String localHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs);
 
             if (localHash == remoteHash) { 
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'synced', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
@@ -330,12 +331,7 @@ class SyncRepository {
   Future<List<Map<String, dynamic>>> getAllRemoteConflicts() async { try { final response = await _apiClient.get('/api/v1/conflicts'); return List<Map<String, dynamic>>.from(response['conflicts'] ?? []); } catch(_) { return []; } }
 
   Future<String> _getLocalHash(String uri, int size, int lastModified) async {
-    String? hash = await _fileCache.getCachedHash(uri, size, lastModified);
-    if (hash == null) {
-        hash = (Platform.isLinux || Platform.isWindows || Platform.isMacOS) ? await DartNativeCrypto.calculateHash(uri) : await _platform.invokeMethod<String>('calculateHash', {'path': uri});
-        if (hash != null) await _fileCache.updateCache(uri, size, lastModified, hash);
-    }
-    return hash ?? 'unknown';
+    return await _hashService.getLocalHash(uri, size, lastModified);
   }
 
   Future<String?> _getMasterKey() async {
@@ -346,7 +342,7 @@ class SyncRepository {
     List<dynamic> list;
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) list = await DartFileScanner.scanRecursive(path, systemId, []);
     else { final String result = await _platform.invokeMethod('scanRecursive', {'path': path, 'systemId': systemId}); list = json.decode(result); }
-    return { for (var f in list) f['relPath']: f };
+    return _conflictResolver.processLocalFiles(systemId, list);
   }
 
   Future<bool> _tryLocalBlockRecovery(String targetPath, int targetIndex, String blockHash, int blockSize) async {
