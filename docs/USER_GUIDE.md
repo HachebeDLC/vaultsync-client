@@ -16,9 +16,9 @@ VaultSync is a high-performance, hardware-encrypted solution for synchronizing y
 
 When you first open VaultSync, you will be prompted to connect to your VaultSync server.
 
-1. **Server URL:** Enter the base URL of your VaultSync server (e.g., `https://vault.yourdomain.com`). If you are using the Cloudflare-optimized setup, ensure your server is reachable on the configured port.
+1. **Server URL:** Enter the base URL of your VaultSync server (e.g., `https://vault.yourdomain.com`).
 2. **Login/Register:** Create an account or log in to your existing one.
-3. **Master Key:** During registration, a local encryption key is derived. **Keep your password safe**, as it is used to derive the keys that encrypt your data. VaultSync is zero-knowledge; the server never sees your unencrypted data or your password.
+3. **Master Key:** During registration, a local encryption key is derived from your password. **Keep your password safe**, as it is used to derive the keys that encrypt your data. VaultSync is zero-knowledge; the server never sees your unencrypted data or your password.
 
 ## Configuring Emulators
 
@@ -59,6 +59,7 @@ VaultSync can handle synchronization automatically so you don't have to remember
 - **Sync on Game Exit:** In Settings, enable this to have VaultSync detect when you close an emulator and immediately upload your latest saves.
   - *Requirement:* You must grant **Usage Access** permission when prompted.
 - **Periodic Background Sync:** Performs a "catch-up" sync every 6 hours to ensure all devices are up to date.
+- **Real-time Notifications:** If another device uploads a new save, VaultSync receives a real-time event and will automatically queue the download for you.
 
 ## Conflict Resolution
 
