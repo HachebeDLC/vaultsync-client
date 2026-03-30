@@ -1,6 +1,6 @@
 # Database Schema and State Management
 
-VaultSync uses an SQLite-based database (via the `sqflite` Flutter plugin) to track the synchronization status of every file and its individual blocks.
+VaultSync uses an SQLite-based database to track the synchronization status of every file and its individual blocks.
 
 ## 1. The `sync_state` Table
 
@@ -29,10 +29,33 @@ CREATE TABLE sync_state(
 - **`pending_download`**: Remote changes detected; waiting for the background download job to pick it up.
 - **`failed`**: A synchronization attempt failed. The `error` column contains the reason.
 
-## 3. Efficient Queries
+## 3. State Management Example (Dart)
 
-- **`idx_sync_status`**: An index on the `status` column to quickly retrieve pending jobs.
-- **`findEntriesByBlockHash(blockHash)`**: Performs a `LIKE` search on the `block_hashes` JSON string. This is used for cross-file block deduplication, allowing the engine to recover identical blocks from other local files.
+The `SyncRepository` uses the database to maintain a journal of synchronization operations:
+
+```dart
+// Example from lib/features/sync/data/sync_repository.dart
+Future<void> _processJobQueue(String systemId, String effectivePath, Function(String)? onProgress) async {
+  final jobs = await _syncStateDb.getPendingJobs();
+  for (final job in jobs) {
+    if (job['system_id'] != systemId) continue;
+
+    try {
+      if (job['status'] == 'pending_upload') {
+        await uploadFile(job['path'], job['remote_path'], ...);
+      } else if (job['status'] == 'pending_download') {
+        await downloadFile(job['remote_path'], ...);
+      }
+
+      // Update status to synced upon success
+      await _syncStateDb.updateStatus(job['path'], 'synced');
+    } catch (e) {
+      // Record failure for retry or user intervention
+      await _syncStateDb.updateStatus(job['path'], 'failed', error: e.toString());
+    }
+  }
+}
+```
 
 ## 4. Background Job Management
 

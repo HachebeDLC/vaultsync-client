@@ -18,11 +18,28 @@ VaultSync uses **Convergent Encryption**, allowing the server to deduplicate ide
 2. **Deterministic Output**: Because the IV is derived from the content itself, the same plaintext data always results in the same ciphertext.
 3. **Hardware Acceleration**: The `CryptoEngine` uses `javax.crypto.Cipher` on Android and a native FFI library on Desktop to leverage hardware-accelerated AES instructions (e.g., AES-NI).
 
-### The MAGIC Header
-Every encrypted block is prefixed with a **7-byte Magic Header**:
-- **Magic**: `NEOSYNC` (ASCII)
-- **IV**: 16 bytes (the MD5 of the block content)
-- **Data**: The AES-256-CBC encrypted ciphertext.
+#### Example: Native AES Encryption in Kotlin
+The `CryptoEngine` uses a `ThreadLocal` for its `Cipher` to allow for lock-free parallel encryption:
+
+```kotlin
+// Example from local_plugins/vaultsync_launcher/android/src/main/kotlin/com/vaultsync/launcher/CryptoEngine.kt
+fun encryptBlock(blockData: ByteArray, dataLength: Int, secretKey: SecretKeySpec, output: ByteArray): Int {
+    // Generate IV from block content for convergent encryption
+    val iv = calculateMd5(blockData, dataLength)
+    val ivSpec = IvParameterSpec(iv)
+
+    val cipher = encryptCipherThreadLocal.get()!!
+    cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec)
+
+    // Prefix with Magic Header (7 bytes) and IV (16 bytes)
+    System.arraycopy(magicBytes, 0, output, 0, 7)
+    System.arraycopy(iv, 0, output, 7, IV_SIZE)
+
+    // Encrypt the block data
+    val encryptedLength = cipher.doFinal(blockData, 0, dataLength, output, 7 + IV_SIZE)
+    return 7 + IV_SIZE + encryptedLength
+}
+```
 
 ## 3. Decryption Flow
 

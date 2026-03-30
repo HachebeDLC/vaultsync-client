@@ -6,21 +6,40 @@ VaultSync provides robust automation features to detect when an emulator process
 
 The `AutomationEngine.kt` uses the Android `UsageStatsManager` to track process lifecycle events.
 
-- **`hasUsageStatsPermission()`**: Checks if the app has the required `Usage Access` permission.
-- **`checkAppClosure()`**: A background task that polls the `UsageStatsManager` for recently used apps.
-- **`onEmulatorClosed`**: When a monitored emulator package (e.g., `xyz.aethersx2.android`) is detected as no longer being in the foreground, a platform-channel call is sent to Dart to trigger an automatic upload of that system's saves.
+#### Detection Logic (Kotlin)
+The `AutomationEngine` polls the system for recently used apps and detects when a monitored package moves from the foreground to the background:
+
+```kotlin
+// Example from local_plugins/vaultsync_launcher/android/src/main/kotlin/com/vaultsync/launcher/AutomationEngine.kt
+private fun checkAppClosure() {
+    if (!hasUsageStatsPermission() || monitoredPackages.isEmpty()) return
+
+    val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+    val time = System.currentTimeMillis()
+    val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 15000, time)
+
+    val currentApp = stats?.filter { it.lastTimeUsed > time - 15000 }
+        ?.maxByOrNull { it.lastTimeUsed }?.packageName
+
+    if (currentApp != null && currentApp != lastForegroundApp) {
+        // If the emulator was recently in foreground but isn't now
+        if (monitoredPackages.contains(lastForegroundApp) && currentApp != context.packageName) {
+            automationHandler.post {
+                // Invoke callback to trigger the sync in Dart
+                channel.invokeMethod("onEmulatorClosed", lastForegroundApp)
+            }
+        }
+        lastForegroundApp = currentApp
+    }
+}
+```
 
 ## 2. Background Sync (Workmanager)
 
 VaultSync uses the `workmanager` Flutter plugin for periodic "catch-up" syncs on mobile platforms.
 
-### Scheduled Tasks
 - **`periodic-sync`**: A periodic task (every 6 hours) that executes the `SyncService` in the background.
 - **`processQueue`**: A one-off task triggered when new jobs are added to the `SyncStateDatabase` while the app is in the background.
-
-### Task Constraints
-- **Network Required**: Background tasks only run when the device has an active network connection.
-- **Battery Optimization**: Tasks are scheduled to run when the battery is not low to avoid unnecessary power drain.
 
 ## 3. Desktop Background Sync
 

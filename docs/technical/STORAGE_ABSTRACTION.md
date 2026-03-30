@@ -25,9 +25,19 @@ The `SystemPathService` abstracts three main storage access methods:
 
 ### AIDL Interface
 The `IShizukuService.aidl` defines the communication protocol between VaultSync and the privileged `ShizukuService`:
-- `openFile(path, mode)`: Returns a `ParcelFileDescriptor`, allowing direct `FileChannel` access.
-- `listFileInfo(path)`: Optimized batch metadata scan to avoid per-file Binder overhead.
-- `calculateBlockHashes(path, blockSize)`: Offloads block-level hashing to the Shizuku service.
+
+```aidl
+// Example from local_plugins/vaultsync_launcher/android/src/main/aidl/com/vaultsync/launcher/IShizukuService.aidl
+interface IShizukuService {
+    List<String> listFiles(String path) = 1;
+    byte[] readFile(String path, long offset, int length) = 2;
+    void writeFile(String path, in byte[] data, long offset) = 3;
+    long getFileSize(String path) = 7;
+    // ... other methods ...
+    ParcelFileDescriptor openFile(String path, String mode) = 11;
+    String listFileInfo(String path) = 12; // Batch metadata
+}
+```
 
 ### Bridge Logic
 - **`ShizukuService.kt`**: Implements the AIDL methods, executing as a different user (shell) with high-level filesystem permissions.
@@ -35,11 +45,23 @@ The `IShizukuService.aidl` defines the communication protocol between VaultSync 
 
 ## 3. Path Resolution Strategy
 
-VaultSync follows a **POSIX-first** resolution strategy:
-1. Try to access the file directly via standard IO.
-2. If access fails (Permission Denied), check if a SAF URI is persisted for the path.
-3. If **Shizuku** is enabled in Settings, automatically translate POSIX paths to `shizuku://` prefixed paths.
-4. Use the appropriate provider (Standard, SAF, or Shizuku) for all subsequent read/write operations.
+VaultSync follows a **POSIX-first** resolution strategy. The `SystemPathService` provides the effective path to use:
+
+```dart
+// Example from lib/features/sync/services/system_path_service.dart
+Future<String> getEffectivePath(String systemId) async {
+  final rawPath = await getSystemPath(systemId);
+  final useShizuku = prefs.getBool('use_shizuku') ?? false;
+  final posixPath = _convertToPosix(rawPath);
+
+  // If Shizuku is enabled, translate POSIX to shizuku:// scheme
+  if (useShizuku && posixPath.startsWith('/storage/emulated/0/')) {
+    return 'shizuku://$posixPath';
+  }
+
+  return posixPath;
+}
+```
 
 ## 4. Platform-Specific Configurations
 

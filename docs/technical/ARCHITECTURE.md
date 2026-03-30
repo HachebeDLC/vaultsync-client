@@ -1,6 +1,6 @@
 # Architecture Overview
 
-VaultSync is a cross-platform (Android, Windows, Linux) synchronization engine that uses a hybrid architecture to balance UI flexibility with native performance.
+VaultSync is a cross-platform synchronization engine that uses a hybrid architecture to balance UI flexibility with native performance.
 
 ## The Hybrid Layer Model
 
@@ -13,10 +13,43 @@ The Dart layer manages high-level business logic, state management, and the user
 - **Database**: Uses `sqflite` for tracking local sync states.
 - **Networking**: Uses `http` for metadata API calls and `flutter_client_sse` for real-time update notifications.
 
+#### Example: Invoking Native Actions via MethodChannel
+The Dart layer communicates with the native execution layer using asynchronous `MethodChannel` calls:
+
+```dart
+// Example from lib/features/sync/services/shizuku_service.dart
+static const _platform = MethodChannel('com.vaultsync.app/launcher');
+
+Future<ShizukuStatus> getStatus() async {
+  try {
+    final Map<dynamic, dynamic> result = await _platform.invokeMethod('checkShizukuStatus');
+    return ShizukuStatus.fromMap(result);
+  } on PlatformException catch (e) {
+    return ShizukuStatus(isRunning: false, isAuthorized: false);
+  }
+}
+```
+
 ### 2. Execution Layer (Native Plugin)
 For performance-critical and platform-specific operations, VaultSync uses the `vaultsync_launcher` plugin.
 - **Android**: Written in Kotlin, it handles AES encryption, high-speed file I/O, and the Shizuku bridge.
 - **Desktop (Windows/Linux)**: Uses Dart's FFI (Foreign Function Interface) to call into native libraries (e.g., `libvaultsync_native.so`) for block hashing and encrypted file streaming.
+
+#### Example: Handling Method Calls in Kotlin
+The native side listens for these calls and dispatches them to specialized managers:
+
+```kotlin
+// Example from local_plugins/vaultsync_launcher/android/src/main/kotlin/com/vaultsync/launcher/VaultSyncLauncherPlugin.kt
+override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+    when (call.method) {
+        "getAndroidVersion" -> result.success(Build.VERSION.SDK_INT)
+        "uploadFileNative" -> uploadManager.handleUploadFile(call, result)
+        "downloadFileNative" -> downloadManager.handleDownloadFile(call, result)
+        // ... more cases
+        else -> result.notImplemented()
+    }
+}
+```
 
 ## Core Components
 

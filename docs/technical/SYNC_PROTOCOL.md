@@ -9,6 +9,22 @@ The engine dynamically selects a block size based on the total file size to bala
 - **Small Files (< 10MB)**: Uses **256KB** blocks.
 - **Large Files (≥ 10MB)**: Uses **1MB** blocks.
 
+#### Kotlin Implementation: `CryptoEngine.kt`
+The block size logic is central to the synchronization process:
+
+```kotlin
+// Example from local_plugins/vaultsync_launcher/android/src/main/kotlin/com/vaultsync/launcher/CryptoEngine.kt
+companion object {
+    const val SMALL_BLOCK_SIZE = 256 * 1024 // 256KB
+    const val LARGE_BLOCK_SIZE = 1024 * 1024 // 1MB
+    const val BLOCK_THRESHOLD = 10 * 1024 * 1024 // 10MB threshold
+
+    fun getBlockSize(fileSize: Long): Int {
+        return if (fileSize >= BLOCK_THRESHOLD) LARGE_BLOCK_SIZE else SMALL_BLOCK_SIZE
+    }
+}
+```
+
 ## 2. Sync Lifecycle
 
 ### Stage 1: Metadata Check
@@ -18,9 +34,9 @@ The Dart `SyncRepository` queries the server for the file list of a specific sys
 
 ### Stage 2: Block-Level Delta Identification
 If a file has changed:
-1. The **native engine** (`FileScanner` and `CryptoEngine`) calculates SHA-256 hashes for every 1MB (or 256KB) block.
+1. The **native engine** calculates SHA-256 hashes for every 1MB (or 256KB) block.
 2. The list of hashes is sent to `/api/v1/blocks/check`.
-3. The server compares these hashes against its own version and returns the indices of the "dirty" blocks.
+3. The server responds with the indices of the "dirty" blocks.
 
 ### Stage 3: Sequential Transfer
 - **Upload**: The `UploadManager` only sends the blocks identified as "dirty" to `/api/v1/upload`.
@@ -28,9 +44,32 @@ If a file has changed:
 
 ## 3. In-Place Patching
 
-- **RandomAccessFile**: On both Android and Desktop, VaultSync uses `RandomAccessFile` (or equivalent `FileChannel`) to `seek` to specific offsets within a file.
-- **Atomic Writes**: For downloads, the engine patches the existing file directly to avoid unnecessary large-scale data copying.
-- **Zero-RAM overhead**: Using a 1MB streaming buffer ensures the app can sync multi-gigabyte files (e.g., 4GB NAND images) without exceeding 100MB of RAM usage.
+VaultSync uses `RandomAccessFile` and `FileChannel` to patch the existing local file directly, avoiding large-scale data copying.
+
+#### Sequential Download Patching (Kotlin)
+This approach minimizes I/O overhead by only writing the blocks that have changed:
+
+```kotlin
+// Example from local_plugins/vaultsync_launcher/android/src/main/kotlin/com/vaultsync/launcher/DownloadManager.kt
+private fun processDownloadStream(inputStream: InputStream, output: FileChannel, secretKey: SecretKeySpec?, patchIndices: List<Int>?, fileSize: Long) {
+    val plainBlockSize = CryptoEngine.getBlockSize(fileSize)
+    // ... setup and decryption logic ...
+
+    while (ringBuffer.remaining() >= expectedBlockSize) {
+        ringBuffer.get(block, 0, expectedBlockSize)
+        val decryptedLength = cryptoEngine.decryptBlock(block, expectedBlockSize, secretKey, decryptedBuffer)
+
+        // Find the correct offset for the patched block
+        val blockIndex = if (patchIndices != null) patchIndices[currentIdx].toLong() else currentIdx.toLong()
+        val offset = blockIndex * plainBlockSize
+
+        // Use seek and write to patch the specific file region
+        output.position(offset)
+        output.write(ByteBuffer.wrap(decryptedBuffer, 0, decryptedLength))
+        currentIdx++
+    }
+}
+```
 
 ## 4. Real-time Events (SSE)
 
