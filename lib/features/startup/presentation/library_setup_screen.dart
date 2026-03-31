@@ -82,7 +82,7 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
         final systems = await ref.read(systemsProvider.future);
         for (final f in found) {
           final sid = f['systemId']!;
-          final p = f['path']!;
+          final p = f['path'];
           
           final currentPath = await service.getSystemPath(sid);
           final sysConf = systems.firstWhere((s) => s.system.id == sid);
@@ -98,13 +98,13 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           // 4. We are on Android, current path is generic RetroArch, but a standalone exists.
           
           bool shouldOverride = currentPath == null;
-          final isEmuDeckRoute = mappedEmuId != null && p.toLowerCase().contains('emulation/saves');
+          final isEmuDeckRoute = mappedEmuId != null && p != null && p.toLowerCase().contains('emulation/saves');
 
           if (!shouldOverride && isEmuDeckRoute && !(currentPath?.toLowerCase().contains('emulation/saves') ?? false)) {
             shouldOverride = true;
           }
           
-          if (!shouldOverride && Platform.isAndroid) {
+          if (!shouldOverride && Platform.isAndroid && p != null) {
             final isBrokenLegacy = (currentPath == p);
             final isGenericRA = (currentPath?.contains('RetroArch/saves') ?? false);
             final isOldMelonDS = (currentPath?.contains('me.arun.melonds') ?? false);
@@ -130,7 +130,7 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
             
             await service.setSystemEmulator(sid, selectedEmu.uniqueId);
             
-            if (mappedEmuId != null && mappedEmuId.isNotEmpty) {
+            if (mappedEmuId != null && mappedEmuId.isNotEmpty && p != null) {
               await service.setSystemPath(sid, p);
             } else {
               final suggested = await service.suggestSavePath(selectedEmu, sid);
@@ -207,9 +207,14 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
 
     final emulator = system.emulators.firstWhere((e) => e.uniqueId == selectedEmulatorId);
     
-    // First try the current configured path, then the auto-mapped EmuDeck path, then fallback to platform defaults
+    // If the emulator changed, suggest the new emulator's path. Otherwise keep the existing one.
     final mappedPath = _foundSystems.where((f) => f['systemId'] == systemId).firstOrNull?['path'];
-    String initialPath = currentPath ?? mappedPath ?? await pathService.suggestSavePath(emulator, systemId);
+    String initialPath;
+    if (selectedEmulatorId != currentEmulatorId) {
+      initialPath = mappedPath ?? await pathService.suggestSavePath(emulator, systemId);
+    } else {
+      initialPath = currentPath ?? mappedPath ?? await pathService.suggestSavePath(emulator, systemId);
+    }
 
     if (!mounted) return;
 
@@ -242,9 +247,12 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
                       icon: const Icon(Icons.folder_open),
                       onPressed: () async {
                         String? initialUri;
-                        if (pathController.text.startsWith('/storage/emulated/0/')) {
+                        if (pathController.text.startsWith('content://')) {
+                          // Already a SAF URI — pass it directly as the picker hint
+                          initialUri = pathController.text;
+                        } else if (pathController.text.startsWith('/storage/emulated/0/')) {
                           String relPath = pathController.text.substring(20).replaceAll('/', '%2F');
-                          
+
                           // SAF navigation to subfolders in Android/data is often restricted.
                           // Target the package root in Android/data.
                           if (pathController.text.contains('/Android/data/')) {
@@ -256,7 +264,7 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
                               relPath = 'Android';
                             }
                           }
-                          
+
                           // Use the 'tree' format for better reliability
                           initialUri = 'content://com.android.externalstorage.documents/tree/primary%3A$relPath';
                         }

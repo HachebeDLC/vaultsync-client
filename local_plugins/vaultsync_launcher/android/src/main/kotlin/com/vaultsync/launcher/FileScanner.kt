@@ -109,37 +109,19 @@ class FileScanner(private val context: Context) {
     fun findFileStrict(parent: DocumentFile, name: String): DocumentFile? {
         val parentUriStr = parent.uri.toString()
         
-        // Performance: Use child mapping cache to eliminate linear listFiles()
         val cached = directoryContentCache[parentUriStr]?.get(name)
         if (cached != null) return cached
 
-        // Direct query fallback for non-cached folders
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parent.uri, getDocIdSafely(parent.uri))
-        context.contentResolver.query(
-            childrenUri,
-            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_MIME_TYPE),
-            "${DocumentsContract.Document.COLUMN_DISPLAY_NAME} = ?",
-            arrayOf(name),
-            null
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val docId = cursor.getString(0)
-                val mime = cursor.getString(1)
-                val fileUri = DocumentsContract.buildDocumentUriUsingTree(parent.uri, docId)
-                val found = if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
-                    DocumentFile.fromTreeUri(context, fileUri)
-                } else {
-                    DocumentFile.fromSingleUri(context, fileUri)
-                }
-                if (found != null) {
-                    val existingMap = directoryContentCache[parentUriStr]?.toMutableMap() ?: mutableMapOf()
-                    existingMap[name] = found
-                    directoryContentCache[parentUriStr] = existingMap
-                    return found
-                }
+        // Standard SAF iterate (Bypasses caching and name filtering bugs)
+        val existingMap = mutableMapOf<String, DocumentFile>()
+        parent.listFiles().forEach { file ->
+            val fileName = file.name
+            if (fileName != null) {
+                existingMap[fileName] = file
             }
         }
-        return null
+        directoryContentCache[parentUriStr] = existingMap
+        return existingMap[name]
     }
 
     fun findSwitchSaveRoot(baseUri: Uri): Uri {
@@ -157,15 +139,74 @@ class FileScanner(private val context: Context) {
                 break
             }
         }
+        
+        // Try to dive one level deeper into the 32-character Profile ID folder
+        val profileRegex = Regex("^[0-9A-Fa-f]{32}$")
+        for (child in current.listFiles()) {
+            if (child.isDirectory) {
+                val name = child.name ?: continue
+                if (profileRegex.matches(name)) {
+                    current = child
+                    break
+                }
+            }
+        }
         return current.uri
+    }
+
+    fun findSwitchProfileId(baseUri: Uri): String? {
+        val profileRegex = Regex("^[0-9A-Fa-f]{32}$")
+        var current = DocumentFile.fromTreeUri(context, baseUri) ?: return null
+
+        // Navigate into 'files/' if it exists at the root
+        val filesDir = findFileStrict(current, "files")
+        if (filesDir != null) current = filesDir
+
+        // Walk down to nand/user/save/0000000000000000
+        for (segment in listOf("nand", "user", "save", "0000000000000000")) {
+            val next = findFileStrict(current, segment)
+            if (next != null && next.isDirectory) {
+                current = next
+            } else {
+                return null
+            }
+        }
+
+        // 'current' is now 0000000000000000; its direct children are the profile ID folders
+        current.listFiles().forEach { child ->
+            if (child.isDirectory) {
+                val name = child.name ?: return@forEach
+                if (profileRegex.matches(name) && name != "00000000000000000000000000000000") return name
+            }
+        }
+        return null
     }
 
     fun getOrCreateDirectory(parent: DocumentFile, name: String): DocumentFile {
         synchronized(safLock) {
+            android.util.Log.d("VaultSync", "📁 SAF: getOrCreateDirectory '$name' in '${parent.name ?: parent.uri}'")
             val existing = findFileStrict(parent, name)
-            if (existing != null && existing.isDirectory) return existing
+            if (existing != null) {
+                if (existing.isDirectory) {
+                    android.util.Log.d("VaultSync", "📁 SAF: Found existing directory '$name'")
+                    return existing
+                } else {
+                    android.util.Log.w("VaultSync", "📁 SAF: Found FILE where DIRECTORY '$name' expected! Deleting file...")
+                    existing.delete()
+                }
+            }
+            
+            android.util.Log.i("VaultSync", "📁 SAF: Creating directory '$name'...")
             val created = parent.createDirectory(name) ?: throw Exception("CreateDirectory failed for '$name'")
             
+            // SAF Cache duplicate check
+            if (created.name != null && created.name != name) {
+                android.util.Log.w("VaultSync", "⚠️ SAF: Created duplicate '${created.name}' instead of '$name'. Fixing...")
+                created.delete()
+                return findFileStrict(parent, name) ?: throw Exception("Fallback resolve failed for $name after duplicate creation")
+            }
+
+            android.util.Log.d("VaultSync", "📁 SAF: Successfully created directory '$name'")
             val parentUriStr = parent.uri.toString()
             val existingMap = directoryContentCache[parentUriStr]?.toMutableMap() ?: mutableMapOf()
             existingMap[name] = created
@@ -176,18 +217,29 @@ class FileScanner(private val context: Context) {
 
     fun getOrCreateFile(parent: DocumentFile, name: String, mime: String): DocumentFile {
         synchronized(safLock) {
+            android.util.Log.d("VaultSync", "📄 SAF: getOrCreateFile '$name' in '${parent.name ?: parent.uri}'")
             val existing = findFileStrict(parent, name)
-            if (existing != null && existing.isFile) return existing
-            
-            if (existing != null && existing.isDirectory) {
-                android.util.Log.w("VaultSync", "📁 SAF: Found directory $name where file expected. Deleting...")
-                if (!existing.delete()) {
-                    android.util.Log.e("VaultSync", "📁 SAF: Failed to delete directory $name!")
+            if (existing != null) {
+                if (existing.isFile) {
+                    android.util.Log.d("VaultSync", "📄 SAF: Found existing file '$name'")
+                    return existing
+                } else {
+                    android.util.Log.w("VaultSync", "📄 SAF: Found DIRECTORY where FILE '$name' expected! Deleting directory...")
+                    existing.delete()
                 }
             }
             
+            android.util.Log.i("VaultSync", "📄 SAF: Creating file '$name' ($mime)...")
             val created = parent.createFile(mime, name) ?: throw Exception("CreateFile failed for '$name'")
 
+            // SAF Cache duplicate check
+            if (created.name != null && created.name != name) {
+                android.util.Log.w("VaultSync", "⚠️ SAF: Created duplicate '${created.name}' instead of '$name'. Fixing...")
+                created.delete()
+                return findFileStrict(parent, name) ?: throw Exception("Fallback resolve failed for file $name after duplicate creation")
+            }
+
+            android.util.Log.d("VaultSync", "📄 SAF: Successfully created file '$name'")
             val parentUriStr = parent.uri.toString()
             val existingMap = directoryContentCache[parentUriStr]?.toMutableMap() ?: mutableMapOf()
             existingMap[name] = created
@@ -205,17 +257,33 @@ class FileScanner(private val context: Context) {
      */
     private fun shouldSyncFile(sid: String, relPath: String, fileName: String): Boolean {
         if (fileName.startsWith(".")) return false
-        if (sid in SYNC_EVERYTHING_SIDS) return true
-
         val lowerRel = relPath.lowercase()
+        
+        // 1. Switch / Eden Stricter Filtering
+        if (sid == "switch" || sid == "eden") {
+            // Since effectivePath might already be 'save/', we can't strictly require 'nand/user/save' in relPath.
+            // We just ensure it's an actual game save by looking for the Title ID prefix (0100).
+            return lowerRel.contains("0100") 
+        }
+
+        // 2. 3DS (Azahar / Citra) Stricter Filtering
+        // We only want actual title data, not extdata or system apps.
+        if (sid == "3ds" || sid == "citra" || sid == "azahar") {
+            // Must be in a game title folder
+            if (!lowerRel.contains("title/00040000")) return false
+            // Exclude everything except the actual save file (usually 'data' or similar)
+            // But 3DS is complex, so we'll at least block known junk extensions
+            val junkExtensions = setOf("tik", "tmd", "app", "metadata", "icon")
+            val ext = fileName.substringAfterLast('.', "").lowercase()
+            if (junkExtensions.contains(ext)) return false
+            return true
+        }
+
         if (sid == "psp" || sid == "ppsspp") {
             return lowerRel.contains("savedata/") || lowerRel.contains("ppsspp_state/") || !lowerRel.contains("/")
         }
         if (sid == "wii") {
             return lowerRel.contains("title/0001000")
-        }
-        if (sid == "3ds" || sid == "citra" || sid == "azahar") {
-            return lowerRel.contains("title/00040000")
         }
 
         val ext = fileName.substringAfterLast('.', "").lowercase()
@@ -238,7 +306,6 @@ class FileScanner(private val context: Context) {
         val combinedIgnoreSet = combinedIgnores.map { it.lowercase() }.toHashSet()
 
         val uriStr = uri.toString().lowercase()
-        val alreadyInZone = isSwitch && (uriStr.contains("nand%2fuser%2fsave") || uriStr.contains("nand/user/save"))
 
         val treeUri = getTreeUri(uri)
         val startDocId = getDocIdSafely(uri)
@@ -269,11 +336,12 @@ class FileScanner(private val context: Context) {
 
                     if (combinedIgnoreSet.contains(name.lowercase()) || ignoreSet.contains(relPath.lowercase())) continue
 
-                    if (isSwitch && !alreadyInZone) {
-                        val inSavePath = relPath.contains("nand/user/save", ignoreCase = true)
-                        if (!inSavePath && 
+                    if (isSwitch) {
+                        if (!relPath.contains("0100", ignoreCase = true) && 
                             !relPath.startsWith("nand", ignoreCase = true) && 
-                            !relPath.equals("nand", ignoreCase = true)) continue
+                            !relPath.startsWith("user", ignoreCase = true) &&
+                            !relPath.startsWith("save", ignoreCase = true) &&
+                            !relPath.startsWith("0000", ignoreCase = true)) continue
                     }
 
                     val isDir = mime == DocumentsContract.Document.MIME_TYPE_DIR

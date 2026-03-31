@@ -41,8 +41,9 @@ class ShizukuService {
       final status = ShizukuStatus.fromMap(result);
       print('🛡️ SHIZUKU: Status running=${status.isRunning}, auth=${status.isAuthorized}');
       return status;
-    } on PlatformException catch (e) {
-      print('🛡️ SHIZUKU ERROR: ${e.message}');
+    } catch (e) {
+      // Catches both PlatformException and MissingPluginException (FlutterError)
+      print('🛡️ SHIZUKU ERROR: $e');
       return ShizukuStatus(isRunning: false, isAuthorized: false);
     }
   }

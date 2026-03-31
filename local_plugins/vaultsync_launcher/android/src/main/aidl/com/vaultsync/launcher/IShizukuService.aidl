@@ -17,6 +17,8 @@ interface IShizukuService {
     
     // NEW: Batch metadata for zero-loop Binder scanning
     String listFileInfo(String path) = 12;
+
+    boolean mkdirs(String path) = 13;
     
     void destroy() = 16777114;
 }

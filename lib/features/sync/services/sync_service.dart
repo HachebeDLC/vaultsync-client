@@ -33,8 +33,9 @@ class SyncService {
   Future<void> triggerQueueProcessing() async {
     if (Platform.isAndroid) {
       await Workmanager().registerOneOffTask(
-        "process-queue-${DateTime.now().millisecondsSinceEpoch}",
+        "processQueueTask",
         "processQueue",
+        existingWorkPolicy: ExistingWorkPolicy.replace,
         constraints: Constraints(networkType: NetworkType.connected),
       );
     } else {
@@ -43,6 +44,7 @@ class SyncService {
   }
 
   Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false, bool isBackground = false}) async {
+    await _notificationService.init();
     if (isBackground) {
       await _notificationService.showSyncStatus('VaultSync', 'Performing background maintenance...');
     }
@@ -124,6 +126,7 @@ class SyncService {
   }
 
   Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false, bool isBackground = false}) async {
+    await _notificationService.init();
     if (isBackground) await _notificationService.showSyncStatus('VaultSync', 'Syncing $systemId...');
     await _powerManager.acquireSyncLock();
     try {

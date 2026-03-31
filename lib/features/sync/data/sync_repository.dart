@@ -123,28 +123,97 @@ class SyncRepository {
   static const _scanCacheTTL = Duration(seconds: 30);
 
   Future<List<dynamic>> _getCachedOrNewScan(String systemId, String effectivePath, List<String>? ignoredFolders) async {
-    final cached = _scanCache[systemId];
+    final cacheKey = '${systemId}_$effectivePath';
+    final cached = _scanCache[cacheKey];
     if (cached != null && DateTime.now().difference(cached.$2) < _scanCacheTTL) {
        _lastScanList = cached.$1;
        return _lastScanList;
     }
     
-    List<dynamic> result;
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      result = await DartFileScanner.scanRecursive(effectivePath, systemId, ignoredFolders ?? []);
-    } else {
-      final String jsonResult = await _platform.invokeMethod('scanRecursive', { 'path': effectivePath, 'systemId': systemId, 'ignoredFolders': ignoredFolders ?? [] });
-      result = json.decode(jsonResult);
+    List<dynamic> result = [];
+    try {
+      if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+        result = await DartFileScanner.scanRecursive(effectivePath, systemId, ignoredFolders ?? []);
+      } else {
+        final String jsonResult = await _platform.invokeMethod('scanRecursive', { 'path': effectivePath, 'systemId': systemId, 'ignoredFolders': ignoredFolders ?? [] });
+        result = json.decode(jsonResult);
+      }
+    } catch (e) {
+      print('⚠️ SCAN: Path does not exist or inaccessible: $effectivePath ($e)');
+      // For Switch/Eden on a fresh install, the save folder might not exist yet.
+      // We continue so the probeProfileId logic can still try to find the profile ID
+      // by walking the parent directory tree.
     }
-    
+
+    // For Switch/Eden: ALWAYS probe profiles.dat for the authoritative profile ID.
+    // We cannot rely on the scan alone — a previous buggy sync may have created a
+    // wrong (e.g. byte-reversed) profile folder that the scan then perpetuates.
+    final sid = systemId.toLowerCase();
+    if (sid == 'switch' || sid == 'eden') {
+      final profileRegex = RegExp(r'^[0-9A-Fa-f]{32}$');
+      final probed = await _pathService.probeProfileId(effectivePath);
+
+      if (probed != null) {
+        // Remove any scan entries that contain a DIFFERENT 32-char profile ID under
+        // nand/user/save/0000000000000000/ — those are stale/wrong folders.
+        result = result.where((f) {
+          final path = (f['relPath'] as String?) ?? '';
+          if (!path.contains('nand/user/save/0000000000000000/')) return true;
+          final segments = path.split('/');
+          final zeroIdx = segments.indexOf('0000000000000000');
+          if (zeroIdx != -1 && zeroIdx + 1 < segments.length) {
+            final candidate = segments[zeroIdx + 1];
+            if (profileRegex.hasMatch(candidate) && candidate != probed) {
+              print('🎮 SWITCH: Dropping stale/wrong profile ID from scan: $candidate (authoritative: $probed)');
+              return false;
+            }
+          }
+          return true;
+        }).toList();
+
+        // Inject the correct profile ID entry if not already present.
+        final hasCorrectId = result.any((f) {
+          final path = (f['relPath'] as String?) ?? '';
+          return path.contains('nand/user/save/0000000000000000/$probed');
+        });
+        if (!hasCorrectId) {
+          result = List.from(result)..add({
+            'relPath': 'nand/user/save/0000000000000000/$probed',
+            'name': probed,
+            'isDirectory': true,
+            'uri': '',
+            'size': 0,
+            'lastModified': 0,
+          });
+          print('🎮 SWITCH: Injected authoritative profile ID: $probed');
+        } else {
+          print('🎮 SWITCH: Authoritative profile ID confirmed from scan: $probed');
+        }
+      } else {
+        // Probe failed — fall back to whatever the scan found.
+        final hasAnyProfileId = result.any((f) {
+          final path = (f['relPath'] as String?) ?? '';
+          return path.contains('nand/user/save') &&
+                 path.split('/').any((s) => profileRegex.hasMatch(s) && s != '00000000000000000000000000000000');
+        });
+        if (!hasAnyProfileId) {
+          print('🎮 SWITCH: No profile ID found from probe or scan — downloads will use zeros placeholder.');
+        }
+      }
+    }
+
     _lastScanList = result;
-    _scanCache[systemId] = (result, DateTime.now());
+    _scanCache[cacheKey] = (result, DateTime.now());
     return result;
   }
 
   Future<List<Map<String, dynamic>>> diffSystem(String systemId, String localPath, {List<String>? ignoredFolders}) async {
     final prefs = await SharedPreferences.getInstance();
     final effectivePath = await _pathService.getEffectivePath(systemId);
+    
+    // Ensure base path exists so scanner doesn't fail
+    await _pathService.mkdirs(effectivePath);
+
     final sid = systemId.toLowerCase();
     final isSwitch = sid == 'eden' || sid == 'switch';
     final response = await _apiClient.get('/api/v1/files', queryParams: {'prefix': isSwitch ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId)});
@@ -185,9 +254,25 @@ class SyncRepository {
         final String remoteHash = remoteInfo['hash'];
         if (_isJournaledSynced(prefs, systemId, relPath, remoteHash)) status = 'Synced';
         else {
-          final int localTs = (localInfo['lastModified'] as num).toInt() ~/ 1000;
-          final int remoteTs = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
-          if (localInfo['size'] != remoteInfo['size'] || localTs != remoteTs) status = 'Modified';
+          // Check SQLite cache for a more robust verify
+          final cached = await _syncStateDb.getState(localInfo['uri']);
+          final int localTs = (localInfo['lastModified'] as num).toInt();
+          final int localSize = (localInfo['size'] as num).toInt();
+          
+          if (cached != null && 
+              cached['size'] == localSize && 
+              (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) && 
+              cached['hash'] == remoteHash) {
+            status = 'Synced';
+            // Proactively update journal so we skip checking DB next time
+            _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
+          } else {
+            // Fallback to loose server-timestamp match if not in DB
+            final int remoteTs = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
+            if (localInfo['size'] != remoteInfo['size'] || (localTs ~/ 1000) != remoteTs) {
+              status = 'Modified';
+            }
+          }
         }
       }
       results.add({ 'relPath': relPath, 'remotePath': remotePath, 'status': status, 'type': type, 'localInfo': localInfo, 'remoteInfo': remoteInfo, 'isDirectory': false, 'name': relPath.split('/').last });
@@ -199,6 +284,11 @@ class SyncRepository {
     await _syncLock.protect(() async {
       final prefs = await SharedPreferences.getInstance();
       final effectivePath = await _pathService.getEffectivePath(systemId);
+
+      // Ensure the base path exists. For Switch/Eden on fresh install,
+      // we might need to create the 'save' directory.
+      await _pathService.mkdirs(effectivePath);
+
       final String cloudPrefix = (systemId.toLowerCase() == 'eden') ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId);
       
       try {
@@ -234,7 +324,8 @@ class SyncRepository {
             onProgress?.call('Queueing $relPath for download...');
             final destRelPath = _pathResolver.getLocalRelPath(systemId, relPath, localFiles, _lastScanList);
             final destUri = p.join(effectivePath, destRelPath);
-            await _syncStateDb.upsertState(destUri, remoteInfo['size'], remoteInfo['updated_at'], remoteInfo['hash'], 'pending_download', systemId: systemId, remotePath: remotePath, relPath: relPath);
+            print('📂 SYNC: Queueing Switch download: $relPath -> $destUri (Base: $effectivePath)');
+            await _syncStateDb.upsertState(destUri, remoteInfo['size'], remoteInfo['updated_at'], remoteInfo['hash'], 'pending_download', systemId: systemId, remotePath: remotePath, relPath: destRelPath);
           } else if (localInfo != null && remoteInfo != null) {
             final String remoteHash = remoteInfo['hash'];
             final int localTs = (localInfo['lastModified'] as num).toInt();
@@ -294,7 +385,42 @@ class SyncRepository {
            await uploadFile(path, remotePath!, systemId: systemId, relPath: relPath!, prefs: prefs, plainHash: job['hash'], localBlockHashes: blockHashes);
         } else if (status == 'pending_download') {
            onProgress?.call('Downloading ${relPath?.split("/").last ?? path.split("/").last}...');
-           await downloadFile(remotePath!, effectivePath, relPath!, systemId: systemId, prefs: prefs, fileSize: job['size'], remoteHash: job['hash'], localUri: path);
+           final downloadResult = await downloadFile(remotePath!, effectivePath, relPath!, systemId: systemId, prefs: prefs, fileSize: job['size'], remoteHash: job['hash'], localUri: path, updatedAt: (job['last_modified'] as num?)?.toInt());
+           
+           // CRITICAL: After download, we MUST update the DB with the ACTUAL file info
+           // from the disk (size/timestamp) so the next scan matches exactly.
+           // We now use the metadata returned directly from the native download call.
+           if (downloadResult is Map) {
+              await _syncStateDb.upsertState(
+                path, 
+                (downloadResult['size'] as num).toInt(), 
+                (downloadResult['lastModified'] as num).toInt(), 
+                job['hash'], 
+                'synced',
+                systemId: systemId,
+                remotePath: remotePath,
+                relPath: relPath
+              );
+           } else {
+             // Fallback for desktop or older native code
+             try {
+               final info = await _platform.invokeMapMethod('getFileInfo', {'uri': path});
+               if (info != null) {
+                 await _syncStateDb.upsertState(
+                   path, 
+                   (info['size'] as num).toInt(), 
+                   (info['lastModified'] as num).toInt(), 
+                   job['hash'], 
+                   'synced',
+                   systemId: systemId,
+                   remotePath: remotePath,
+                   relPath: relPath
+                 );
+               }
+             } catch (e) {
+               print('⚠️ Failed to update post-download metadata for $path: $e');
+             }
+           }
         }
         await _syncStateDb.updateStatus(path, 'synced');
       } catch (e) { 
@@ -320,8 +446,8 @@ class SyncRepository {
     await _networkService.uploadFile(path, remotePath, systemId: systemId, relPath: relPath, deviceName: await _getDeviceName(), onRecordSuccess: (sid, rp, h) => _recordSyncSuccess(prefs, sid, rp, h), plainHash: plainHash, localBlockHashes: localBlockHashes, force: force);
   }
 
-  Future<void> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, required int fileSize, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
-    await _networkService.downloadFile(remotePath, localBasePath, relPath, systemId: systemId, fileSize: fileSize, onRecordSuccess: (sid, rp, h) => _recordSyncSuccess(prefs, sid, rp, h), remoteHash: remoteHash, updatedAt: updatedAt, serverBlocks: serverBlocks, localUri: localUri);
+  Future<dynamic> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, required int fileSize, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
+    return await _networkService.downloadFile(remotePath, localBasePath, relPath, systemId: systemId, fileSize: fileSize, onRecordSuccess: (sid, rp, h) => _recordSyncSuccess(prefs, sid, rp, h), remoteHash: remoteHash, updatedAt: updatedAt, serverBlocks: serverBlocks, localUri: localUri);
   }
 
   Future<void> deleteRemoteFile(String path) async { await _apiClient.delete('/api/v1/files', body: {'filename': path}); }
@@ -395,7 +521,7 @@ class SyncRepository {
 
     print('🚀 SSE: Remote update detected for $path. Queueing download...');
     
-    final destRelPath = _pathResolver.getLocalRelPath(systemId, path.split('/').skip(1).join('/'), {}, []);
+    final destRelPath = _pathResolver.getLocalRelPath(systemId, path.split('/').skip(1).join('/'), {}, _lastScanList);
     final effectivePath = await _pathService.getEffectivePath(systemId);
     final destUri = p.join(effectivePath, destRelPath);
 

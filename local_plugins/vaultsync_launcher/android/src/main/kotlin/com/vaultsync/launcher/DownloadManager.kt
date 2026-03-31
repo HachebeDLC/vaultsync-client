@@ -118,7 +118,61 @@ class DownloadManager(
                         }
                     }
                 }
-                mainHandler.post { result.success(true) }
+                
+                // CRITICAL: Return the ACTUAL metadata from the file on disk.
+                // This bypasses the need for Dart to call getFileInfo separately,
+                // which often fails on SAF with "Unsupported Uri" errors.
+                try {
+                    val finalInfo = when {
+                        isShizukuPath(uriStr) -> {
+                            val baseDir = getCleanPath(uriStr)
+                            val finalPath = File(baseDir, localFilename).absolutePath
+                            val svc = getShizukuServiceSync()
+                            mapOf("size" to svc.getFileSize(finalPath), "lastModified" to svc.getLastModified(finalPath))
+                        }
+                        uriStr.startsWith("content://") -> {
+                            val treeUri = Uri.parse(uriStr)
+                            val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
+                            var currentDir = rootDoc
+                            val pathParts = localFilename.split("/")
+                            for (i in 0 until pathParts.size - 1) {
+                                currentDir = currentDir?.let { fileScanner.findFileStrict(it, pathParts[i]) }
+                            }
+                            
+                            // Force a fresh query by bypassing the cache for the specific file
+                            // so we get the ACTUAL size after the stream is closed.
+                            var finalSize = 0L
+                            var finalTs = 0L
+                            if (currentDir != null) {
+                                val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(currentDir.uri, android.provider.DocumentsContract.getDocumentId(currentDir.uri))
+                                context.contentResolver.query(
+                                    childrenUri,
+                                    arrayOf(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME, android.provider.DocumentsContract.Document.COLUMN_SIZE, android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+                                    null, null, null
+                                )?.use { cursor ->
+                                    val targetName = pathParts.last()
+                                    while (cursor.moveToNext()) {
+                                        val name = cursor.getString(0) ?: continue
+                                        if (name == targetName) {
+                                            finalSize = cursor.getLong(1)
+                                            finalTs = cursor.getLong(2)
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                            mapOf("size" to finalSize, "lastModified" to finalTs)
+                        }
+                        else -> {
+                            val finalFile = File(File(uriStr), localFilename)
+                            mapOf("size" to finalFile.length(), "lastModified" to finalFile.lastModified())
+                        }
+                    }
+                    mainHandler.post { result.success(finalInfo) }
+                } catch (e: Exception) {
+                    // Fallback to simple success if metadata retrieval fails
+                    mainHandler.post { result.success(true) }
+                }
             } catch (e: Exception) {
                 android.util.Log.e("VaultSync", "Download failed: ${e.message}", e)
                 mainHandler.post { result.error("DOWNLOAD_ERROR", e.message, null) }

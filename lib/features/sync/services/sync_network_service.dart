@@ -84,7 +84,7 @@ class SyncNetworkService {
     onRecordSuccess(systemId, relPath, hash);
   }
 
-  Future<void> downloadFile(
+  Future<dynamic> downloadFile(
     String remotePath, 
     String localBasePath, 
     String relPath, {
@@ -129,16 +129,13 @@ class SyncNetworkService {
 
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       await DartNativeCrypto.downloadFileNative(downloadArgs);
+      return true;
     } else {
-      await _platform.invokeMethod('downloadFileNative', downloadArgs);
+      return await _platform.invokeMethod('downloadFileNative', downloadArgs);
     }
-
-    if (remoteHash != null) {
-      onRecordSuccess(systemId, relPath, remoteHash);
-    }  
   }
 
-  Future<void> restoreVersion(
+  Future<dynamic> restoreVersion(
     String remotePath, 
     String versionId, 
     String localBasePath, 
@@ -162,8 +159,9 @@ class SyncNetworkService {
 
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       await DartNativeCrypto.downloadFileNative(args);
+      return true;
     } else {
-      await _platform.invokeMethod('downloadFileNative', args);
+      return await _platform.invokeMethod('downloadFileNative', args);
     }
   }
 }

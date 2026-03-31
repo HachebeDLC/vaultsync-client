@@ -39,6 +39,16 @@ void callbackDispatcher() {
 
     try {
       final apiClient = container.read(apiClientProvider);
+
+      // 1. Check if server is even configured
+      if (!await apiClient.isConfigured()) {
+        print("🕒 WORKER: Server not configured. Skipping background sync.");
+        // We don't necessarily cancelAll here as the user might be mid-setup, 
+        // but we return true to stop this specific execution.
+        return true;
+      }
+      
+      // 2. Check if we have an auth token
       final token = await apiClient.getToken();
       
       // If we've lost our session or logged out, stop the background worker permanently

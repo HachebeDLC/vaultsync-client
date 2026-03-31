@@ -32,6 +32,10 @@ class ShizukuService : IShizukuService.Stub() {
         return results.toString()
     }
 
+    override fun mkdirs(path: String): Boolean {
+        return File(path).mkdirs()
+    }
+
     override fun readFile(path: String, offset: Long, length: Int): ByteArray {
         val file = File(path)
         if (!file.exists()) return ByteArray(0)

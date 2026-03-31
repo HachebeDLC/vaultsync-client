@@ -45,7 +45,7 @@ class FileCache {
       path,
       version: 2,
       onConfigure: (db) async {
-        await db.execute('PRAGMA journal_mode = WAL');
+        await db.rawQuery('PRAGMA journal_mode = WAL');
         await db.execute('PRAGMA synchronous = NORMAL');
       },
       onCreate: (db, version) async {

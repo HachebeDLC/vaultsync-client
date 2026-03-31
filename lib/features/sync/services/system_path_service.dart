@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:path/path.dart' as p;
 import '../../emulation/data/emulator_repository.dart';
 import '../../emulation/domain/emulator_config.dart';
 
@@ -83,8 +84,37 @@ class SystemPathService {
 
   /// Returns the configured path for a specific `systemId`.
   Future<String?> getSystemPath(String systemId) async {
-    final paths = await getAllSystemPaths();
-    return paths[systemId];
+    final prefs = await SharedPreferences.getInstance();
+    String? path = prefs.getString('system_path_$systemId');
+
+    // Proactive Auto-Correction & Migration
+    if (path != null) {
+      final sid = systemId.toLowerCase();
+      
+      // 1. Force 3DS into the cleaner 'saves' folder if it's pointing to the root
+      // Only for POSIX paths to avoid corrupting SAF URIs.
+      if ((sid == '3ds' || sid == 'azahar') && !path.contains('content://') && (path.endsWith('Azahar') || path.endsWith('Azahar/'))) {
+        print('🛠️ PATH: Auto-correcting 3DS path to include /saves');
+        path = p.join(path, 'saves');
+        await setSystemPath(systemId, path);
+      }
+
+      // 2. Pull Switch/Eden back to the 'files' root if it's too deep
+      if (sid == 'switch' || sid == 'eden') {
+        if (path.endsWith('nand/user/save')) {
+           print('🛠️ PATH: Auto-migrating Switch POSIX path from /save to /files');
+           path = path.substring(0, path.lastIndexOf('/nand/user/save'));
+           await setSystemPath(systemId, path);
+        } else if (path.contains('nand%2Fuser%2Fsave')) {
+           print('🛠️ PATH: Auto-migrating Switch SAF path from /save to /files');
+           path = path.split('nand%2Fuser%2Fsave').first;
+           if (path.endsWith('%2F')) path = path.substring(0, path.length - 3);
+           await setSystemPath(systemId, path);
+        }
+      }
+    }
+
+    return path;
   }
 
   /// Persists a custom save path for a given `systemId`.
@@ -97,7 +127,7 @@ class SystemPathService {
 
   Future<String?> getSystemEmulator(String systemId) async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString("system_emulator_$systemId");
+    return prefs.getString('system_emulator_$systemId');
   }
 
   Future<void> setSystemEmulator(String systemId, String emulatorId) async {
@@ -130,7 +160,19 @@ class SystemPathService {
       return '${_getDesktopHome()}/RetroArch/saves';
     }
     
+    // For RetroArch cores on Android, always use the RetroArch saves directory
+    if (RegExp(r'\.ra\d*\.').hasMatch(emulator.uniqueId)) {
+      return '/storage/emulated/0/RetroArch/saves';
+    }
+
     final Map? standalones = _config?['standaloneDefaults'];
+    if (standalones != null) {
+      for (final entry in standalones.entries) {
+        if (emulator.uniqueId.contains(entry.key as String)) {
+          return entry.value as String;
+        }
+      }
+    }
     return standalones?[systemId.toLowerCase()] ?? '/storage/emulated/0/RetroArch/saves';
   }
 
@@ -314,7 +356,22 @@ class SystemPathService {
 
   /// Resolves the 'effective' path for Android, handling POSIX, SAF, and Shizuku abstraction.
   Future<String> getEffectivePath(String systemId) async {
-    final rawPath = await getSystemPath(systemId);
+    String? rawPath = await getSystemPath(systemId);
+    final emulatorId = await getSystemEmulator(systemId);
+
+    // MIGRATION: If we have a RetroArch core but a standalone path was saved,
+    // it's almost certainly a legacy mistake from before the core-aware suggestion fix.
+    if (rawPath != null && emulatorId != null && Platform.isAndroid) {
+      if (RegExp(r'\.ra\d*\.').hasMatch(emulatorId)) {
+        if (rawPath.contains('com.mgba.android') || rawPath.contains('com.github.stenzek.duckstation')) {
+          print('🛠️ PATH: Migrating legacy standalone path for RA core $emulatorId');
+          rawPath = '/storage/emulated/0/RetroArch/saves';
+          // Persist the fix so we don't keep re-migrating
+          await setSystemPath(systemId, rawPath);
+        }
+      }
+    }
+
     if (rawPath == null) return await suggestSavePathById(systemId);
     if (!Platform.isAndroid) return rawPath;
 
@@ -328,12 +385,20 @@ class SystemPathService {
     }
 
     if (posixPath.toLowerCase().contains('android/data')) {
-       if (rawPath.startsWith('content://')) return rawPath;
+       if (rawPath.startsWith('content://')) {
+          print('🛠️ PATH: Using SAF effective path for $systemId: $rawPath');
+          return rawPath;
+       }
        final persistedUri = prefs.getString("saf_uri_$posixPath");
-       if (persistedUri != null) return persistedUri;
+       if (persistedUri != null) {
+          print('🛠️ PATH: Using persisted SAF URI for $systemId: $persistedUri');
+          return persistedUri;
+       }
+       print('🛠️ PATH: Falling back to POSIX for $systemId: $posixPath');
        return rawPath; 
     }
     
+    print('🛠️ PATH: Using POSIX effective path for $systemId: $posixPath');
     return posixPath;
   }
 
@@ -370,9 +435,16 @@ class SystemPathService {
           if (await _hasValidRoms(d, system.system.extensions)) {
             if (emuDeckSaves != null) {
               final config = await _getEmuDeckConfig(emuDeckSaves.path, system.system.id);
-              results.add({'systemId': system.system.id, 'path': config['path']!, 'emulatorId': config['emulatorId']!});
+              results.add({
+                'systemId': system.system.id, 
+                'path': config['path']!, 
+                'emulatorId': config['emulatorId']!
+              });
             } else {
-              results.add({'systemId': system.system.id, 'path': d.path});
+              // If not EmuDeck, we don't know where the saves are.
+              // We report the system is found but don't provide a path,
+              // allowing suggestSavePath() to handle it later.
+              results.add({'systemId': system.system.id});
             }
           }
         }
@@ -397,7 +469,64 @@ class SystemPathService {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
+  Future<bool> mkdirs(String path) async {
+    if (!Platform.isAndroid) {
+      await Directory(path).create(recursive: true);
+      return true;
+    }
+    try {
+      return await _platform.invokeMethod<bool>('mkdirs', {'path': path}) ?? false;
+    } catch (e) {
+      print('⚠️ PATH: mkdirs failed for $path: $e');
+      return false;
+    }
+  }
+
   Future<String?> getSwitchSavePathForGame(String systemId, String gameId) async => await getEffectivePath(systemId);
+
+  /// Probes the Switch/Eden emulator NAND directory to discover the user's profile ID.
+  /// Used for first-restore scenarios where no local save files exist yet to probe from.
+  Future<String?> probeProfileId(String effectivePath) async {
+    if (!Platform.isAndroid) return null;
+
+    // Use native probing for all Android paths (SAF and Shizuku)
+    // because Dart I/O cannot see inside /Android/data.
+    try {
+      // 1. Try to read the real ID from Eden's profiles.dat first
+      final edenId = await _platform.invokeMethod<String?>('readEdenUserId', {'uri': effectivePath});
+      if (edenId != null) {
+        print('🎮 EDEN: Discovered real User ID via profiles.dat: $edenId');
+        return edenId;
+      }
+
+      // 2. Fallback to general Switch profile discovery
+      return await _platform.invokeMethod<String?>('findSwitchProfileId', {'uri': effectivePath});
+    } catch (e) {
+      print('⚠️ PROBE: Native profile discovery failed: $e');
+    }
+
+    // Fallback for simple non-restricted POSIX paths (SD card, etc)
+    final posixPath = effectivePath.replaceFirst('shizuku://', '');
+    String basePath = posixPath;
+    if (basePath.contains('nand/user/save')) {
+      basePath = basePath.substring(0, basePath.indexOf('nand/user/save'));
+    }
+    
+    final profileRegex = RegExp(r'^[0-9A-Fa-f]{32}$');
+    for (final base in ['$basePath/nand/user/save/0000000000000000', '$basePath/files/nand/user/save/0000000000000000']) {
+      final saveDir = Directory(base);
+      if (!await saveDir.exists()) continue;
+      try {
+        await for (final entity in saveDir.list()) {
+          if (entity is Directory) {
+            final name = entity.path.split('/').last;
+            if (profileRegex.hasMatch(name) && name != '00000000000000000000000000000000') return name;
+          }
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
 
   Future<Map<String, String>> getRetroArchPaths() async {
     final saves = await getSystemPath('retroarch') ?? await suggestSavePathById('retroarch');

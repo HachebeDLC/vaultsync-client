@@ -147,7 +147,32 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             "openSafDirectoryPicker" -> {
                 val act = activity ?: return result.error("NO_ACTIVITY", "Activity is not available", null)
                 pendingResult = result
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                val initialUriStr = call.argument<String>("initialUri")
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && initialUriStr != null) {
+                    try {
+                        val cleanPath = when {
+                            initialUriStr.contains("primary%3A") ->
+                                initialUriStr.split("primary%3A").last().replace("%2F", "/")
+                            initialUriStr.contains("primary:") ->
+                                initialUriStr.split("primary:").last()
+                            initialUriStr.contains("tree/") ->
+                                initialUriStr.split("tree/").last().split(":").last().replace("%2F", "/")
+                            else -> null
+                        }
+                        val hintUri = if (cleanPath != null) {
+                            DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:${cleanPath.trimEnd('/')}")
+                        } else {
+                            Uri.parse(initialUriStr)
+                        }
+                        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, hintUri)
+                        android.util.Log.d("VaultSync", "SAF picker hint URI: $hintUri")
+                    } catch (e: Exception) {
+                        android.util.Log.w("VaultSync", "Failed to set SAF picker hint: ${e.message}")
+                    }
+                }
                 act.startActivityForResult(intent, PICK_DIRECTORY_REQUEST_CODE)
             }
             "checkSafPermission" -> {
@@ -170,15 +195,25 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 result.success(automationEngine.getRecentlyClosedEmulator(packages))
             }
             "checkShizukuStatus" -> {
-                val running = Shizuku.pingBinder()
-                val auth = if (running) Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED else false
-                result.success(mapOf("running" to running, "authorized" to auth))
+                try {
+                    val running = Shizuku.pingBinder()
+                    val auth = if (running) Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED else false
+                    result.success(mapOf("running" to running, "authorized" to auth))
+                } catch (e: Exception) {
+                    android.util.Log.w("VaultSync", "checkShizukuStatus threw: ${e.message}")
+                    result.success(mapOf("running" to false, "authorized" to false))
+                }
             }
             "requestShizukuPermission" -> {
-                if (Shizuku.pingBinder() && Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                    Shizuku.requestPermission(101)
-                    result.success(true)
-                } else {
+                try {
+                    if (Shizuku.pingBinder() && Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                        Shizuku.requestPermission(101)
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("VaultSync", "requestShizukuPermission threw: ${e.message}")
                     result.success(false)
                 }
             }
@@ -235,6 +270,24 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 fileScanner.clearCache()
                 result.success(true)
             }
+            "mkdirs" -> {
+                val path = call.argument<String>("path") ?: return result.error("ARG_MISSING", "path missing", null)
+                executor.execute {
+                    try {
+                        val success = when {
+                            path.startsWith("shizuku://") -> getShizukuServiceSync().mkdirs(getCleanPath(path))
+                            path.startsWith("content://") -> {
+                                // SAF doesn't have a direct 'mkdirs', but we handle it during download
+                                true 
+                            }
+                            else -> File(path).mkdirs()
+                        }
+                        mainHandler.post { result.success(success) }
+                    } catch (e: Exception) {
+                        mainHandler.post { result.error("MKDIRS_ERROR", e.message, null) }
+                    }
+                }
+            }
             "startMonitoring" -> {
                 val packages = call.argument<List<String>>("packages") ?: emptyList()
                 val interval = (call.argument<Any>("interval") as? Number)?.toLong() ?: 15000L
@@ -249,6 +302,121 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
                 val root = fileScanner.findSwitchSaveRoot(Uri.parse(uriStr))
                 result.success(root.toString())
+            }
+            "readEdenUserId" -> {
+                val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
+                val ctx = context ?: return result.error("NO_CONTEXT", "Context is null", null)
+                executor.execute {
+                    try {
+                        // ProfileDataRaw layout (from Eden source):
+                        //   [0x00-0x0F] 16-byte header padding
+                        //   [0x10+N*0xC8] UserRaw[N].uuid — 16-byte UUID at start of each 200-byte entry
+                        val PROFILE_HEADER = 0x10
+                        val USER_RAW_SIZE  = 0xC8  // sizeof(UserRaw) per static_assert
+                        val MAX_USERS      = 8
+
+                        fun extractUserId(bytes: ByteArray): String? {
+                            for (i in 0 until MAX_USERS) {
+                                val offset = PROFILE_HEADER + i * USER_RAW_SIZE
+                                if (offset + 16 > bytes.size) break
+                                val uuidBytes = bytes.sliceArray(offset until offset + 16)
+                                if (uuidBytes.any { it != 0.toByte() }) {
+                                    // Eden stores the UUID as two little-endian u64s.
+                                    // The save folder name is formatted as {uuid[1]}{uuid[0]},
+                                    // which equals reversing all 16 raw bytes before hex-encoding.
+                                    return uuidBytes.reversedArray().joinToString("") { "%02x".format(it) }.uppercase()
+                                }
+                            }
+                            return null
+                        }
+
+                        val PROFILES_SEGMENTS = listOf("nand", "system", "save", "8000000000000010", "su", "avators")
+
+                        val userId = when {
+                            uriStr.startsWith("content://") -> {
+                                var current: DocumentFile? = DocumentFile.fromTreeUri(ctx, Uri.parse(uriStr))
+                                for (segment in PROFILES_SEGMENTS) {
+                                    current = current?.let { fileScanner.findFileStrict(it, segment) }
+                                    if (current == null) break
+                                }
+                                val profileFile = current?.let { fileScanner.findFileStrict(it, "profiles.dat") }
+                                profileFile?.let { pf ->
+                                    ctx.contentResolver.openInputStream(pf.uri)?.use { extractUserId(it.readBytes()) }
+                                }
+                            }
+                            uriStr.startsWith("shizuku://") -> {
+                                val cleanPath = getCleanPath(uriStr)
+                                val svc = getShizukuServiceSync()
+                                val probePaths = listOf(
+                                    "$cleanPath/nand/system/save/8000000000000010/su/avators/profiles.dat",
+                                    "$cleanPath/files/nand/system/save/8000000000000010/su/avators/profiles.dat"
+                                )
+                                var found: String? = null
+                                for (path in probePaths) {
+                                    val pfd = svc.openFile(path, "r") ?: continue
+                                    found = pfd.use { FileInputStream(it.fileDescriptor).use { s -> extractUserId(s.readBytes()) } }
+                                    if (found != null) break
+                                }
+                                found
+                            }
+                            else -> {
+                                val cleanPath = getCleanPath(uriStr)
+                                val probePaths = listOf(
+                                    "$cleanPath/nand/system/save/8000000000000010/su/avators/profiles.dat",
+                                    "$cleanPath/files/nand/system/save/8000000000000010/su/avators/profiles.dat"
+                                )
+                                probePaths.firstNotNullOfOrNull { path ->
+                                    val f = File(path)
+                                    if (f.exists()) extractUserId(f.readBytes()) else null
+                                }
+                            }
+                        }
+
+                        android.util.Log.i("VaultSync", "🎮 EDEN: User ID probe result: $userId")
+                        mainHandler.post { result.success(userId) }
+                    } catch (e: Exception) {
+                        android.util.Log.e("VaultSync", "readEdenUserId failed", e)
+                        mainHandler.post { result.success(null) }
+                    }
+                }
+            }
+            "findSwitchProfileId" -> {
+                val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
+                executor.execute {
+                    try {
+                        val profileId = when {
+                            uriStr.startsWith("shizuku://") -> {
+                                val cleanPath = getCleanPath(uriStr)
+                                // Standard probe locations for Shizuku/POSIX
+                                val probePaths = listOf(
+                                    "$cleanPath/nand/user/save/0000000000000000",
+                                    "$cleanPath/files/nand/user/save/0000000000000000"
+                                )
+                                var found: String? = null
+                                val profileRegex = Regex("^[0-9A-Fa-f]{32}$")
+                                val svc = getShizukuServiceSync()
+                                
+                                for (p in probePaths) {
+                                    val children = svc.listFiles(p) ?: continue
+                                    for (child in children) {
+                                        if (profileRegex.matches(child) && child != "00000000000000000000000000000000") {
+                                            found = child
+                                            break
+                                        }
+                                    }
+                                    if (found != null) break
+                                }
+                                found
+                            }
+                            else -> fileScanner.findSwitchProfileId(Uri.parse(uriStr))
+                        }
+                        android.util.Log.d("VaultSync", "🎮 SWITCH: Probed profile ID: $profileId")
+                        mainHandler.post { result.success(profileId) }
+                    } catch (e: Exception) {
+                        android.util.Log.e("VaultSync", "findSwitchProfileId failed", e)
+                        mainHandler.post { result.success(null) }
+                    }
+                }
             }
             else -> result.notImplemented()
         }
