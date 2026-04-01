@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/emulator_repository.dart';
 import '../domain/emulator_config.dart';
@@ -15,12 +16,49 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
     
     // 1. Detect which emulators are installed
     for (var emulator in systemConfig.emulators) {
-      // For Android, unique_id like "switch.dev.eden.eden_emulator" needs the package part
-      final packageId = emulator.uniqueId.contains('.') 
-          ? emulator.uniqueId.substring(emulator.uniqueId.indexOf('.') + 1)
-          : emulator.uniqueId;
+      bool isInstalled = false;
+      final lowerId = emulator.uniqueId.toLowerCase();
+      
+      // Determine if this looks like an Android package (has .com. .org. etc)
+      // or if we are explicitly on Android and it's a RetroArch core.
+      final isRA = lowerId.contains('.ra.') || lowerId.contains('.ra64.') || lowerId.contains('.ra32.');
+      final isPackageFormat = lowerId.contains('.com.') || 
+                            lowerId.contains('.org.') || 
+                            lowerId.contains('.net.') ||
+                            lowerId.contains('.it.') ||
+                            lowerId.contains('.come.');
+
+      if (Platform.isAndroid || isPackageFormat || isRA) {
+        // Special case: RetroArch cores (Android specific detection)
+        if (isRA) {
+           final raPackages = ['com.retroarch', 'com.retroarch.aarch64', 'com.retroarch.ra32'];
+           for (final pkg in raPackages) {
+             if (await detector.isEmulatorInstalled(pkg)) {
+               isInstalled = true;
+               break;
+             }
+           }
+        } else {
+          // Normal package detection: strip the system prefix (e.g. "ps2.com.tahlreth.aethersx2" -> "com.tahlreth.aethersx2")
+          String packageId = lowerId.contains('.') 
+              ? lowerId.substring(lowerId.indexOf('.') + 1)
+              : lowerId;
           
-      final isInstalled = await detector.isEmulatorInstalled(packageId);
+          // Manual mappings
+          if (packageId == 'azahar') packageId = 'org.citra.citra_emu';
+          if (packageId == 'citra') packageId = 'com.citra.emu';
+          if (packageId == 'citra.desktop') packageId = 'com.citra.emu';
+          if (packageId == 'pcsx2.desktop') packageId = 'com.pcsx2.pcsx2';
+              
+          isInstalled = await detector.isEmulatorInstalled(packageId);
+        }
+      } 
+      
+      // If still not detected, try as a desktop emulator if on desktop
+      if (!isInstalled && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
+        isInstalled = await detector.isEmulatorInstalled(emulator.uniqueId);
+      }
+      
       detectedEmulators.add(emulator.copyWith(isInstalled: isInstalled));
     }
 

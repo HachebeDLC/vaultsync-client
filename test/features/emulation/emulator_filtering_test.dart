@@ -7,16 +7,17 @@ import 'package:vaultsync_client/features/emulation/presentation/emulator_provid
 import 'package:vaultsync_client/core/services/emulator_detector.dart';
 
 class MockEmulatorRepository extends Mock implements EmulatorRepository {}
-class MockEmulatorDetector extends Mock implements EmulatorDetector {}
+class MockDetector extends Mock implements EmulatorDetector {}
 
 void main() {
   late MockEmulatorRepository mockRepository;
-  late MockEmulatorDetector mockDetector;
+  late MockDetector mockDetector;
 
   setUp(() {
     mockRepository = MockEmulatorRepository();
-    mockDetector = MockEmulatorDetector();
+    mockDetector = MockDetector();
     
+    registerFallbackValue('com.retroarch');
     when(() => mockDetector.isEmulatorInstalled(any())).thenAnswer((_) async => false);
   });
 
@@ -34,7 +35,7 @@ void main() {
       
       // Mock: Only standalone Snes9x EX+ is installed
       when(() => mockDetector.isEmulatorInstalled('com.explusplus.snes9x')).thenAnswer((_) async => true);
-      when(() => mockDetector.isEmulatorInstalled('ra.snes9x')).thenAnswer((_) async => false);
+      when(() => mockDetector.isEmulatorInstalled('com.retroarch')).thenAnswer((_) async => false);
 
       final container = ProviderContainer(
         overrides: [
@@ -56,6 +57,32 @@ void main() {
       expect(emulators[1].isInstalled, isFalse);
     });
 
+    test('should detect RetroArch cores if RetroArch package is installed', () async {
+      final systemConfig = EmulatorConfig(
+        system: SystemInfo(id: 'snes', name: 'SNES', folders: ['snes'], extensions: ['smc'], ignoredFolders: []),
+        emulators: [
+          EmulatorInfo(name: 'RetroArch Snes9x', uniqueId: 'snes.ra.snes9x', defaultEmulator: true),
+        ],
+      );
+
+      when(() => mockRepository.loadSystems()).thenAnswer((_) async => [systemConfig]);
+      
+      // Mock: RetroArch is installed
+      when(() => mockDetector.isEmulatorInstalled('com.retroarch.aarch64')).thenAnswer((_) async => true);
+
+      final container = ProviderContainer(
+        overrides: [
+          emulatorRepositoryProvider.overrideWith((ref) => mockRepository),
+          emulatorDetectorProvider.overrideWith((ref) => mockDetector),
+        ],
+      );
+
+      final result = await container.read(systemsProvider.future);
+      
+      expect(result.length, 1);
+      expect(result.first.emulators.first.isInstalled, isTrue);
+    });
+
     test('should hide systems that have NO installed emulators', () async {
       final snesConfig = EmulatorConfig(
         system: SystemInfo(id: 'snes', name: 'SNES', folders: ['snes'], extensions: ['smc'], ignoredFolders: []),
@@ -73,9 +100,11 @@ void main() {
 
       when(() => mockRepository.loadSystems()).thenAnswer((_) async => [snesConfig, ps2Config]);
       
-      // Mock: Only AetherSX2 is installed. Snes9x is NOT.
+      // Mock: Only AetherSX2 is installed. RetroArch is NOT.
       when(() => mockDetector.isEmulatorInstalled('com.tahlreth.aethersx2.free')).thenAnswer((_) async => true);
-      when(() => mockDetector.isEmulatorInstalled('ra.snes9x')).thenAnswer((_) async => false);
+      when(() => mockDetector.isEmulatorInstalled('com.retroarch')).thenAnswer((_) async => false);
+      when(() => mockDetector.isEmulatorInstalled('com.retroarch.aarch64')).thenAnswer((_) async => false);
+      when(() => mockDetector.isEmulatorInstalled('com.retroarch.ra32')).thenAnswer((_) async => false);
 
       final container = ProviderContainer(
         overrides: [

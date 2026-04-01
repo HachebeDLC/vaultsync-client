@@ -87,7 +87,11 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           final currentPath = await service.getSystemPath(sid);
           
           // Find system from the filtered list (already only contains systems with installed emus)
-          final sysConf = systems.firstWhere((s) => s.system.id == sid, orElse: () => throw Exception('System $sid has no installed emulators.'));
+          final sysConf = systems.where((s) => s.system.id == sid).firstOrNull;
+          if (sysConf == null) {
+            print('ℹ️ SETUP: Skipping $sid because no emulators are installed.');
+            continue;
+          }
           
           // Auto-selected mapped emulator from EmuDeck detection
           final mappedEmuId = f['emulatorId'];
