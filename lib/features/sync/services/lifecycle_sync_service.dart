@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/sync_provider.dart';
+import '../../../core/services/connectivity_provider.dart';
+import 'sync_service.dart';
 
 final lifecycleSyncServiceProvider = Provider<LifecycleSyncService>((ref) {
   final service = LifecycleSyncService(ref);
@@ -14,9 +16,20 @@ final lifecycleSyncServiceProvider = Provider<LifecycleSyncService>((ref) {
 class LifecycleSyncService with WidgetsBindingObserver {
   final Ref _ref;
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
+  bool _wasOffline = false;
 
   LifecycleSyncService(this._ref) {
     WidgetsBinding.instance.addObserver(this);
+    _initConnectivityListener();
+  }
+
+  void _initConnectivityListener() {
+    _ref.listen<bool>(isOnlineProvider, (previous, next) {
+      if (previous == false && next == true) {
+        print('🕒 LIFECYCLE: Device is back online. Triggering offline queue...');
+        _ref.read(syncServiceProvider).processOfflineQueue();
+      }
+    }, fireImmediately: true);
   }
 
   void dispose() {

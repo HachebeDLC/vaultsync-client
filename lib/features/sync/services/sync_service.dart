@@ -43,6 +43,12 @@ class SyncService {
     }
   }
 
+  Future<void> processOfflineQueue() async {
+    print('🕒 SYNC: Restoring offline queue to active status...');
+    await _repository.restoreOfflineQueue();
+    await triggerQueueProcessing();
+  }
+
   Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false, bool isBackground = false}) async {
     await _notificationService.init();
     if (isBackground) {

@@ -12,6 +12,7 @@ import 'file_cache.dart';
 import 'dart_file_scanner.dart';
 import 'dart_native_crypto.dart';
 import 'sync_state_database.dart';
+import '../../../core/services/connectivity_provider.dart';
 import '../domain/notification_models.dart';
 import '../domain/notification_provider.dart';
 import '../services/sync_network_service.dart';
@@ -291,6 +292,41 @@ class SyncRepository {
 
       final String cloudPrefix = (systemId.toLowerCase() == 'eden') ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId);
       
+      final bool isOnline = _ref?.read(isOnlineProvider) ?? true;
+
+      if (!isOnline) {
+        print('🕒 SYNC: Offline mode. Queuing local changes for $systemId...');
+        final List<dynamic> localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
+        final localFiles = _conflictResolver.processLocalFiles(systemId, localList);
+        
+        for (final entry in localFiles.entries) {
+          final relPath = entry.key;
+          final localInfo = entry.value;
+          final int localTs = (localInfo['lastModified'] as num).toInt();
+          final int localSize = (localInfo['size'] as num).toInt();
+          
+          final cached = await _syncStateDb.getState(localInfo['uri']);
+          // If not in DB or metadata changed, it's a potential upload
+          if (cached == null || cached['size'] != localSize || cached['last_modified'] != localTs) {
+            final remotePath = '$cloudPrefix/$relPath';
+            // We don't hash yet to save battery while offline, just mark as offline-pending
+            // Actually, we need the hash eventually, but we can wait until we are online.
+            // For now, let's just mark it so the UI knows.
+            await _syncStateDb.upsertState(
+              localInfo['uri'], 
+              localSize, 
+              localTs, 
+              cached?['hash'] ?? '', 
+              'pending_offline_upload', 
+              systemId: systemId, 
+              remotePath: remotePath, 
+              relPath: relPath
+            );
+          }
+        }
+        return;
+      }
+
       try {
         final response = await _apiClient.get('/api/v1/files', queryParams: {'prefix': cloudPrefix});
         final List<dynamic> fileList = response['files'] ?? [];
@@ -439,6 +475,10 @@ class SyncRepository {
        final effectivePath = await _pathService.getEffectivePath(systemId);
        await _processJobQueue(systemId, effectivePath, (msg) => print('Queue: $msg'));
     }
+  }
+
+  Future<void> restoreOfflineQueue() async {
+    await _syncStateDb.markOfflineJobsAsPending();
   }
 
   Future<void> uploadFile(dynamic localPathOrFile, String remotePath, {required String systemId, required String relPath, required SharedPreferences prefs, String? plainHash, List<String>? localBlockHashes, bool force = false}) async {

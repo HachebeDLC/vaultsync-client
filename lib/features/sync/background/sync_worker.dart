@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:workmanager/workmanager.dart';
 import '../../../core/services/api_client_provider.dart';
@@ -11,6 +12,19 @@ import '../services/sync_service.dart';
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     print("🕒 SYNC WORKER: Executing task: $task");
+
+    const platform = MethodChannel('com.vaultsync.app/launcher');
+    
+    // Check connectivity first to save battery
+    try {
+      final bool isOnline = await platform.invokeMethod<bool>('isOnline') ?? true;
+      if (!isOnline) {
+        print("🕒 SYNC WORKER: Device is offline. Skipping background sync to save battery.");
+        return true;
+      }
+    } catch (e) {
+      print("⚠️ SYNC WORKER: Could not verify connectivity: $e");
+    }
     
     // Initialize a lightweight container for background sync
     final container = ProviderContainer(
