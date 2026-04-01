@@ -57,6 +57,32 @@ void main() {
       expect(emulators[1].isInstalled, isFalse);
     });
 
+    test('should detect Azahar/Citra via multiple package candidates', () async {
+      final systemConfig = EmulatorConfig(
+        system: SystemInfo(id: '3ds', name: '3DS', folders: ['3ds'], extensions: ['3ds'], ignoredFolders: []),
+        emulators: [
+          EmulatorInfo(name: 'Azahar', uniqueId: '3ds.azahar', defaultEmulator: true),
+        ],
+      );
+
+      when(() => mockRepository.loadSystems()).thenAnswer((_) async => [systemConfig]);
+      
+      // Mock: Azahar is installed using one of the common Citra package names
+      when(() => mockDetector.isEmulatorInstalled('org.citra.citra_emu')).thenAnswer((_) async => true);
+
+      final container = ProviderContainer(
+        overrides: [
+          emulatorRepositoryProvider.overrideWith((ref) => mockRepository),
+          emulatorDetectorProvider.overrideWith((ref) => mockDetector),
+        ],
+      );
+
+      final result = await container.read(systemsProvider.future);
+      
+      expect(result.length, 1);
+      expect(result.first.emulators.first.isInstalled, isTrue);
+    });
+
     test('should detect RetroArch cores if RetroArch package is installed', () async {
       final systemConfig = EmulatorConfig(
         system: SystemInfo(id: 'snes', name: 'SNES', folders: ['snes'], extensions: ['smc'], ignoredFolders: []),

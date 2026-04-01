@@ -191,16 +191,7 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
               final isSelected = emu.uniqueId == currentEmulatorId;
               return ListTile(
                 title: Text(emu.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-                subtitle: Row(
-                  children: [
-                    Text(emu.uniqueId, style: const TextStyle(fontSize: 10)),
-                    if (emu.isInstalled) ...[
-                      const SizedBox(width: 8),
-                      const Icon(Icons.check_circle, size: 12, color: Colors.green),
-                      const Text(' Installed', style: TextStyle(fontSize: 10, color: Colors.green)),
-                    ],
-                  ],
-                ),
+                subtitle: Text(emu.uniqueId, style: const TextStyle(fontSize: 10)),
                 selected: isSelected,
                 trailing: isSelected ? const Icon(Icons.check, color: Colors.blue) : null,
                 onTap: () => Navigator.pop(context, emu.uniqueId),

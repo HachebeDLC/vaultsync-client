@@ -19,16 +19,21 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
       bool isInstalled = false;
       final lowerId = emulator.uniqueId.toLowerCase();
       
-      // Determine if this looks like an Android package (has .com. .org. etc)
-      // or if we are explicitly on Android and it's a RetroArch core.
       final isRA = lowerId.contains('.ra.') || lowerId.contains('.ra64.') || lowerId.contains('.ra32.');
-      final isPackageFormat = lowerId.contains('.com.') || 
-                            lowerId.contains('.org.') || 
-                            lowerId.contains('.net.') ||
-                            lowerId.contains('.it.') ||
-                            lowerId.contains('.come.');
 
-      if (Platform.isAndroid || isPackageFormat || isRA) {
+      // Extract potential packageId from system prefix (e.g. "3ds.azahar" -> "azahar")
+      String packageId = lowerId.contains('.') 
+          ? lowerId.substring(lowerId.indexOf('.') + 1)
+          : lowerId;
+
+      // Check if this matches a known manual mapping (even if not a package format)
+      final isManualMapping = (packageId == 'azahar' || packageId == 'citra' || packageId == 'citra.desktop' || packageId == 'pcsx2.desktop');
+
+      // Determine if this looks like an Android package (has .com. .org. etc)
+      final dotCount = '.'.allMatches(lowerId).length;
+      final looksLikePackage = dotCount >= 2;
+
+      if (Platform.isAndroid || looksLikePackage || isRA || isManualMapping) {
         // Special case: RetroArch cores (Android specific detection)
         if (isRA) {
            final raPackages = ['com.retroarch', 'com.retroarch.aarch64', 'com.retroarch.ra32'];
@@ -39,18 +44,20 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
              }
            }
         } else {
-          // Normal package detection: strip the system prefix (e.g. "ps2.com.tahlreth.aethersx2" -> "com.tahlreth.aethersx2")
-          String packageId = lowerId.contains('.') 
-              ? lowerId.substring(lowerId.indexOf('.') + 1)
-              : lowerId;
-          
-          // Manual mappings
-          if (packageId == 'azahar') packageId = 'org.citra.citra_emu';
-          if (packageId == 'citra') packageId = 'com.citra.emu';
-          if (packageId == 'citra.desktop') packageId = 'com.citra.emu';
-          if (packageId == 'pcsx2.desktop') packageId = 'com.pcsx2.pcsx2';
+          // Normal package detection or manual mapping
+          List<String> candidatePackages = [packageId];
+          if (packageId == 'azahar' || packageId == 'citra' || packageId == 'citra.desktop') {
+            candidatePackages = ['org.citra.citra_emu', 'com.citra.emu', 'org.citra.emu', 'org.citra.citra_emu.canary', 'org.citra.citra_emu.antimony'];
+          } else if (packageId == 'pcsx2.desktop') {
+            candidatePackages = ['com.pcsx2.pcsx2', 'xyz.aethersx2.android', 'xyz.nethersx2.android'];
+          }
               
-          isInstalled = await detector.isEmulatorInstalled(packageId);
+          for (final pkg in candidatePackages) {
+            if (await detector.isEmulatorInstalled(pkg)) {
+              isInstalled = true;
+              break;
+            }
+          }
         }
       } 
       
