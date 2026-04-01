@@ -16,6 +16,7 @@ final systemPathServiceProvider = Provider<SystemPathService>((ref) {
 final systemPathsProvider = FutureProvider<Map<String, String>>((ref) async {
   final service = ref.watch(systemPathServiceProvider);
   await service.getStorageVersion(); 
+  await service.purgeOrphanedPaths();
   return service.getAllSystemPaths();
 });
 
@@ -69,17 +70,67 @@ class SystemPathService {
   }
 
   /// Retrieves all user-configured system paths from local storage.
+  /// Filters out orphaned paths that are no longer supported by the current system configs.
   Future<Map<String, String>> getAllSystemPaths() async {
     if (_cachedPaths != null) return _cachedPaths!;
+    
     final prefs = await SharedPreferences.getInstance();
+    final validSystems = await _emulatorRepository.loadSystems();
+    final validIds = validSystems.map((s) => s.system.id.toLowerCase()).toSet();
+    
     final keys = prefs.getKeys().where((k) => k.startsWith('system_path_'));
     final Map<String, String> paths = {};
+    
     for (final key in keys) {
-      final systemId = key.replaceFirst('system_path_', '');
-      paths[systemId] = prefs.getString(key)!;
+      final systemId = key.replaceFirst('system_path_', '').toLowerCase();
+      
+      // Only include if it's a currently supported system
+      if (validIds.contains(systemId)) {
+        paths[systemId] = prefs.getString(key)!;
+      }
     }
+    
     _cachedPaths = paths;
     return paths;
+  }
+
+  /// Automatically removes configurations for systems that are no longer supported
+  /// or are duplicates (e.g. legacy psx vs new ps1).
+  Future<void> purgeOrphanedPaths() async {
+    final prefs = await SharedPreferences.getInstance();
+    final validSystems = await _emulatorRepository.loadSystems();
+    final validIds = validSystems.map((s) => s.system.id.toLowerCase()).toSet();
+    
+    final keys = prefs.getKeys().toList();
+    int purgedCount = 0;
+
+    for (final key in keys) {
+      String? systemId;
+      if (key.startsWith('system_path_')) {
+        systemId = key.replaceFirst('system_path_', '');
+      } else if (key.startsWith('system_emulator_')) {
+        systemId = key.replaceFirst('system_emulator_', '');
+      }
+
+      if (systemId != null && !validIds.contains(systemId.toLowerCase())) {
+        print('🗑️ PURGE: Removing orphaned config for unknown system: $systemId');
+        
+        // Get associated path value BEFORE removing the key to clean up SAF permissions
+        final pathValue = prefs.getString(key);
+        
+        await prefs.remove(key);
+        
+        if (pathValue != null) {
+          await prefs.remove("saf_uri_$pathValue");
+        }
+        purgedCount++;
+      }
+    }
+
+    if (purgedCount > 0) {
+      _cachedPaths = null;
+      print('🗑️ PURGE: Successfully cleaned up $purgedCount orphaned settings.');
+    }
   }
 
   /// Returns the configured path for a specific `systemId`.

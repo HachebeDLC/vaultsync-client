@@ -25,8 +25,13 @@
   "emulators": [
     {
       "name": "Vita3K",
-      "unique_id": "vita.vita3k.desktop",
+      "unique_id": "vita.org.vita3k.emulator",
       "default": true
+    },
+    {
+      "name": "Vita3K (Desktop)",
+      "unique_id": "vita.vita3k.desktop",
+      "default": false
     }
   ]
 }
