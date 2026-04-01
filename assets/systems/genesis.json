@@ -35,7 +35,7 @@
       "default": false
     },
     {
-      "name": "GensPlusDroid",
+      "name": "Gensoid",
       "unique_id": "genesis.com.androidemu.gens",
       "default": false
     },
@@ -45,47 +45,47 @@
       "default": false
     },
     {
-      "name": "RetroArch64 Genesis Plus GX",
+      "name": "RetroArch (64 bits) - genesis_plus_gx",
       "unique_id": "genesis.ra64.genesis_plus_gx",
       "default": false
     },
     {
-      "name": "RetroArch64 Genesis Plus GX Wide",
+      "name": "RetroArch (64 bits) - genesis_plus_gx_wide",
       "unique_id": "genesis.ra64.genesis_plus_gx_wide",
       "default": false
     },
     {
-      "name": "RetroArch64 PicoDrive",
+      "name": "RetroArch (64 bits) - picodrive",
       "unique_id": "genesis.ra64.picodrive",
       "default": false
     },
     {
-      "name": "RetroArch32 Genesis Plus GX",
+      "name": "RetroArch (32 bits) - genesis_plus_gx",
       "unique_id": "genesis.ra32.genesis_plus_gx",
       "default": false
     },
     {
-      "name": "RetroArch32 Genesis Plus GX Wide",
+      "name": "RetroArch (32 bits) - genesis_plus_gx_wide",
       "unique_id": "genesis.ra32.genesis_plus_gx_wide",
       "default": false
     },
     {
-      "name": "RetroArch32 PicoDrive",
+      "name": "RetroArch (32 bits) - picodrive",
       "unique_id": "genesis.ra32.picodrive",
       "default": false
     },
     {
-      "name": "RetroArch Genesis Plus GX",
+      "name": "RetroArch - genesis_plus_gx",
       "unique_id": "genesis.ra.genesis_plus_gx",
       "default": true
     },
     {
-      "name": "RetroArch Genesis Plus GX Wide",
+      "name": "RetroArch - genesis_plus_gx_wide",
       "unique_id": "genesis.ra.genesis_plus_gx_wide",
       "default": false
     },
     {
-      "name": "RetroArch PicoDrive",
+      "name": "RetroArch - picodrive",
       "unique_id": "genesis.ra.picodrive",
       "default": false
     }

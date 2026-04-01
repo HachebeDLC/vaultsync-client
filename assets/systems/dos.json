@@ -2,15 +2,77 @@
   "system": {
     "id": "dos",
     "name": "DOS",
-    "folders": ["dos", "pc"],
-    "extensions": ["exe", "com", "bat", "conf", "zip", "7z"],
-    "ignored_folders": ["media", "cache"]
+    "folders": [
+      "dos",
+      "pc"
+    ],
+    "extensions": [
+      "exe",
+      "com",
+      "bat",
+      "conf",
+      "zip",
+      "7z",
+      "cue",
+      "dosz",
+      "ima",
+      "img",
+      "ins",
+      "iso",
+      "m3u",
+      "m3u8",
+      "vhd"
+    ],
+    "ignored_folders": [
+      "media",
+      "cache"
+    ]
   },
   "emulators": [
     {
-      "name": "RetroArch DOSBox Pure",
+      "name": "RetroArch - dosbox_pure",
       "unique_id": "dos.ra.dosbox_pure",
       "default": true
+    },
+    {
+      "name": "RetroArch (64 bits) - dosbox_pure",
+      "unique_id": "dos.ra64.dosbox_pure",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - dosbox_svn",
+      "unique_id": "dos.ra64.dosbox_svn",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - dosbox_core",
+      "unique_id": "dos.ra64.dosbox_core",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - dosbox_pure",
+      "unique_id": "dos.ra32.dosbox_pure",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - dosbox_svn",
+      "unique_id": "dos.ra32.dosbox_svn",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - dosbox_core",
+      "unique_id": "dos.ra32.dosbox_core",
+      "default": false
+    },
+    {
+      "name": "RetroArch - dosbox_svn",
+      "unique_id": "dos.ra.dosbox_svn",
+      "default": false
+    },
+    {
+      "name": "RetroArch - dosbox_core",
+      "unique_id": "dos.ra.dosbox_core",
+      "default": false
     }
   ]
 }

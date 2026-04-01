@@ -1,0 +1,31 @@
+{
+  "system": {
+    "id": "tic80",
+    "name": "TIC-80",
+    "folders": [
+      "tic80",
+      "TIC-80"
+    ],
+    "extensions": [
+      "tic"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - tic80",
+      "unique_id": "tic80.ra64.tic80",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - tic80",
+      "unique_id": "tic80.ra32.tic80",
+      "default": false
+    },
+    {
+      "name": "RetroArch - tic80",
+      "unique_id": "tic80.ra.tic80",
+      "default": false
+    }
+  ]
+}

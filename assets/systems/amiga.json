@@ -2,15 +2,70 @@
   "system": {
     "id": "amiga",
     "name": "Commodore Amiga",
-    "folders": ["amiga", "amiga600", "amiga1200", "amigacd32"],
-    "extensions": ["adf", "ipf", "dms", "uae", "lha", "zip", "7z"],
-    "ignored_folders": ["media", "cache"]
+    "folders": [
+      "amiga",
+      "amiga600",
+      "amiga1200",
+      "amigacd32"
+    ],
+    "extensions": [
+      "adf",
+      "ipf",
+      "dms",
+      "uae",
+      "lha",
+      "zip",
+      "7z",
+      "adz",
+      "ccd",
+      "chd",
+      "cue",
+      "fdi",
+      "hdf",
+      "hdz",
+      "info",
+      "iso",
+      "m3u",
+      "mds",
+      "nrg",
+      "rp9",
+      "slave"
+    ],
+    "ignored_folders": [
+      "media",
+      "cache"
+    ]
   },
   "emulators": [
     {
-      "name": "RetroArch PUAE",
+      "name": "RetroArch - puae",
       "unique_id": "amiga.ra.puae",
       "default": true
+    },
+    {
+      "name": "RetroArch (64 bits) - puae",
+      "unique_id": "amiga.ra64.puae",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - puae2021",
+      "unique_id": "amiga.ra64.puae2021",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - puae",
+      "unique_id": "amiga.ra32.puae",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - puae2021",
+      "unique_id": "amiga.ra32.puae2021",
+      "default": false
+    },
+    {
+      "name": "RetroArch - puae2021",
+      "unique_id": "amiga.ra.puae2021",
+      "default": false
     }
   ]
 }

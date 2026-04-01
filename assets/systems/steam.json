@@ -1,0 +1,45 @@
+{
+  "system": {
+    "id": "steam",
+    "name": "Steam",
+    "folders": [
+      "steam"
+    ],
+    "extensions": [
+      "steamappid"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "GameHub Lite",
+      "unique_id": "steam.gamehub.lite",
+      "default": false
+    },
+    {
+      "name": "GameHub Lite RC",
+      "unique_id": "steam.gamehub.lite.rc",
+      "default": false
+    },
+    {
+      "name": "GameHub Lite (Antutu)",
+      "unique_id": "steam.gamehub.lite.antutu",
+      "default": false
+    },
+    {
+      "name": "GameHub Lite (PUBG)",
+      "unique_id": "steam.gamehub.lite.pubg",
+      "default": false
+    },
+    {
+      "name": "GameHub Lite (Ludashi)",
+      "unique_id": "steam.gamehub.lite.ludashi",
+      "default": false
+    },
+    {
+      "name": "GameNative",
+      "unique_id": "steam.app.gamenative",
+      "default": false
+    }
+  ]
+}

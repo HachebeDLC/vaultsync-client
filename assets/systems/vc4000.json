@@ -1,0 +1,32 @@
+{
+  "system": {
+    "id": "vc4000",
+    "name": "Interton VC 4000",
+    "folders": [
+      "vc4000",
+      "Interton VC 4000"
+    ],
+    "extensions": [
+      "zip",
+      "cmd"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "DroidArcadia",
+      "unique_id": "vc4000.com.amigan.droidarcadia",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mess",
+      "unique_id": "vc4000.ra64.mess",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mess",
+      "unique_id": "vc4000.ra.mess",
+      "default": false
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "system": {
+    "id": "rpgmaker",
+    "name": "RPG Maker",
+    "folders": [
+      "rpgmaker",
+      "RPG Maker"
+    ],
+    "extensions": [
+      "easyrpg",
+      "ldb",
+      "zip"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - easyrpg",
+      "unique_id": "rpgmaker.ra64.easyrpg",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - easyrpg",
+      "unique_id": "rpgmaker.ra32.easyrpg",
+      "default": false
+    },
+    {
+      "name": "RetroArch - easyrpg",
+      "unique_id": "rpgmaker.ra.easyrpg",
+      "default": false
+    }
+  ]
+}

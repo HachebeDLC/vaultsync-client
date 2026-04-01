@@ -22,87 +22,87 @@
   },
   "emulators": [
     {
-      "name": "Nes.Emu",
+      "name": "NES.emu",
       "unique_id": "nes.com.explusalpha.NesEmu",
       "default": false
     },
     {
-      "name": "Nes Emu",
+      "name": "Nesoid",
       "unique_id": "nes.com.androidemu.nes",
       "default": false
     },
     {
-      "name": "RetroArch64 Nestopia",
+      "name": "RetroArch (64 bits) - nestopia",
       "unique_id": "nes.ra64.nestopia",
       "default": false
     },
     {
-      "name": "RetroArch64 FCEUmm",
+      "name": "RetroArch (64 bits) - fceumm",
       "unique_id": "nes.ra64.fceumm",
       "default": false
     },
     {
-      "name": "RetroArch64 Mesen",
+      "name": "RetroArch (64 bits) - mesen",
       "unique_id": "nes.ra64.mesen",
       "default": false
     },
     {
-      "name": "RetroArch64 QuickNES",
+      "name": "RetroArch (64 bits) - quicknes",
       "unique_id": "nes.ra64.quicknes",
       "default": false
     },
     {
-      "name": "RetroArch64 bnes",
+      "name": "RetroArch (64 bits) - bnes",
       "unique_id": "nes.ra64.bnes",
       "default": false
     },
     {
-      "name": "RetroArch32 Nestopia",
+      "name": "RetroArch (32 bits) - nestopia",
       "unique_id": "nes.ra32.nestopia",
       "default": false
     },
     {
-      "name": "RetroArch32 FCEUmm",
+      "name": "RetroArch (32 bits) - fceumm",
       "unique_id": "nes.ra32.fceumm",
       "default": false
     },
     {
-      "name": "RetroArch32 Mesen",
+      "name": "RetroArch (32 bits) - mesen",
       "unique_id": "nes.ra32.mesen",
       "default": false
     },
     {
-      "name": "RetroArch32 QuickNES",
+      "name": "RetroArch (32 bits) - quicknes",
       "unique_id": "nes.ra32.quicknes",
       "default": false
     },
     {
-      "name": "RetroArch32 bnes",
+      "name": "RetroArch (32 bits) - bnes",
       "unique_id": "nes.ra32.bnes",
       "default": false
     },
     {
-      "name": "RetroArch Nestopia",
+      "name": "RetroArch - nestopia",
       "unique_id": "nes.ra.nestopia",
       "default": false
     },
     {
-      "name": "RetroArch FCEUmm",
+      "name": "RetroArch - fceumm",
       "unique_id": "nes.ra.fceumm",
       "default": false
     },
     {
-      "name": "RetroArch Mesen",
+      "name": "RetroArch - mesen",
       "unique_id": "nes.ra.mesen",
       "default": false
     },
     {
-      "name": "RetroArch QuickNES",
+      "name": "RetroArch - quicknes",
       "unique_id": "nes.ra.quicknes",
       "default": false
     },
     {
-      "name": "RetroArch bnes",
+      "name": "RetroArch - bnes",
       "unique_id": "nes.ra.bnes",
       "default": false
     }

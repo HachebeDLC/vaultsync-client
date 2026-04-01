@@ -1,0 +1,43 @@
+{
+  "system": {
+    "id": "gameandwatch",
+    "name": "Game & Watch",
+    "folders": [
+      "gameandwatch",
+      "Game & Watch"
+    ],
+    "extensions": [
+      "mgw",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - gw",
+      "unique_id": "gw.ra64.gw",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mess",
+      "unique_id": "gw.ra64.mamemess",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - gw",
+      "unique_id": "gw.ra32.gw",
+      "default": false
+    },
+    {
+      "name": "RetroArch - gw",
+      "unique_id": "gw.ra.gw",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mess",
+      "unique_id": "gw.ra.mamemess",
+      "default": false
+    }
+  ]
+}

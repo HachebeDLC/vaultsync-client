@@ -1,0 +1,33 @@
+{
+  "system": {
+    "id": "cdimono1",
+    "name": "Philips CD-i",
+    "folders": [
+      "cdimono1",
+      "Philips CD-i"
+    ],
+    "extensions": [
+      "cue",
+      "chd",
+      "iso"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Retroarch 64 - same_cdi",
+      "unique_id": "cdi.ra64.same_cdi",
+      "default": false
+    },
+    {
+      "name": "Retroarch 32 - same_cdi",
+      "unique_id": "cdi.ra32.same_cdi",
+      "default": false
+    },
+    {
+      "name": "Retroarch - same_cdi",
+      "unique_id": "cdi.ra.same_cdi",
+      "default": false
+    }
+  ]
+}

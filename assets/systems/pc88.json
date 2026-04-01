@@ -1,0 +1,33 @@
+{
+  "system": {
+    "id": "pc88",
+    "name": "NEC PC-88",
+    "folders": [
+      "pc88",
+      "NEC PC-88"
+    ],
+    "extensions": [
+      "d88",
+      "m3u",
+      "u88"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Retroarch 64 - quasi88",
+      "unique_id": "pc88.ra64.quasi88",
+      "default": false
+    },
+    {
+      "name": "Retroarch 32 - quasi88",
+      "unique_id": "pc88.ra32.quasi88",
+      "default": false
+    },
+    {
+      "name": "Retroarch - quasi88",
+      "unique_id": "pc88.ra.quasi88",
+      "default": false
+    }
+  ]
+}

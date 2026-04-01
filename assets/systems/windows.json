@@ -1,0 +1,57 @@
+{
+  "system": {
+    "id": "windows",
+    "name": "Windows",
+    "folders": [
+      "windows"
+    ],
+    "extensions": [
+      "desktop",
+      "lnk",
+      "localgameid"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Winlator CMod",
+      "unique_id": "windows.winlator.cmod",
+      "default": false
+    },
+    {
+      "name": "Winlator CMod Proot",
+      "unique_id": "windows.winlator.cmodproot",
+      "default": false
+    },
+    {
+      "name": "Winlator Cmod (Old)",
+      "unique_id": "windows.winlator.cmod.old",
+      "default": false
+    },
+    {
+      "name": "MiceWine",
+      "unique_id": "windows.micewine.emu",
+      "default": false
+    },
+    {
+      "name": "GameHub Lite (Local Games)",
+      "unique_id": "windows.gamehub.lite.local",
+      "default": false
+    },
+    {
+      "name": "GameHub Lite (Local Games - Antutu)",
+      "unique_id": "windows.gamehub.lite.local.antutu",
+      "default": false
+    },
+    {
+      "name": "GameHub Lite (Local Games - PUBG)",
+      "unique_id": "windows.gamehub.lite.local.pubg",
+      "default": false
+    },
+    {
+      "name": "GameHub Lite (Local Games - Ludashi)",
+      "unique_id": "windows.gamehub.lite.ludashi",
+      "default": false
+    }
+  ]
+}

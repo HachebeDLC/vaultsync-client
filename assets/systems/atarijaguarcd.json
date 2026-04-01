@@ -1,0 +1,44 @@
+{
+  "system": {
+    "id": "atarijaguarcd",
+    "name": "Atari Jaguar CD",
+    "folders": [
+      "atarijaguarcd",
+      "Atari Jaguar CD"
+    ],
+    "extensions": [
+      "j64",
+      "jag",
+      "rom",
+      "abs",
+      "cof",
+      "bin",
+      "prg",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "IrataJaguar",
+      "unique_id": "jaguarcd.ru.vastness.altmer.iratajaguar",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - Virtual Jaguar",
+      "unique_id": "jaguarcd.ra64.virtualjaguar",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - Virtual Jaguar",
+      "unique_id": "jaguarcd.ra32.virtualjaguar",
+      "default": false
+    },
+    {
+      "name": "RetroArch - Virtual Jaguar",
+      "unique_id": "jaguarcd.ra.virtualjaguar",
+      "default": false
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "system": {
+    "id": "psvita",
+    "name": "Sony PS Vita",
+    "folders": [
+      "psvita",
+      "Sony PS Vita"
+    ],
+    "extensions": [
+      "dpt"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Vita3k",
+      "unique_id": "psv.vita3k",
+      "default": false
+    },
+    {
+      "name": "Vita3k ZX",
+      "unique_id": "psv.vita3k.zx",
+      "default": false
+    }
+  ]
+}

@@ -20,37 +20,37 @@
   },
   "emulators": [
     {
-      "name": "PCE.emu",
+      "name": "com.PceEmu",
       "unique_id": "tg16.com.PceEmu",
       "default": false
     },
     {
-      "name": "RetroArch64 Beetle PCE Fast",
+      "name": "RetroArch (64 bits) - mednafen_pce_fast",
       "unique_id": "tg16.ra64.mednafen_pce_fast",
       "default": false
     },
     {
-      "name": "RetroArch64 Beetle PCE",
+      "name": "RetroArch (64 bits) - mednafen_pce",
       "unique_id": "tg16.ra64.mednafen_pce",
       "default": false
     },
     {
-      "name": "RetroArch32 Beetle PCE Fast",
+      "name": "RetroArch (32 bits) - mednafen_pce_fast",
       "unique_id": "tg16.ra32.mednafen_pce_fast",
       "default": false
     },
     {
-      "name": "RetroArch32 Beetle PCE",
+      "name": "RetroArch (32 bits) - mednafen_pce",
       "unique_id": "tg16.ra32.mednafen_pce",
       "default": false
     },
     {
-      "name": "RetroArch Beetle PCE Fast",
+      "name": "RetroArch - mednafen_pce_fast",
       "unique_id": "tg16.ra.mednafen_pce_fast",
       "default": false
     },
     {
-      "name": "RetroArch Beetle PCE",
+      "name": "RetroArch - mednafen_pce",
       "unique_id": "tg16.ra.mednafen_pce",
       "default": false
     }

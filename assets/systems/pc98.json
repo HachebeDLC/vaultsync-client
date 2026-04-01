@@ -2,15 +2,71 @@
   "system": {
     "id": "pc98",
     "name": "NEC PC-98",
-    "folders": ["pc98"],
-    "extensions": ["hdi", "fdi", "d88", "nhd", "zip", "7z"],
-    "ignored_folders": ["media", "cache"]
+    "folders": [
+      "pc98"
+    ],
+    "extensions": [
+      "hdi",
+      "fdi",
+      "d88",
+      "nhd",
+      "zip",
+      "7z",
+      "2hd",
+      "88d",
+      "98d",
+      "cmd",
+      "d98",
+      "dup",
+      "fdd",
+      "hdd",
+      "hdm",
+      "hdn",
+      "tfd",
+      "thd",
+      "xdf",
+      "cue"
+    ],
+    "ignored_folders": [
+      "media",
+      "cache"
+    ]
   },
   "emulators": [
     {
       "name": "RetroArch Neko Project II Kai",
       "unique_id": "pc98.ra.neko_project_ii_kai",
       "default": true
+    },
+    {
+      "name": "Retroarch 64 - np2kai",
+      "unique_id": "pc98.ra64.np2kai",
+      "default": false
+    },
+    {
+      "name": "Retroarch 64 - nekop2",
+      "unique_id": "pc98.ra64.nekop2",
+      "default": false
+    },
+    {
+      "name": "Retroarch 32 - np2kai",
+      "unique_id": "pc98.ra32.np2kai",
+      "default": false
+    },
+    {
+      "name": "Retroarch 32 - nekop2",
+      "unique_id": "pc98.ra32.nekop2",
+      "default": false
+    },
+    {
+      "name": "Retroarch - np2kai",
+      "unique_id": "pc98.ra.np2kai",
+      "default": false
+    },
+    {
+      "name": "Retroarch - nekop2",
+      "unique_id": "pc98.ra.nekop2",
+      "default": false
     }
   ]
 }

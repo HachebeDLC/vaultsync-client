@@ -1,0 +1,43 @@
+{
+  "system": {
+    "id": "x1",
+    "name": "Sharp X1",
+    "folders": [
+      "x1",
+      "Sharp X1"
+    ],
+    "extensions": [
+      "2hd",
+      "88d",
+      "cmd",
+      "d88",
+      "dim",
+      "dup",
+      "hdf",
+      "hdm",
+      "img",
+      "m3u",
+      "xdf",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - x1",
+      "unique_id": "x1.ra64.x1",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - x1",
+      "unique_id": "x1.ra32.x1",
+      "default": false
+    },
+    {
+      "name": "RetroArch - x1",
+      "unique_id": "x1.ra.x1",
+      "default": false
+    }
+  ]
+}

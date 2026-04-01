@@ -1,7 +1,7 @@
 {
   "system": {
     "id": "mame",
-    "name": "M.A.M.E.",
+    "name": "Arcade (MAME)",
     "folders": [
       "mame",
       "M.A.M.E."
@@ -25,92 +25,92 @@
       "default": false
     },
     {
-      "name": "RetroArch64 MAME 2003",
+      "name": "RetroArch (64 bits) - mame2003",
       "unique_id": "mame.ra64.mame2003",
       "default": false
     },
     {
-      "name": "RetroArch64 MAME 2003 Midway",
+      "name": "RetroArch (64 bits) - mame2003_midway",
       "unique_id": "mame.ra64.mame2003_midway",
       "default": false
     },
     {
-      "name": "RetroArch64 MAME 2003 Plus",
+      "name": "RetroArch (64 bits) - mame2003_plus",
       "unique_id": "mame.ra64.mame2003_plus",
       "default": false
     },
     {
-      "name": "RetroArch64 MAME",
+      "name": "RetroArch (64 bits) - mame",
       "unique_id": "mame.ra64.mamearcade",
       "default": false
     },
     {
-      "name": "RetroArch64 MAME 2000",
+      "name": "RetroArch (64 bits) - mame2000",
       "unique_id": "mame.ra64.mame2000",
       "default": false
     },
     {
-      "name": "RetroArch64 MAME 2010",
+      "name": "RetroArch (64 bits) - mame2010",
       "unique_id": "mame.ra64.mame2010",
       "default": false
     },
     {
-      "name": "RetroArch32 MAME 2003",
+      "name": "RetroArch (32 bits) - mame2003",
       "unique_id": "mame.ra32.mame2003",
       "default": false
     },
     {
-      "name": "RetroArch32 MAME 2003 Midway",
+      "name": "RetroArch (32 bits) - mame2003_midway",
       "unique_id": "mame.ra32.mame2003_midway",
       "default": false
     },
     {
-      "name": "RetroArch32 MAME 2003 Plus",
+      "name": "RetroArch (32 bits) - mame2003_plus",
       "unique_id": "mame.ra32.mame2003_plus",
       "default": false
     },
     {
-      "name": "RetroArch32 MAME",
+      "name": "RetroArch (32 bits) - mame",
       "unique_id": "mame.ra32.mamearcade",
       "default": false
     },
     {
-      "name": "RetroArch32 MAME 2000",
+      "name": "RetroArch (32 bits) - mame2000",
       "unique_id": "mame.ra32.mame2000",
       "default": false
     },
     {
-      "name": "RetroArch32 MAME 2010",
+      "name": "RetroArch (32 bits) - mame2010",
       "unique_id": "mame.ra32.mame2010",
       "default": false
     },
     {
-      "name": "RetroArch MAME 2003",
+      "name": "RetroArch - mame2003",
       "unique_id": "mame.ra.mame2003",
       "default": false
     },
     {
-      "name": "RetroArch MAME 2003 Midway",
+      "name": "RetroArch - mame2003_midway",
       "unique_id": "mame.ra.mame2003_midway",
       "default": false
     },
     {
-      "name": "RetroArch MAME 2003 Plus",
+      "name": "RetroArch - mame2003_plus",
       "unique_id": "mame.ra.mame2003_plus",
       "default": false
     },
     {
-      "name": "RetroArch MAME",
+      "name": "RetroArch - mame",
       "unique_id": "mame.ra.mamearcade",
       "default": true
     },
     {
-      "name": "RetroArch MAME 2000",
+      "name": "RetroArch - mame2000",
       "unique_id": "mame.ra.mame2000",
       "default": false
     },
     {
-      "name": "RetroArch MAME 2010",
+      "name": "RetroArch - mame2010",
       "unique_id": "mame.ra.mame2010",
       "default": false
     },

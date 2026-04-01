@@ -35,17 +35,17 @@
   },
   "emulators": [
     {
-      "name": "RetroArch Play!",
+      "name": "RetroArch - play",
       "unique_id": "ps2.ra.play",
       "default": false
     },
     {
-      "name": "RetroArch64 Play!",
+      "name": "RetroArch (64 bits) - play",
       "unique_id": "ps2.ra64.play",
       "default": false
     },
     {
-      "name": "RetroArch32 Play!",
+      "name": "RetroArch (32 bits) - play",
       "unique_id": "ps2.ra32.play",
       "default": false
     },
@@ -65,12 +65,12 @@
       "default": false
     },
     {
-      "name": "NetherSX2",
+      "name": "AetherSX2",
       "unique_id": "ps2.xyz.aethersx2.android",
       "default": true
     },
     {
-      "name": "Aethersx2 Turnip",
+      "name": "AetherSX2 Turnip",
       "unique_id": "ps2.xyz.aethersx2.custom",
       "default": false
     },

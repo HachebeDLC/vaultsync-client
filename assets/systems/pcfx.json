@@ -15,17 +15,17 @@
   },
   "emulators": [
     {
-      "name": "RetroArch64 Beetle PC-FX",
+      "name": "Retroarch 64 - beetle pcfx",
       "unique_id": "pcfx.ra64.mednafen_pcfx",
       "default": false
     },
     {
-      "name": "RetroArch32 Beetle PC-FX",
+      "name": "Retroarch 32 - beetle pcfx",
       "unique_id": "pcfx.ra32.mednafen_pcfx",
       "default": false
     },
     {
-      "name": "RetroArch Beetle PC-FX",
+      "name": "Retroarch - beetle pcfx",
       "unique_id": "pcfx.ra.mednafen_pcfx",
       "default": true
     }

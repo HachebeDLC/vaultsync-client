@@ -1,0 +1,80 @@
+{
+  "system": {
+    "id": "fds",
+    "name": "Famicom Disk System",
+    "folders": [
+      "fds",
+      "Famicom Disk System"
+    ],
+    "extensions": [
+      "bin",
+      "fds",
+      "nes",
+      "nsf",
+      "qd",
+      "rom",
+      "unf",
+      "unif",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "NES.emu",
+      "unique_id": "fds.com.explusalpha.NesEmu",
+      "default": false
+    },
+    {
+      "name": "Nesoid",
+      "unique_id": "fds.com.androidemu.nes",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - nestopia",
+      "unique_id": "fds.ra64.nestopia",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - fceumm",
+      "unique_id": "fds.ra64.fceumm",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mesen",
+      "unique_id": "fds.ra64.mesen",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - nestopia",
+      "unique_id": "fds.ra32.nestopia",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - fceumm",
+      "unique_id": "fds.ra32.fceumm",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mesen",
+      "unique_id": "fds.ra32.mesen",
+      "default": false
+    },
+    {
+      "name": "RetroArch - nestopia",
+      "unique_id": "fds.ra.nestopia",
+      "default": false
+    },
+    {
+      "name": "RetroArch - fceumm",
+      "unique_id": "fds.ra.fceumm",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mesen",
+      "unique_id": "fds.ra.mesen",
+      "default": false
+    }
+  ]
+}

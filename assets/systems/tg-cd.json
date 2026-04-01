@@ -1,0 +1,59 @@
+{
+  "system": {
+    "id": "tg-cd",
+    "name": "TurboGrafx-CD",
+    "folders": [
+      "tg-cd",
+      "TurboGrafx-CD"
+    ],
+    "extensions": [
+      "ccd",
+      "chd",
+      "cue",
+      "m3u",
+      "pce",
+      "sgx",
+      "toc",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "com.PceEmu",
+      "unique_id": "tgcd.com.PceEmu",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mednafen_pce_fast",
+      "unique_id": "tgcd.ra64.mednafen_pce_fast",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mednafen_pce",
+      "unique_id": "tgcd.ra64.mednafen_pce",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mednafen_pce_fast",
+      "unique_id": "tgcd.ra32.mednafen_pce_fast",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mednafen_pce",
+      "unique_id": "tgcd.ra32.mednafen_pce",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mednafen_pce_fast",
+      "unique_id": "tgcd.ra.mednafen_pce_fast",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mednafen_pce",
+      "unique_id": "tgcd.ra.mednafen_pce",
+      "default": false
+    }
+  ]
+}

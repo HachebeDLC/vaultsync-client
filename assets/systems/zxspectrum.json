@@ -1,16 +1,44 @@
 {
   "system": {
     "id": "zxspectrum",
-    "name": "Sinclair ZX Spectrum",
-    "folders": ["zxspectrum", "spec", "spectrum"],
-    "extensions": ["tap", "tzx", "z80", "scl", "trd", "szx", "zip", "7z"],
-    "ignored_folders": ["media", "cache"]
+    "name": "ZX Spectrum",
+    "folders": [
+      "zxspectrum",
+      "spec",
+      "spectrum"
+    ],
+    "extensions": [
+      "tap",
+      "tzx",
+      "z80",
+      "scl",
+      "trd",
+      "szx",
+      "zip",
+      "7z",
+      "dsk",
+      "rzx"
+    ],
+    "ignored_folders": [
+      "media",
+      "cache"
+    ]
   },
   "emulators": [
     {
-      "name": "RetroArch Fuse",
+      "name": "RetroArch - fuse",
       "unique_id": "zxspectrum.ra.fuse",
       "default": true
+    },
+    {
+      "name": "RetroArch (64 bits) - fuse",
+      "unique_id": "zxspectrum.ra64.fuse",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - fuse",
+      "unique_id": "zxspectrum.ra32.fuse",
+      "default": false
     }
   ]
 }

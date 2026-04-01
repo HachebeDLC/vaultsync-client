@@ -1,0 +1,32 @@
+{
+  "system": {
+    "id": "lowresnx",
+    "name": "LowRes NX",
+    "folders": [
+      "lowresnx",
+      "LowRes NX"
+    ],
+    "extensions": [
+      "nx",
+      "zip"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - lowresnx",
+      "unique_id": "lowresnx.ra64.lowresnx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - lowresnx",
+      "unique_id": "lowresnx.ra32.lowresnx",
+      "default": false
+    },
+    {
+      "name": "RetroArch - lowresnx",
+      "unique_id": "lowresnx.ra.lowresnx",
+      "default": false
+    }
+  ]
+}

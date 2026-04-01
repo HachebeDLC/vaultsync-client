@@ -42,12 +42,12 @@
       "default": false
     },
     {
-      "name": "GBA Emulator",
+      "name": "My Boy! Free",
       "unique_id": "gba.com.fastemulator.gbafree",
       "default": false
     },
     {
-      "name": "GBA Emulator (Paid)",
+      "name": "My Boy!",
       "unique_id": "gba.com.fastemulator.gba",
       "default": false
     },
@@ -57,92 +57,92 @@
       "default": false
     },
     {
-      "name": "RetroArch64 VBA Next",
+      "name": "RetroArch (64 bits) - vba_next",
       "unique_id": "gba.ra64.vba_next",
       "default": false
     },
     {
-      "name": "RetroArch64 VBA-M",
+      "name": "RetroArch (64 bits) - vbam",
       "unique_id": "gba.ra64.vbam",
       "default": false
     },
     {
-      "name": "RetroArch64 mGBA",
+      "name": "RetroArch (64 bits) - mgba",
       "unique_id": "gba.ra64.mgba",
       "default": false
     },
     {
-      "name": "RetroArch64 Mednafen GBA",
+      "name": "RetroArch (64 bits) - mednafen_gba",
       "unique_id": "gba.ra64.mednafen_gba",
       "default": false
     },
     {
-      "name": "RetroArch64 Meteor",
+      "name": "RetroArch (64 bits) - meteor",
       "unique_id": "gba.ra64.meteor",
       "default": false
     },
     {
-      "name": "RetroArch64 gpSP",
+      "name": "RetroArch (64 bits) - gpsp",
       "unique_id": "gba.ra64.gpsp",
       "default": false
     },
     {
-      "name": "RetroArch32 VBA Next",
+      "name": "RetroArch (32 bits) - vba_next",
       "unique_id": "gba.ra32.vba_next",
       "default": false
     },
     {
-      "name": "RetroArch32 VBA-M",
+      "name": "RetroArch (32 bits) - vbam",
       "unique_id": "gba.ra32.vbam",
       "default": false
     },
     {
-      "name": "RetroArch32 mGBA",
+      "name": "RetroArch (32 bits) - mgba",
       "unique_id": "gba.ra32.mgba",
       "default": false
     },
     {
-      "name": "RetroArch32 Mednafen GBA",
+      "name": "RetroArch (32 bits) - mednafen_gba",
       "unique_id": "gba.ra32.mednafen_gba",
       "default": false
     },
     {
-      "name": "RetroArch32 Meteor",
+      "name": "RetroArch (32 bits) - meteor",
       "unique_id": "gba.ra32.meteor",
       "default": false
     },
     {
-      "name": "RetroArch32 gpSP",
+      "name": "RetroArch (32 bits) - gpsp",
       "unique_id": "gba.ra32.gpsp",
       "default": false
     },
     {
-      "name": "RetroArch VBA Next",
+      "name": "RetroArch - vba_next",
       "unique_id": "gba.ra.vba_next",
       "default": false
     },
     {
-      "name": "RetroArch VBA-M",
+      "name": "RetroArch - vbam",
       "unique_id": "gba.ra.vbam",
       "default": false
     },
     {
-      "name": "RetroArch mGBA",
+      "name": "RetroArch - mgba",
       "unique_id": "gba.ra.mgba",
       "default": true
     },
     {
-      "name": "RetroArch Mednafen GBA",
+      "name": "RetroArch - mednafen_gba",
       "unique_id": "gba.ra.mednafen_gba",
       "default": false
     },
     {
-      "name": "RetroArch gpsp",
+      "name": "RetroArch - gpsp",
       "unique_id": "gba.ra.gpsp",
       "default": false
     },
     {
-      "name": "RetroArch Meteor",
+      "name": "RetroArch - meteor",
       "unique_id": "gba.ra.meteor",
       "default": false
     },

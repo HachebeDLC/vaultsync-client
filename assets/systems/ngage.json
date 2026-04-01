@@ -1,0 +1,21 @@
+{
+  "system": {
+    "id": "ngage",
+    "name": "Nokia N-Gage",
+    "folders": [
+      "ngage",
+      "Nokia N-Gage"
+    ],
+    "extensions": [
+      "json"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "eka2l1",
+      "unique_id": "ngage.com.github.eka2l1",
+      "default": false
+    }
+  ]
+}

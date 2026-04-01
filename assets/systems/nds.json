@@ -1,0 +1,110 @@
+{
+  "system": {
+    "id": "nds",
+    "name": "Nintendo DS",
+    "folders": [
+      "nds",
+      "Nintendo DS"
+    ],
+    "extensions": [
+      "nds",
+      "zip",
+      "7z",
+      "bin",
+      "rar"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "MelonDS",
+      "unique_id": "nds.me.magnum.melonds",
+      "default": false
+    },
+    {
+      "name": "MelonDualDS",
+      "unique_id": "nds.me.magnum.melondualds",
+      "default": false
+    },
+    {
+      "name": "Drastic",
+      "unique_id": "nds.com.dsemu.drastic",
+      "default": false
+    },
+    {
+      "name": "Drastic Legacy",
+      "unique_id": "nds.com.dsemu.drastic.legacy",
+      "default": false
+    },
+    {
+      "name": "MelonDS Nightly",
+      "unique_id": "nds.me.magnum.melonds.nightly",
+      "default": false
+    },
+    {
+      "name": "MelonDS Dev (Dual Screen Fork)",
+      "unique_id": "nds.me.magnum.melonds.dev",
+      "default": false
+    },
+    {
+      "name": "NooDS",
+      "unique_id": "nds.com.hydra.noods",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - melonds",
+      "unique_id": "nds.ra64.melonds",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - melonds ds",
+      "unique_id": "nds.ra64.melondsds",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - desmume",
+      "unique_id": "nds.ra64.desmume",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - desmume2015",
+      "unique_id": "nds.ra64.desmume2015",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - melonds",
+      "unique_id": "nds.ra32.melonds",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - desmume",
+      "unique_id": "nds.ra32.desmume",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - desmume2015",
+      "unique_id": "nds.ra32.desmume2015",
+      "default": false
+    },
+    {
+      "name": "RetroArch - melonds",
+      "unique_id": "nds.ra.melonds",
+      "default": false
+    },
+    {
+      "name": "RetroArch - melonds ds",
+      "unique_id": "nds.ra.melondsds",
+      "default": false
+    },
+    {
+      "name": "RetroArch - desmume",
+      "unique_id": "nds.ra.desmume",
+      "default": false
+    },
+    {
+      "name": "RetroArch - desmume2015",
+      "unique_id": "nds.ra.desmume2015",
+      "default": false
+    }
+  ]
+}

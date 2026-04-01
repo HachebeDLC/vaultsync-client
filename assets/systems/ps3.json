@@ -10,7 +10,8 @@
       "m3u",
       "pkg",
       "bin",
-      "pup"
+      "pup",
+      "ps3folder"
     ],
     "ignored_folders": [
       "dev_hdd0",
@@ -27,6 +28,16 @@
       "name": "RPCS3",
       "unique_id": "ps3.rpcs3.desktop",
       "default": true
+    },
+    {
+      "name": "aPS3e",
+      "unique_id": "ps3.aenu.aps3e",
+      "default": false
+    },
+    {
+      "name": "aPS3e (Folder Style)",
+      "unique_id": "ps3.aenu.aps3e.folder",
+      "default": false
     }
   ]
 }

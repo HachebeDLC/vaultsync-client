@@ -20,12 +20,12 @@
       "default": false
     },
     {
-      "name": "RetroArch64 FBNeo",
+      "name": "RetroArch (64 bits) - fbneo",
       "unique_id": "neogeo.ra64.fbneo",
       "default": false
     },
     {
-      "name": "RetroArch64 FBAlpha 2012",
+      "name": "RetroArch (64 bits) - fbalpha 2012",
       "unique_id": "neogeo.ra64.fbalpha2012",
       "default": false
     },
@@ -35,17 +35,17 @@
       "default": false
     },
     {
-      "name": "RetroArch64 Geolith",
+      "name": "RetroArch (64 bits) - geolith",
       "unique_id": "neogeo.ra64.geolith",
       "default": false
     },
     {
-      "name": "RetroArch32 FBNeo",
+      "name": "RetroArch (32 bits) - fbneo",
       "unique_id": "neogeo.ra32.fbneo",
       "default": false
     },
     {
-      "name": "RetroArch32 FBAlpha 2012",
+      "name": "RetroArch (32 bits) - fbalpha 2012",
       "unique_id": "neogeo.ra32.fbalpha2012",
       "default": false
     },
@@ -55,17 +55,17 @@
       "default": false
     },
     {
-      "name": "RetroArch32 Geolith",
+      "name": "RetroArch (32 bits) - geolith",
       "unique_id": "neogeo.ra32.geolith",
       "default": false
     },
     {
-      "name": "RetroArch FBNeo",
+      "name": "RetroArch - fbneo",
       "unique_id": "neogeo.ra.fbneo",
       "default": true
     },
     {
-      "name": "RetroArch FBAlpha 2012",
+      "name": "RetroArch - fbalpha 2012",
       "unique_id": "neogeo.ra.fbalpha2012",
       "default": false
     },
@@ -75,7 +75,7 @@
       "default": false
     },
     {
-      "name": "RetroArch Geolith",
+      "name": "RetroArch - geolith",
       "unique_id": "neogeo.ra.geolith",
       "default": false
     }

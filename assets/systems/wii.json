@@ -34,17 +34,17 @@
   },
   "emulators": [
     {
-      "name": "Dolphin Handheld",
+      "name": "Dolphin (Handheld)",
       "unique_id": "wii.org.dolphinemu.handheld",
       "default": false
     },
     {
-      "name": "Dolphin MJR",
+      "name": "Dolphin (org.mm.jr Fork)",
       "unique_id": "wii.org.mm.jr",
       "default": false
     },
     {
-      "name": "Dolphin MMJ",
+      "name": "Dolphin (org.mm.j Fork)",
       "unique_id": "wii.org.mm.j",
       "default": false
     },
@@ -59,7 +59,7 @@
       "default": false
     },
     {
-      "name": "Dolphin Official",
+      "name": "Dolphin Emulator",
       "unique_id": "wii.org.dolphinemu.dolphinemu",
       "default": false
     },
@@ -79,18 +79,23 @@
       "default": false
     },
     {
-      "name": "RetroArch64 Dolphin",
+      "name": "RetroArch (64 bits) - dolphin",
       "unique_id": "wii.ra64.dolphin",
       "default": false
     },
     {
-      "name": "RetroArch Dolphin",
+      "name": "RetroArch - dolphin",
       "unique_id": "wii.ra.dolphin",
       "default": true
     },
     {
       "name": "Dolphin",
       "unique_id": "wii.dolphin.desktop",
+      "default": false
+    },
+    {
+      "name": "Dolphin PrimeHack",
+      "unique_id": "wii.org.shiiion.primehack",
       "default": false
     }
   ]

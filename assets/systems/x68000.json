@@ -2,15 +2,45 @@
   "system": {
     "id": "x68000",
     "name": "Sharp X68000",
-    "folders": ["x68000", "x68k"],
-    "extensions": ["dim", "img", "d88", "hdm", "zip", "7z"],
-    "ignored_folders": ["media", "cache"]
+    "folders": [
+      "x68000",
+      "x68k"
+    ],
+    "extensions": [
+      "dim",
+      "img",
+      "d88",
+      "hdm",
+      "zip",
+      "7z",
+      "2hd",
+      "88d",
+      "cmd",
+      "dup",
+      "hdf",
+      "m3u",
+      "xdf"
+    ],
+    "ignored_folders": [
+      "media",
+      "cache"
+    ]
   },
   "emulators": [
     {
-      "name": "RetroArch PX68k",
+      "name": "RetroArch - px68k",
       "unique_id": "x68000.ra.px68k",
       "default": true
+    },
+    {
+      "name": "RetroArch (64 bits) - px68k",
+      "unique_id": "x68000.ra64.px68k",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - px68k",
+      "unique_id": "x68000.ra32.px68k",
+      "default": false
     }
   ]
 }

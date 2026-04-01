@@ -1,0 +1,48 @@
+{
+  "system": {
+    "id": "genesismsu",
+    "name": "Sega Genesis - MSU",
+    "folders": [
+      "genesismsu",
+      "Sega Genesis - MSU"
+    ],
+    "extensions": [
+      "md",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - genesis_plus_gx",
+      "unique_id": "genesismsu.ra64.genesis_plus_gx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - genesis_plus_gx_wide",
+      "unique_id": "genesismsu.ra64.genesis_plus_gx_wide",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - genesis_plus_gx",
+      "unique_id": "genesismsu.ra32.genesis_plus_gx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - genesis_plus_gx_wide",
+      "unique_id": "genesismsu.ra32.genesis_plus_gx_wide",
+      "default": false
+    },
+    {
+      "name": "RetroArch - genesis_plus_gx",
+      "unique_id": "genesismsu.ra.genesis_plus_gx",
+      "default": false
+    },
+    {
+      "name": "RetroArch - genesis_plus_gx_wide",
+      "unique_id": "genesismsu.ra.genesis_plus_gx_wide",
+      "default": false
+    }
+  ]
+}

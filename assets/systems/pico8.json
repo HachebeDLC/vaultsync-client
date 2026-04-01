@@ -2,15 +2,64 @@
   "system": {
     "id": "pico8",
     "name": "PICO-8",
-    "folders": ["pico8", "pico-8"],
-    "extensions": ["p8", "png"],
-    "ignored_folders": ["media", "cache"]
+    "folders": [
+      "pico8",
+      "pico-8"
+    ],
+    "extensions": [
+      "p8",
+      "png"
+    ],
+    "ignored_folders": [
+      "media",
+      "cache"
+    ]
   },
   "emulators": [
     {
       "name": "RetroArch PICO-8",
       "unique_id": "pico8.ra.pico8",
       "default": true
+    },
+    {
+      "name": "Pico8 Wrapper (NaviVani's Fork)",
+      "unique_id": "pico8.io.wip.pico8",
+      "default": false
+    },
+    {
+      "name": "Infinity P8 Player",
+      "unique_id": "pico8.me.dt2dev.infinity",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - fake08",
+      "unique_id": "pico8.ra64.fake08",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - retro8",
+      "unique_id": "pico8.ra64.retro8",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - fake08",
+      "unique_id": "pico8.ra32.fake08",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - retro8",
+      "unique_id": "pico8.ra32.retro8",
+      "default": false
+    },
+    {
+      "name": "RetroArch - fake08",
+      "unique_id": "pico8.ra.fake08",
+      "default": false
+    },
+    {
+      "name": "RetroArch - retro8",
+      "unique_id": "pico8.ra.retro8",
+      "default": false
     }
   ]
 }

@@ -1,0 +1,27 @@
+{
+  "system": {
+    "id": "moonlight",
+    "name": "Moonlight Streaming",
+    "folders": [
+      "moonlight",
+      "Moonlight Streaming"
+    ],
+    "extensions": [
+      "art",
+      "moonlight"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Artemis",
+      "unique_id": "moonlight.com.limelight.noir",
+      "default": false
+    },
+    {
+      "name": "Moonlight",
+      "unique_id": "moonlight.com.limelight",
+      "default": false
+    }
+  ]
+}

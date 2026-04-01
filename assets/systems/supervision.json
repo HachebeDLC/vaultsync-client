@@ -1,0 +1,34 @@
+{
+  "system": {
+    "id": "supervision",
+    "name": "Watara Supervision",
+    "folders": [
+      "supervision",
+      "Watara Supervision"
+    ],
+    "extensions": [
+      "bin",
+      "sv",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Retroarch 64 - Potator",
+      "unique_id": "supervision.ra64.potator",
+      "default": false
+    },
+    {
+      "name": "Retroarch 32 - Potator",
+      "unique_id": "supervision.ra32.potator",
+      "default": false
+    },
+    {
+      "name": "Retroarch - Potator",
+      "unique_id": "supervision.ra.potator",
+      "default": false
+    }
+  ]
+}

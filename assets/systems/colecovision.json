@@ -1,0 +1,58 @@
+{
+  "system": {
+    "id": "colecovision",
+    "name": "ColecoVision",
+    "folders": [
+      "colecovision"
+    ],
+    "extensions": [
+      "cas",
+      "col",
+      "dsk",
+      "m3u",
+      "mx1",
+      "mx2",
+      "ri",
+      "rom",
+      "sc",
+      "sg",
+      "zip",
+      "7z",
+      "cv",
+      "bin"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - bluemsx",
+      "unique_id": "coleco.ra64.bluemsx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - gearcoleco",
+      "unique_id": "coleco.ra64.gearcoleco",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - bluemsx",
+      "unique_id": "coleco.ra32.bluemsx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - gearcoleco",
+      "unique_id": "coleco.ra32.gearcoleco",
+      "default": false
+    },
+    {
+      "name": "RetroArch - bluemsx",
+      "unique_id": "coleco.ra.bluemsx",
+      "default": false
+    },
+    {
+      "name": "RetroArch - gearcoleco",
+      "unique_id": "coleco.ra.gearcoleco",
+      "default": false
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "system": {
+    "id": "atari7800",
+    "name": "Atari 7800",
+    "folders": [
+      "atari7800",
+      "Atari 7800"
+    ],
+    "extensions": [
+      "a78",
+      "bin",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - prosystem",
+      "unique_id": "atari7800.ra64.prosystem",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - prosystem",
+      "unique_id": "atari7800.ra32.prosystem",
+      "default": false
+    },
+    {
+      "name": "RetroArch - prosystem",
+      "unique_id": "atari7800.ra.prosystem",
+      "default": false
+    }
+  ]
+}

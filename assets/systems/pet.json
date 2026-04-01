@@ -1,0 +1,61 @@
+{
+  "system": {
+    "id": "pet",
+    "name": "Commodore - PET",
+    "folders": [
+      "pet",
+      "Commodore - PET"
+    ],
+    "extensions": [
+      "bin",
+      "crt",
+      "d64",
+      "d6z",
+      "d71",
+      "d7z",
+      "d80",
+      "d81",
+      "d82",
+      "d8z",
+      "g41",
+      "g4z",
+      "g64",
+      "g6z",
+      "gz",
+      "lnx",
+      "p00",
+      "prg",
+      "t64",
+      "tap",
+      "x64",
+      "x6z",
+      "zip",
+      "cmd",
+      "d2m",
+      "d4m",
+      "m3u",
+      "nbz",
+      "nib",
+      "vfl",
+      "vsf"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - vice xpet",
+      "unique_id": "pet.ra64.vice_xpet",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - vice xpet",
+      "unique_id": "pet.ra32.vice_xpet",
+      "default": false
+    },
+    {
+      "name": "RetroArch - vice xpet",
+      "unique_id": "pet.ra.vice_xpet",
+      "default": false
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "system": {
+    "id": "zx81",
+    "name": "ZX 81",
+    "folders": [
+      "zx81",
+      "ZX 81"
+    ],
+    "extensions": [
+      "p",
+      "t81",
+      "tzx",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - 81",
+      "unique_id": "zx81.ra64.81",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - 81",
+      "unique_id": "zx81.ra32.81",
+      "default": false
+    },
+    {
+      "name": "RetroArch - 81",
+      "unique_id": "zx81.ra.81",
+      "default": false
+    }
+  ]
+}

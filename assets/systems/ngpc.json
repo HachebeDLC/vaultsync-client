@@ -1,0 +1,54 @@
+{
+  "system": {
+    "id": "ngpc",
+    "name": "NeoGeo Pocket Color",
+    "folders": [
+      "ngpc",
+      "NeoGeo Pocket Color"
+    ],
+    "extensions": [
+      "zip",
+      "ngp",
+      "ngc",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "NGP.EMU",
+      "unique_id": "ngpc.com.explusalpha.NgpEmu",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - Beetle NeoPop",
+      "unique_id": "ngpc.ra64.mednafen_ngp",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - RACE",
+      "unique_id": "ngpc.ra64.race",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - Beetle NeoPop",
+      "unique_id": "ngpc.ra32.mednafen_ngp",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - RACE",
+      "unique_id": "ngpc.ra32.race",
+      "default": false
+    },
+    {
+      "name": "RetroArch - Beetle NeoPop",
+      "unique_id": "ngpc.ra.mednafen_ngp",
+      "default": false
+    },
+    {
+      "name": "RetroArch - RACE",
+      "unique_id": "ngpc.ra.race",
+      "default": false
+    }
+  ]
+}

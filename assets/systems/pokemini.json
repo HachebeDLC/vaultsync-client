@@ -1,0 +1,33 @@
+{
+  "system": {
+    "id": "pokemini",
+    "name": "Pokemon Mini",
+    "folders": [
+      "pokemini",
+      "Pokemon Mini"
+    ],
+    "extensions": [
+      "min",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - pokemini",
+      "unique_id": "pokemini.ra64.pokemini",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - pokemini",
+      "unique_id": "pokemini.ra32.pokemini",
+      "default": false
+    },
+    {
+      "name": "RetroArch - pokemini",
+      "unique_id": "pokemini.ra.pokemini",
+      "default": false
+    }
+  ]
+}

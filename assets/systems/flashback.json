@@ -1,0 +1,34 @@
+{
+  "system": {
+    "id": "flashback",
+    "name": "Flashback Game Engine",
+    "folders": [
+      "flashback",
+      "Flashback Game Engine"
+    ],
+    "extensions": [
+      "aba",
+      "lev",
+      "map",
+      "seq"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - reminiscence",
+      "unique_id": "flashback.ra64.reminiscence",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - reminiscence",
+      "unique_id": "flashback.ra32.reminiscence",
+      "default": false
+    },
+    {
+      "name": "RetroArch - reminiscence",
+      "unique_id": "flashback.ra.reminiscence",
+      "default": false
+    }
+  ]
+}

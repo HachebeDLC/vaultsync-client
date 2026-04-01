@@ -1,0 +1,32 @@
+{
+  "system": {
+    "id": "megaduck",
+    "name": "Mega Duck",
+    "folders": [
+      "megaduck",
+      "Mega Duck"
+    ],
+    "extensions": [
+      "bin",
+      "zip"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - sameduck",
+      "unique_id": "megaduck.ra64.sameduck",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - sameduck",
+      "unique_id": "megaduck.ra32.sameduck",
+      "default": false
+    },
+    {
+      "name": "RetroArch - sameduck",
+      "unique_id": "megaduck.ra.sameduck",
+      "default": false
+    }
+  ]
+}

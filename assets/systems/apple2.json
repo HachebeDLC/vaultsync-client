@@ -1,0 +1,26 @@
+{
+  "system": {
+    "id": "apple2",
+    "name": "Apple II",
+    "folders": [
+      "apple2",
+      "Apple II"
+    ],
+    "extensions": [
+      "cmd"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - mess",
+      "unique_id": "appleii.ra64.mess",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mess",
+      "unique_id": "appleii.ra.mess",
+      "default": false
+    }
+  ]
+}

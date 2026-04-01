@@ -23,37 +23,37 @@
   },
   "emulators": [
     {
-      "name": "MsxEmu",
+      "name": "com.explusalpha.MsxEmu",
       "unique_id": "msx.com.explusalpha.MsxEmu",
       "default": false
     },
     {
-      "name": "RetroArch64 fMSX",
+      "name": "RetroArch (64 bits) - fmsx",
       "unique_id": "msx.ra64.fmsx",
       "default": false
     },
     {
-      "name": "RetroArch64 blueMSX",
+      "name": "RetroArch (64 bits) - bluemsx",
       "unique_id": "msx.ra64.bluemsx",
       "default": false
     },
     {
-      "name": "RetroArch32 fMSX",
+      "name": "RetroArch (32 bits) - fmsx",
       "unique_id": "msx.ra32.fmsx",
       "default": false
     },
     {
-      "name": "RetroArch32 blueMSX",
+      "name": "RetroArch (32 bits) - bluemsx",
       "unique_id": "msx.ra32.bluemsx",
       "default": false
     },
     {
-      "name": "RetroArch fMSX",
+      "name": "RetroArch - fmsx",
       "unique_id": "msx.ra.fmsx",
       "default": false
     },
     {
-      "name": "RetroArch blueMSX",
+      "name": "RetroArch - bluemsx",
       "unique_id": "msx.ra.bluemsx",
       "default": true
     }

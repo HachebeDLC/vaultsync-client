@@ -35,27 +35,27 @@
   },
   "emulators": [
     {
-      "name": "Dolphin Handheld",
+      "name": "Dolphin (Handheld)",
       "unique_id": "gc.org.dolphinemu.handheld",
       "default": false
     },
     {
-      "name": "Dolphin MMJR",
+      "name": "Dolphin (org.mm.jr Fork)",
       "unique_id": "gc.org.mm.jr",
       "default": false
     },
     {
-      "name": "Dolphin MMJR2",
+      "name": "Dolphin MMJR",
       "unique_id": "gc.org.dolphinemu.mmjr",
       "default": false
     },
     {
-      "name": "Dolphin MMJ",
+      "name": "Dolphin (org.mm.j Fork)",
       "unique_id": "gc.org.mm.j",
       "default": false
     },
     {
-      "name": "Dolphin Official",
+      "name": "Dolphin Emulator",
       "unique_id": "gc.org.dolphinemu.dolphinemu",
       "default": false
     },
@@ -65,18 +65,28 @@
       "default": false
     },
     {
-      "name": "RetroArch64 Dolphin",
+      "name": "RetroArch (64 bits) - dolphin",
       "unique_id": "gc.ra64.dolphin",
       "default": false
     },
     {
-      "name": "RetroArch Dolphin",
+      "name": "RetroArch - dolphin",
       "unique_id": "gc.ra.dolphin",
       "default": true
     },
     {
       "name": "Dolphin",
       "unique_id": "gc.dolphin.desktop",
+      "default": false
+    },
+    {
+      "name": "Dolphin MMJR3",
+      "unique_id": "gc.org.dolphinemu.mmjr3",
+      "default": false
+    },
+    {
+      "name": "Dolphin (Debug Build)",
+      "unique_id": "gc.org.dolphinemu.dolphinemu.debug",
       "default": false
     }
   ]

@@ -1,7 +1,7 @@
 {
   "system": {
     "id": "psp",
-    "name": "Sony PlayStation Portable",
+    "name": "PlayStation Portable",
     "folders": [
       "psp",
       "pspminis",
@@ -34,17 +34,17 @@
       "default": false
     },
     {
-      "name": "RetroArch64 PPSSPP",
+      "name": "RetroArch (64 bits) - ppsspp",
       "unique_id": "psp.ra64.ppsspp",
       "default": false
     },
     {
-      "name": "RetroArch32 PPSSPP",
+      "name": "RetroArch (32 bits) - ppsspp",
       "unique_id": "psp.ra32.ppsspp",
       "default": false
     },
     {
-      "name": "RetroArch PPSSPP",
+      "name": "RetroArch - ppsspp",
       "unique_id": "psp.ra.ppsspp",
       "default": true
     },

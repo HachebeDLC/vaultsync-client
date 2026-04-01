@@ -1,0 +1,94 @@
+{
+  "system": {
+    "id": "saturn",
+    "name": "Sega Saturn",
+    "folders": [
+      "saturn",
+      "Sega Saturn"
+    ],
+    "extensions": [
+      "bin",
+      "ccd",
+      "chd",
+      "cue",
+      "iso",
+      "m3u",
+      "mds",
+      "toc",
+      "zip"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "YabaSanshiro 2 Pro",
+      "unique_id": "saturn.org.devmiyax.yabasanshioro2.pro",
+      "default": false
+    },
+    {
+      "name": "YabaSanshiro 2",
+      "unique_id": "saturn.org.devmiyax.yabasanshioro2",
+      "default": false
+    },
+    {
+      "name": "YabaSanshiro Pro",
+      "unique_id": "saturn.org.uoyabause.android.pro",
+      "default": false
+    },
+    {
+      "name": "YabaSanshiro",
+      "unique_id": "saturn.org.uoyabause.android",
+      "default": false
+    },
+    {
+      "name": "Saturn.EMU",
+      "unique_id": "saturn.com.explusalpha.SaturnEmu",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - beetle saturn",
+      "unique_id": "saturn.ra64.mednafen_saturn",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - yabasanshiro",
+      "unique_id": "saturn.ra64.yabasanshiro",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - yabause",
+      "unique_id": "saturn.ra64.yabause",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - beetle saturn",
+      "unique_id": "saturn.ra32.mednafen_saturn",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - yabasanshiro",
+      "unique_id": "saturn.ra32.yabasanshiro",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - yabause",
+      "unique_id": "saturn.ra32.yabause",
+      "default": false
+    },
+    {
+      "name": "RetroArch - beetle saturn",
+      "unique_id": "saturn.ra.mednafen_saturn",
+      "default": false
+    },
+    {
+      "name": "RetroArch - yabasanshiro",
+      "unique_id": "saturn.ra.yabasanshiro",
+      "default": false
+    },
+    {
+      "name": "RetroArch - yabause",
+      "unique_id": "saturn.ra.yabause",
+      "default": false
+    }
+  ]
+}

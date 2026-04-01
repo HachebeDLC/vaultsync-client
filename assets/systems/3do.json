@@ -1,7 +1,7 @@
 {
   "system": {
     "id": "3do",
-    "name": "3DO Interactive Multiplayer",
+    "name": "3DO",
     "folders": [
       "3do",
       "3DO Interactive Multiplayer"
@@ -15,17 +15,17 @@
   },
   "emulators": [
     {
-      "name": "RetroArch Opera",
+      "name": "RetroArch - opera",
       "unique_id": "3do.ra.opera",
       "default": true
     },
     {
-      "name": "RetroArch64 Opera",
+      "name": "RetroArch (64 bits) - opera",
       "unique_id": "3do.ra64.opera",
       "default": false
     },
     {
-      "name": "RetroArch32 Opera",
+      "name": "RetroArch (32 bits) - opera",
       "unique_id": "3do.ra32.opera",
       "default": false
     }

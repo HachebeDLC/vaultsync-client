@@ -1,0 +1,51 @@
+{
+  "system": {
+    "id": "pspminis",
+    "name": "PlayStation Portable Minis",
+    "folders": [
+      "pspminis",
+      "PlayStation Portable Minis"
+    ],
+    "extensions": [
+      "cso",
+      "chd",
+      "elf",
+      "iso",
+      "pbp",
+      "prx"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "PPSSPP",
+      "unique_id": "pspminis.org.ppsspp.ppsspp",
+      "default": false
+    },
+    {
+      "name": "PPSSPP Gold",
+      "unique_id": "pspminis.org.ppsspp.ppssppgold",
+      "default": false
+    },
+    {
+      "name": "PPSSPP Legacy",
+      "unique_id": "pspminis.org.ppsspp.ppsspplegacy",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - ppsspp",
+      "unique_id": "pspminis.ra64.ppsspp",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - ppsspp",
+      "unique_id": "pspminis.ra32.ppsspp",
+      "default": false
+    },
+    {
+      "name": "RetroArch - ppsspp",
+      "unique_id": "pspminis.ra.ppsspp",
+      "default": false
+    }
+  ]
+}

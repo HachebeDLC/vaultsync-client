@@ -1,0 +1,56 @@
+{
+  "system": {
+    "id": "ebook",
+    "name": "Book Reader",
+    "folders": [
+      "ebook",
+      "Book Reader"
+    ],
+    "extensions": [
+      "azw",
+      "azw3",
+      "cbz",
+      "cbr",
+      "djvu",
+      "doc",
+      "docx",
+      "epub",
+      "epub3",
+      "fb2",
+      "html",
+      "mobi",
+      "opds",
+      "pdf",
+      "rtf",
+      "txt"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Librera Reader",
+      "unique_id": "ebook.com.foobnix.pdf.reader",
+      "default": false
+    },
+    {
+      "name": "Librera Reader Pro",
+      "unique_id": "ebook.com.foobnix.pro.pdf.reader",
+      "default": false
+    },
+    {
+      "name": "ReadEra",
+      "unique_id": "ebook.org.readera",
+      "default": false
+    },
+    {
+      "name": "Book Reader",
+      "unique_id": "ebook.com.github.axet.bookreader",
+      "default": false
+    },
+    {
+      "name": "KOReader",
+      "unique_id": "ebook.org.koreader.launcher",
+      "default": false
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "system": {
+    "id": "bbcmicro",
+    "name": "Acorn Computers BBC Micro",
+    "folders": [
+      "bbcmicro",
+      "Acorn Computers BBC Micro"
+    ],
+    "extensions": [
+      "ssd",
+      "dsd"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - b2",
+      "unique_id": "bbcmicro.ra64.b2",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - b2",
+      "unique_id": "bbcmicro.ra32.b2",
+      "default": false
+    },
+    {
+      "name": "RetroArch - b2",
+      "unique_id": "bbcmicro.ra.b2",
+      "default": false
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "system": {
+    "id": "palm",
+    "name": "Palm OS",
+    "folders": [
+      "palm",
+      "Palm OS"
+    ],
+    "extensions": [
+      "img",
+      "pdb",
+      "pqa",
+      "prc"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - mu",
+      "unique_id": "palm.ra64.mu",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mu",
+      "unique_id": "palm.ra32.mu",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mu",
+      "unique_id": "palm.ra.mu",
+      "default": false
+    }
+  ]
+}

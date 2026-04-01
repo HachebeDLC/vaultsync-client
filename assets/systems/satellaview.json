@@ -1,0 +1,171 @@
+{
+  "system": {
+    "id": "satellaview",
+    "name": "Nintendo Satellaview",
+    "folders": [
+      "satellaview",
+      "Nintendo Satellaview"
+    ],
+    "extensions": [
+      "bml",
+      "bs",
+      "bsx",
+      "dx2",
+      "fig",
+      "gb",
+      "gbc",
+      "gd3",
+      "gd7",
+      "rom",
+      "sfc",
+      "smc",
+      "st",
+      "swc",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Snes9x EX",
+      "unique_id": "satellaview.com.explusalpha.Snes9xPlus",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - snes9x",
+      "unique_id": "satellaview.ra64.snes9x",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mednafen_supafaust",
+      "unique_id": "satellaview.ra64.mednafen_supafaust",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mednafen_snes",
+      "unique_id": "satellaview.ra64.mednafen_snes",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - snes9x2002",
+      "unique_id": "satellaview.ra64.snes9x2002",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - snes9x2005_plus",
+      "unique_id": "satellaview.ra64.snes9x2005_plus",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - snes9x2005",
+      "unique_id": "satellaview.ra64.snes9x2005",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - snes9x2010",
+      "unique_id": "satellaview.ra64.snes9x2010",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - bsnes",
+      "unique_id": "satellaview.ra64.bsnes",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mesen-s",
+      "unique_id": "satellaview.ra64.mesen-s",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - snes9x",
+      "unique_id": "satellaview.ra32.snes9x",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mednafen_supafaust",
+      "unique_id": "satellaview.ra32.mednafen_supafaust",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mednafen_snes",
+      "unique_id": "satellaview.ra32.mednafen_snes",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - snes9x2002",
+      "unique_id": "satellaview.ra32.snes9x2002",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - snes9x2005_plus",
+      "unique_id": "satellaview.ra32.snes9x2005_plus",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - snes9x2005",
+      "unique_id": "satellaview.ra32.snes9x2005",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - snes9x2010",
+      "unique_id": "satellaview.ra32.snes9x2010",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - bsnes",
+      "unique_id": "satellaview.ra32.bsnes",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mesen-s",
+      "unique_id": "satellaview.ra32.mesen-s",
+      "default": false
+    },
+    {
+      "name": "RetroArch - snes9x",
+      "unique_id": "satellaview.ra.snes9x",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mednafen_supafaust",
+      "unique_id": "satellaview.ra.mednafen_supafaust",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mednafen_snes",
+      "unique_id": "satellaview.ra.mednafen_snes",
+      "default": false
+    },
+    {
+      "name": "RetroArch - snes9x2002",
+      "unique_id": "satellaview.ra.snes9x2002",
+      "default": false
+    },
+    {
+      "name": "RetroArch - snes9x2005_plus",
+      "unique_id": "satellaview.ra.snes9x2005_plus",
+      "default": false
+    },
+    {
+      "name": "RetroArch - snes9x2005",
+      "unique_id": "satellaview.ra.snes9x2005",
+      "default": false
+    },
+    {
+      "name": "RetroArch - snes9x2010",
+      "unique_id": "satellaview.ra.snes9x2010",
+      "default": false
+    },
+    {
+      "name": "RetroArch - bsnes",
+      "unique_id": "satellaview.ra.bsnes",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mesen-s",
+      "unique_id": "satellaview.ra.mesen-s",
+      "default": false
+    }
+  ]
+}

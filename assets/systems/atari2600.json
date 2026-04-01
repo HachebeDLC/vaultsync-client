@@ -1,0 +1,74 @@
+{
+  "system": {
+    "id": "atari2600",
+    "name": "Atari 2600",
+    "folders": [
+      "atari2600",
+      "Atari 2600"
+    ],
+    "extensions": [
+      "a26",
+      "bin",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "com.explusalpha.A2600Emu",
+      "unique_id": "atari2600.com.explusalpha.A2600Emu",
+      "default": false
+    },
+    {
+      "name": "com.androidemu.atari",
+      "unique_id": "atari2600.com.androidemu.atari",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - stella",
+      "unique_id": "atari2600.ra64.stella",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - stella2014",
+      "unique_id": "atari2600.ra64.stella2014",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - stella2023",
+      "unique_id": "atari2600.ra64.stella2023",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - stella",
+      "unique_id": "atari2600.ra32.stella",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - stella2014",
+      "unique_id": "atari2600.ra32.stella2014",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - stella2023",
+      "unique_id": "atari2600.ra32.stella2023",
+      "default": false
+    },
+    {
+      "name": "RetroArch - stella",
+      "unique_id": "atari2600.ra.stella",
+      "default": false
+    },
+    {
+      "name": "RetroArch - stella2014",
+      "unique_id": "atari2600.ra.stella2014",
+      "default": false
+    },
+    {
+      "name": "RetroArch - stella2023",
+      "unique_id": "atari2600.ra.stella2023",
+      "default": false
+    }
+  ]
+}

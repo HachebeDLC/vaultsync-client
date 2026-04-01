@@ -1,0 +1,46 @@
+{
+  "system": {
+    "id": "arduboy",
+    "name": "Arduboy",
+    "folders": [
+      "arduboy"
+    ],
+    "extensions": [
+      "hex",
+      "arduboy"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - arduous",
+      "unique_id": "arduboy.ra64.arduous",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - ardens",
+      "unique_id": "arduboy.ra64.ardens",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - arduous",
+      "unique_id": "arduboy.ra32.arduous",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - ardens",
+      "unique_id": "arduboy.ra32.ardens",
+      "default": false
+    },
+    {
+      "name": "RetroArch - arduous",
+      "unique_id": "arduboy.ra.arduous",
+      "default": false
+    },
+    {
+      "name": "RetroArch - ardens",
+      "unique_id": "arduboy.ra.ardens",
+      "default": false
+    }
+  ]
+}

@@ -7,7 +7,9 @@
     ],
     "extensions": [
       "scummvm",
-      "svm"
+      "svm",
+      "dpt",
+      "sh"
     ],
     "ignored_folders": [
       "media",
@@ -19,6 +21,31 @@
       "name": "ScummVM",
       "unique_id": "scummvm.scummvm.desktop",
       "default": true
+    },
+    {
+      "name": "ScummVM",
+      "unique_id": "scummvm.org.scummvm.scummvm",
+      "default": false
+    },
+    {
+      "name": "ScummVM (Debug Build)",
+      "unique_id": "scummvm.org.scummvm.scummvm.debug",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - scummvm",
+      "unique_id": "scummvm.ra64.scummvm",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - scummvm",
+      "unique_id": "scummvm.ra32.scummvm",
+      "default": false
+    },
+    {
+      "name": "RetroArch - scummvm",
+      "unique_id": "scummvm.ra.scummvm",
+      "default": false
     }
   ]
 }

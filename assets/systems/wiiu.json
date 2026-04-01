@@ -10,7 +10,8 @@
       "wud",
       "wux",
       "iso",
-      "rpx"
+      "rpx",
+      "wua"
     ],
     "ignored_folders": [
       "mlc01",
@@ -26,6 +27,11 @@
       "name": "Cemu",
       "unique_id": "wiiu.cemu.desktop",
       "default": true
+    },
+    {
+      "name": "CEMU",
+      "unique_id": "wiiu.info.cemu.Cemu",
+      "default": false
     }
   ]
 }

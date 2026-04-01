@@ -28,292 +28,292 @@
   },
   "emulators": [
     {
-      "name": "Snes9x EX+",
+      "name": "Snes9x EX",
       "unique_id": "snes.com.explusalpha.Snes9xPlus",
       "default": false
     },
     {
-      "name": "RetroArch64 Snes9x",
+      "name": "RetroArch (64 bits) - snes9x",
       "unique_id": "snes.ra64.snes9x",
       "default": false
     },
     {
-      "name": "RetroArch64 higan",
+      "name": "RetroArch (64 bits) - higan_sfc",
       "unique_id": "snes.ra64.higan_sfc",
       "default": false
     },
     {
-      "name": "RetroArch64 higan balanced",
+      "name": "RetroArch (64 bits) - higan_sfc_balanced",
       "unique_id": "snes.ra64.higan_sfc_balanced",
       "default": false
     },
     {
-      "name": "RetroArch64 Beetle Supafaust",
+      "name": "RetroArch (64 bits) - mednafen_supafaust",
       "unique_id": "snes.ra64.mednafen_supafaust",
       "default": false
     },
     {
-      "name": "RetroArch64 Beetle SNES",
+      "name": "RetroArch (64 bits) - mednafen_snes",
       "unique_id": "snes.ra64.mednafen_snes",
       "default": false
     },
     {
-      "name": "RetroArch64 Snes9x 2002",
+      "name": "RetroArch (64 bits) - snes9x2002",
       "unique_id": "snes.ra64.snes9x2002",
       "default": false
     },
     {
-      "name": "RetroArch64 Snes9x 2005 Plus",
+      "name": "RetroArch (64 bits) - snes9x2005_plus",
       "unique_id": "snes.ra64.snes9x2005_plus",
       "default": false
     },
     {
-      "name": "RetroArch64 Snes9x 2005",
+      "name": "RetroArch (64 bits) - snes9x2005",
       "unique_id": "snes.ra64.snes9x2005",
       "default": false
     },
     {
-      "name": "RetroArch64 Snes9x 2010",
+      "name": "RetroArch (64 bits) - snes9x2010",
       "unique_id": "snes.ra64.snes9x2010",
       "default": false
     },
     {
-      "name": "RetroArch64 bsnes 2014 Accuracy",
+      "name": "RetroArch (64 bits) - bsnes2014_accuracy",
       "unique_id": "snes.ra64.bsnes2014_accuracy",
       "default": false
     },
     {
-      "name": "RetroArch64 bsnes 2014 Balanced",
+      "name": "RetroArch (64 bits) - bsnes2014_balanced",
       "unique_id": "snes.ra64.bsnes2014_balanced",
       "default": false
     },
     {
-      "name": "RetroArch64 bsnes 2014 Performance",
+      "name": "RetroArch (64 bits) - bsnes2014_performance",
       "unique_id": "snes.ra64.bsnes2014_performance",
       "default": false
     },
     {
-      "name": "RetroArch64 bsnes C++98",
+      "name": "RetroArch (64 bits) - bsnes_cplusplus98",
       "unique_id": "snes.ra64.bsnes_cplusplus98",
       "default": false
     },
     {
-      "name": "RetroArch64 bsnes",
+      "name": "RetroArch (64 bits) - bsnes",
       "unique_id": "snes.ra64.bsnes",
       "default": false
     },
     {
-      "name": "RetroArch64 bsnes HD Beta",
+      "name": "RetroArch (64 bits) - bsnes_hd_beta",
       "unique_id": "snes.ra64.bsnes_hd_beta",
       "default": false
     },
     {
-      "name": "RetroArch64 bsnes Mercury Accuracy",
+      "name": "RetroArch (64 bits) - bsnes_mercury_accuracy",
       "unique_id": "snes.ra64.bsnes_mercury_accuracy",
       "default": false
     },
     {
-      "name": "RetroArch64 bsnes Mercury Balanced",
+      "name": "RetroArch (64 bits) - bsnes_mercury_balanced",
       "unique_id": "snes.ra64.bsnes_mercury_balanced",
       "default": false
     },
     {
-      "name": "RetroArch64 bsnes Mercury Performance",
+      "name": "RetroArch (64 bits) - bsnes_mercury_performance",
       "unique_id": "snes.ra64.bsnes_mercury_performance",
       "default": false
     },
     {
-      "name": "RetroArch64 Mesen-S",
+      "name": "RetroArch (64 bits) - mesen-s",
       "unique_id": "snes.ra64.mesen-s",
       "default": false
     },
     {
-      "name": "RetroArch32 Snes9x",
+      "name": "RetroArch (32 bits) - snes9x",
       "unique_id": "snes.ra32.snes9x",
       "default": false
     },
     {
-      "name": "RetroArch32 higan",
+      "name": "RetroArch (32 bits) - higan_sfc",
       "unique_id": "snes.ra32.higan_sfc",
       "default": false
     },
     {
-      "name": "RetroArch32 higan balanced",
+      "name": "RetroArch (32 bits) - higan_sfc_balanced",
       "unique_id": "snes.ra32.higan_sfc_balanced",
       "default": false
     },
     {
-      "name": "RetroArch32 Beetle Supafaust",
+      "name": "RetroArch (32 bits) - mednafen_supafaust",
       "unique_id": "snes.ra32.mednafen_supafaust",
       "default": false
     },
     {
-      "name": "RetroArch32 Beetle SNES",
+      "name": "RetroArch (32 bits) - mednafen_snes",
       "unique_id": "snes.ra32.mednafen_snes",
       "default": false
     },
     {
-      "name": "RetroArch32 Snes9x 2002",
+      "name": "RetroArch (32 bits) - snes9x2002",
       "unique_id": "snes.ra32.snes9x2002",
       "default": false
     },
     {
-      "name": "RetroArch32 Snes9x 2005 Plus",
+      "name": "RetroArch (32 bits) - snes9x2005_plus",
       "unique_id": "snes.ra32.snes9x2005_plus",
       "default": false
     },
     {
-      "name": "RetroArch32 Snes9x 2005",
+      "name": "RetroArch (32 bits) - snes9x2005",
       "unique_id": "snes.ra32.snes9x2005",
       "default": false
     },
     {
-      "name": "RetroArch32 Snes9x 2010",
+      "name": "RetroArch (32 bits) - snes9x2010",
       "unique_id": "snes.ra32.snes9x2010",
       "default": false
     },
     {
-      "name": "RetroArch32 bsnes 2014 Accuracy",
+      "name": "RetroArch (32 bits) - bsnes2014_accuracy",
       "unique_id": "snes.ra32.bsnes2014_accuracy",
       "default": false
     },
     {
-      "name": "RetroArch32 bsnes 2014 Balanced",
+      "name": "RetroArch (32 bits) - bsnes2014_balanced",
       "unique_id": "snes.ra32.bsnes2014_balanced",
       "default": false
     },
     {
-      "name": "RetroArch32 bsnes 2014 Performance",
+      "name": "RetroArch (32 bits) - bsnes2014_performance",
       "unique_id": "snes.ra32.bsnes2014_performance",
       "default": false
     },
     {
-      "name": "RetroArch32 bsnes C++98",
+      "name": "RetroArch (32 bits) - bsnes_cplusplus98",
       "unique_id": "snes.ra32.bsnes_cplusplus98",
       "default": false
     },
     {
-      "name": "RetroArch32 bsnes",
+      "name": "RetroArch (32 bits) - bsnes",
       "unique_id": "snes.ra32.bsnes",
       "default": false
     },
     {
-      "name": "RetroArch32 bsnes HD Beta",
+      "name": "RetroArch (32 bits) - bsnes_hd_beta",
       "unique_id": "snes.ra32.bsnes_hd_beta",
       "default": false
     },
     {
-      "name": "RetroArch32 bsnes Mercury Accuracy",
+      "name": "RetroArch (32 bits) - bsnes_mercury_accuracy",
       "unique_id": "snes.ra32.bsnes_mercury_accuracy",
       "default": false
     },
     {
-      "name": "RetroArch32 bsnes Mercury Balanced",
+      "name": "RetroArch (32 bits) - bsnes_mercury_balanced",
       "unique_id": "snes.ra32.bsnes_mercury_balanced",
       "default": false
     },
     {
-      "name": "RetroArch32 bsnes Mercury Performance",
+      "name": "RetroArch (32 bits) - bsnes_mercury_performance",
       "unique_id": "snes.ra32.bsnes_mercury_performance",
       "default": false
     },
     {
-      "name": "RetroArch32 Mesen-S",
+      "name": "RetroArch (32 bits) - mesen-s",
       "unique_id": "snes.ra32.mesen-s",
       "default": false
     },
     {
-      "name": "RetroArch Snes9x",
+      "name": "RetroArch - snes9x",
       "unique_id": "snes.ra.snes9x",
       "default": true
     },
     {
-      "name": "RetroArch higan",
+      "name": "RetroArch - higan_sfc",
       "unique_id": "snes.ra.higan_sfc",
       "default": false
     },
     {
-      "name": "RetroArch higan balanced",
+      "name": "RetroArch - higan_sfc_balanced",
       "unique_id": "snes.ra.higan_sfc_balanced",
       "default": false
     },
     {
-      "name": "RetroArch Beetle Supafaust",
+      "name": "RetroArch - mednafen_supafaust",
       "unique_id": "snes.ra.mednafen_supafaust",
       "default": false
     },
     {
-      "name": "RetroArch Beetle SNES",
+      "name": "RetroArch - mednafen_snes",
       "unique_id": "snes.ra.mednafen_snes",
       "default": false
     },
     {
-      "name": "RetroArch Snes9x 2002",
+      "name": "RetroArch - snes9x2002",
       "unique_id": "snes.ra.snes9x2002",
       "default": false
     },
     {
-      "name": "RetroArch Snes9x 2005 Plus",
+      "name": "RetroArch - snes9x2005_plus",
       "unique_id": "snes.ra.snes9x2005_plus",
       "default": false
     },
     {
-      "name": "RetroArch Snes9x 2005",
+      "name": "RetroArch - snes9x2005",
       "unique_id": "snes.ra.snes9x2005",
       "default": false
     },
     {
-      "name": "RetroArch Snes9x 2010",
+      "name": "RetroArch - snes9x2010",
       "unique_id": "snes.ra.snes9x2010",
       "default": false
     },
     {
-      "name": "RetroArch bsnes 2014 Accuracy",
+      "name": "RetroArch - bsnes2014_accuracy",
       "unique_id": "snes.ra.bsnes2014_accuracy",
       "default": false
     },
     {
-      "name": "RetroArch bsnes 2014 Balanced",
+      "name": "RetroArch - bsnes2014_balanced",
       "unique_id": "snes.ra.bsnes2014_balanced",
       "default": false
     },
     {
-      "name": "RetroArch bsnes 2014 Performance",
+      "name": "RetroArch - bsnes2014_performance",
       "unique_id": "snes.ra.bsnes2014_performance",
       "default": false
     },
     {
-      "name": "RetroArch bsnes C++98",
+      "name": "RetroArch - bsnes_cplusplus98",
       "unique_id": "snes.ra.bsnes_cplusplus98",
       "default": false
     },
     {
-      "name": "RetroArch bsnes",
+      "name": "RetroArch - bsnes",
       "unique_id": "snes.ra.bsnes",
       "default": false
     },
     {
-      "name": "RetroArch bsnes HD Beta",
+      "name": "RetroArch - bsnes_hd_beta",
       "unique_id": "snes.ra.bsnes_hd_beta",
       "default": false
     },
     {
-      "name": "RetroArch bsnes Mercury Accuracy",
+      "name": "RetroArch - bsnes_mercury_accuracy",
       "unique_id": "snes.ra.bsnes_mercury_accuracy",
       "default": false
     },
     {
-      "name": "RetroArch bsnes Mercury Balanced",
+      "name": "RetroArch - bsnes_mercury_balanced",
       "unique_id": "snes.ra.bsnes_mercury_balanced",
       "default": false
     },
     {
-      "name": "RetroArch bsnes Mercury Performance",
+      "name": "RetroArch - bsnes_mercury_performance",
       "unique_id": "snes.ra.bsnes_mercury_performance",
       "default": false
     },
     {
-      "name": "RetroArch Mesen-S",
+      "name": "RetroArch - mesen-s",
       "unique_id": "snes.ra.mesen-s",
       "default": false
     }

@@ -41,7 +41,7 @@
       "default": false
     },
     {
-      "name": "GBC Emulator",
+      "name": "My OldBoy!",
       "unique_id": "gb.com.fastemulator.gbc",
       "default": false
     },
@@ -51,98 +51,118 @@
       "default": false
     },
     {
-      "name": "RetroArch64 Gambatte",
+      "name": "RetroArch (64 bits) - gambatte",
       "unique_id": "gb.ra64.gambatte",
       "default": false
     },
     {
-      "name": "RetroArch64 Gearboy",
+      "name": "RetroArch (64 bits) - gearboy",
       "unique_id": "gb.ra64.gearboy",
       "default": false
     },
     {
-      "name": "RetroArch64 SameBoy",
+      "name": "RetroArch (64 bits) - sameboy",
       "unique_id": "gb.ra64.sameboy",
       "default": false
     },
     {
-      "name": "RetroArch64 TGB Dual",
+      "name": "RetroArch (64 bits) - tgbdual",
       "unique_id": "gb.ra64.tgbdual",
       "default": false
     },
     {
-      "name": "RetroArch64 DoubleCherryGB",
+      "name": "RetroArch (64 bits) - doublecherrygb",
       "unique_id": "gb.ra64.DoubleCherryGB",
       "default": false
     },
     {
-      "name": "RetroArch64 Mesen-S",
+      "name": "RetroArch (64 bits) - mesen-s",
       "unique_id": "gb.ra64.mesen-s",
       "default": false
     },
     {
-      "name": "RetroArch32 Gambatte",
+      "name": "RetroArch (32 bits) - gambatte",
       "unique_id": "gb.ra32.gambatte",
       "default": false
     },
     {
-      "name": "RetroArch32 Gearboy",
+      "name": "RetroArch (32 bits) - gearboy",
       "unique_id": "gb.ra32.gearboy",
       "default": false
     },
     {
-      "name": "RetroArch32 SameBoy",
+      "name": "RetroArch (32 bits) - sameboy",
       "unique_id": "gb.ra32.sameboy",
       "default": false
     },
     {
-      "name": "RetroArch32 TGB Dual",
+      "name": "RetroArch (32 bits) - tgbdual",
       "unique_id": "gb.ra32.tgbdual",
       "default": false
     },
     {
-      "name": "RetroArch32 DoubleCherryGB",
+      "name": "RetroArch (32 bits) - doublecherrygb",
       "unique_id": "gb.ra32.DoubleCherryGB",
       "default": false
     },
     {
-      "name": "RetroArch32 Mesen-S",
+      "name": "RetroArch (32 bits) - mesen-s",
       "unique_id": "gb.ra32.mesen-s",
       "default": false
     },
     {
-      "name": "RetroArch Gambatte",
+      "name": "RetroArch - gambatte",
       "unique_id": "gb.ra.gambatte",
       "default": true
     },
     {
-      "name": "RetroArch Gearboy",
+      "name": "RetroArch - gearboy",
       "unique_id": "gb.ra.gearboy",
       "default": false
     },
     {
-      "name": "RetroArch SameBoy",
+      "name": "RetroArch - sameboy",
       "unique_id": "gb.ra.sameboy",
       "default": false
     },
     {
-      "name": "RetroArch TGB Dual",
+      "name": "RetroArch - tgbdual",
       "unique_id": "gb.ra.tgbdual",
       "default": false
     },
     {
-      "name": "RetroArch DoubleCherryGB",
+      "name": "RetroArch - doublecherrygb",
       "unique_id": "gb.ra.DoubleCherryGB",
       "default": false
     },
     {
-      "name": "RetroArch Mesen-S",
+      "name": "RetroArch - mesen-s",
       "unique_id": "gb.ra.mesen-s",
       "default": false
     },
     {
       "name": "mGBA",
       "unique_id": "gb.mgba.desktop",
+      "default": false
+    },
+    {
+      "name": "My OldBoy! Free",
+      "unique_id": "gb.com.fastemulator.gbcfree",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mgba",
+      "unique_id": "gb.ra64.mgba",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mgba",
+      "unique_id": "gb.ra32.mgba",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mgba",
+      "unique_id": "gb.ra.mgba",
       "default": false
     }
   ]

@@ -1,0 +1,69 @@
+{
+  "system": {
+    "id": "atarilynx",
+    "name": "Atari Lynx",
+    "folders": [
+      "atarilynx",
+      "Atari Lynx"
+    ],
+    "extensions": [
+      "lnx",
+      "o",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "com.explusalpha.LynxEmu",
+      "unique_id": "lynx.com.explusalpha.LynxEmu",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mednafen_lynx",
+      "unique_id": "lynx.ra64.mednafen_lynx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - handy",
+      "unique_id": "lynx.ra64.handy",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - holani",
+      "unique_id": "lynx.ra64.holani",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mednafen_lynx",
+      "unique_id": "lynx.ra32.mednafen_lynx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - handy",
+      "unique_id": "lynx.ra32.handy",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - holani",
+      "unique_id": "lynx.ra32.holani",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mednafen_lynx",
+      "unique_id": "lynx.ra.mednafen_lynx",
+      "default": false
+    },
+    {
+      "name": "RetroArch - handy",
+      "unique_id": "lynx.ra.handy",
+      "default": false
+    },
+    {
+      "name": "RetroArch - holani",
+      "unique_id": "lynx.ra.holani",
+      "default": false
+    }
+  ]
+}

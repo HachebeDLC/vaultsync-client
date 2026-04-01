@@ -1,0 +1,33 @@
+{
+  "system": {
+    "id": "videopac",
+    "name": "Philips Videopac+ G7400",
+    "folders": [
+      "videopac",
+      "Philips Videopac+ G7400"
+    ],
+    "extensions": [
+      "bin",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - o2em",
+      "unique_id": "g7400.ra64.o2em",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - o2em",
+      "unique_id": "g7400.ra32.o2em",
+      "default": false
+    },
+    {
+      "name": "RetroArch - o2em",
+      "unique_id": "g7400.ra.o2em",
+      "default": false
+    }
+  ]
+}

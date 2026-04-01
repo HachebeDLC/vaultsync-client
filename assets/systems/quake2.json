@@ -1,0 +1,76 @@
+{
+  "system": {
+    "id": "quake2",
+    "name": "Quake II Game Engine",
+    "folders": [
+      "quake2",
+      "Quake II Game Engine"
+    ],
+    "extensions": [
+      "pak"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - vitaquake2",
+      "unique_id": "quake2.ra64.vitaquake2",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - vitaquake2 rogue",
+      "unique_id": "quake2.ra64.vitaquake2-rogue_libretro",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - vitaquake2 xatrix",
+      "unique_id": "quake2.ra64.vitaquake2-xatrix_libretro",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - vitaquake2 zaero",
+      "unique_id": "quake2.ra64.vitaquake2-zaero_libretro",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - vitaquake2",
+      "unique_id": "quake2.ra32.vitaquake2",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - vitaquake2 rogue",
+      "unique_id": "quake2.ra32.vitaquake2-rogue_libretro",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - vitaquake2 xatrix",
+      "unique_id": "quake2.ra32.vitaquake2-xatrix_libretro",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - vitaquake2 zaero",
+      "unique_id": "quake2.ra32.vitaquake2-zaero_libretro",
+      "default": false
+    },
+    {
+      "name": "RetroArch - vitaquake2",
+      "unique_id": "quake2.ra.vitaquake2",
+      "default": false
+    },
+    {
+      "name": "RetroArch - vitaquake2 rogue",
+      "unique_id": "quake2.ra.vitaquake2-rogue_libretro",
+      "default": false
+    },
+    {
+      "name": "RetroArch - vitaquake2 xatrix",
+      "unique_id": "quake2.ra.vitaquake2-xatrix_libretro",
+      "default": false
+    },
+    {
+      "name": "RetroArch - vitaquake2 zaero",
+      "unique_id": "quake2.ra.vitaquake2-zaero_libretro",
+      "default": false
+    }
+  ]
+}

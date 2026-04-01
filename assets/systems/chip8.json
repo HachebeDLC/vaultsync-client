@@ -1,0 +1,32 @@
+{
+  "system": {
+    "id": "chip8",
+    "name": "CHIP-8",
+    "folders": [
+      "chip8",
+      "CHIP-8"
+    ],
+    "extensions": [
+      "ch8",
+      "zip"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - jaxe",
+      "unique_id": "chip8.ra64.jaxe",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - jaxe",
+      "unique_id": "chip8.ra32.jaxe",
+      "default": false
+    },
+    {
+      "name": "RetroArch - jaxe",
+      "unique_id": "chip8.ra.jaxe",
+      "default": false
+    }
+  ]
+}

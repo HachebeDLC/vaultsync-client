@@ -1,0 +1,31 @@
+{
+  "system": {
+    "id": "quake",
+    "name": "Quake Game Engine",
+    "folders": [
+      "quake",
+      "Quake Game Engine"
+    ],
+    "extensions": [
+      "pak"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - tyrquake",
+      "unique_id": "quake.ra64.tyrquake",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - tyrquake",
+      "unique_id": "quake.ra32.tyrquake",
+      "default": false
+    },
+    {
+      "name": "RetroArch - tyrquake",
+      "unique_id": "quake.ra.tyrquake",
+      "default": false
+    }
+  ]
+}

@@ -12,17 +12,17 @@
   },
   "emulators": [
     {
-      "name": "RetroArch64 WASM-4",
+      "name": "RetroArch (64 bits) - wasm4",
       "unique_id": "wasm4.ra64.wasm4",
       "default": false
     },
     {
-      "name": "RetroArch32 WASM-4",
+      "name": "RetroArch (32 bits) - wasm4",
       "unique_id": "wasm4.ra32.wasm4",
       "default": false
     },
     {
-      "name": "RetroArch WASM-4",
+      "name": "RetroArch - wasm4",
       "unique_id": "wasm4.ra.wasm4",
       "default": true
     }

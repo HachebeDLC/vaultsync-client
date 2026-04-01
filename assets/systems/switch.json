@@ -58,7 +58,7 @@
       "default": false
     },
     {
-      "name": "Yuzu (early access)",
+      "name": "Yuzu (Early Access)",
       "unique_id": "switch.org.yuzu.yuzu_emu.ea",
       "default": false
     },
@@ -100,6 +100,26 @@
     {
       "name": "Yuzu",
       "unique_id": "switch.yuzu.desktop",
+      "default": false
+    },
+    {
+      "name": "Eden (Optimized)",
+      "unique_id": "switch.dev.eden.eden_emulator_legacy",
+      "default": false
+    },
+    {
+      "name": "Eden Nightly",
+      "unique_id": "switch.dev.eden.eden_emulator.nightly",
+      "default": false
+    },
+    {
+      "name": "Eden Nightly (Legacy)",
+      "unique_id": "switch.dev.legacy.eden_emulator.nightly",
+      "default": false
+    },
+    {
+      "name": "Eden Nightly (Optimized)",
+      "unique_id": "switch.com.mihoyo.yuanshen.nightly",
       "default": false
     }
   ]

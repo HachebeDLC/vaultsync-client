@@ -16,22 +16,22 @@
   },
   "emulators": [
     {
-      "name": "Flycast",
+      "name": "Flycast (Dev Build)",
       "unique_id": "naomi.com.flycast.emulator",
       "default": false
     },
     {
-      "name": "RetroArch64 Flycast",
+      "name": "RetroArch (64 bits) - flycast",
       "unique_id": "naomi.ra64.flycast",
       "default": false
     },
     {
-      "name": "RetroArch32 Flycast",
+      "name": "RetroArch (32 bits) - flycast",
       "unique_id": "naomi.ra32.flycast",
       "default": false
     },
     {
-      "name": "RetroArch Flycast",
+      "name": "RetroArch - flycast",
       "unique_id": "naomi.ra.flycast",
       "default": true
     }

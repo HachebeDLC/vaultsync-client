@@ -1,0 +1,78 @@
+{
+  "system": {
+    "id": "wiiware",
+    "name": "Nintendo WiiWare",
+    "folders": [
+      "wiiware",
+      "Nintendo WiiWare"
+    ],
+    "extensions": [
+      "ciso",
+      "dff",
+      "dol",
+      "elf",
+      "gcm",
+      "gcz",
+      "iso",
+      "tgc",
+      "wad",
+      "wbfs",
+      "rvz",
+      "m3u",
+      "wia"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Dolphin Emulator",
+      "unique_id": "wiiware.org.dolphinemu.dolphinemu",
+      "default": false
+    },
+    {
+      "name": "Dolphin (Handheld)",
+      "unique_id": "wiiware.org.dolphinemu.handheld",
+      "default": false
+    },
+    {
+      "name": "Dolphin (org.mm.jr Fork)",
+      "unique_id": "wiiware.org.mm.jr",
+      "default": false
+    },
+    {
+      "name": "Dolphin (org.mm.j Fork)",
+      "unique_id": "wiiware.org.mm.j",
+      "default": false
+    },
+    {
+      "name": "Dolphin MMJR",
+      "unique_id": "wiiware.org.dolphinemu.mmjr",
+      "default": false
+    },
+    {
+      "name": "Dolphin MMJR3",
+      "unique_id": "wiiware.org.dolphinemu.mmjr3",
+      "default": false
+    },
+    {
+      "name": "Dolphin Ishiiruka",
+      "unique_id": "wiiware.org.dolphin.ishiirukadark",
+      "default": false
+    },
+    {
+      "name": "Dolphin (Debug Build)",
+      "unique_id": "wiiware.org.dolphinemu.dolphinemu.debug",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - dolphin",
+      "unique_id": "wiiware.ra64.dolphin",
+      "default": false
+    },
+    {
+      "name": "RetroArch - dolphin",
+      "unique_id": "wiiware.ra.dolphin",
+      "default": false
+    }
+  ]
+}

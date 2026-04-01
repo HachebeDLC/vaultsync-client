@@ -1,16 +1,36 @@
 {
   "system": {
     "id": "doom",
-    "name": "DooM",
-    "folders": ["doom"],
-    "extensions": ["wad", "iwad", "pwad"],
-    "ignored_folders": ["media", "cache"]
+    "name": "DOOM Game Engine",
+    "folders": [
+      "doom"
+    ],
+    "extensions": [
+      "wad",
+      "iwad",
+      "pwad",
+      "zip"
+    ],
+    "ignored_folders": [
+      "media",
+      "cache"
+    ]
   },
   "emulators": [
     {
-      "name": "RetroArch PrBoom",
+      "name": "RetroArch - prboom",
       "unique_id": "doom.ra.prboom",
       "default": true
+    },
+    {
+      "name": "RetroArch (64 bits) - prboom",
+      "unique_id": "doom.ra64.prboom",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - prboom",
+      "unique_id": "doom.ra32.prboom",
+      "default": false
     }
   ]
 }

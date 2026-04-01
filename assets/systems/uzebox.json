@@ -1,0 +1,32 @@
+{
+  "system": {
+    "id": "uzebox",
+    "name": "Uzebox",
+    "folders": [
+      "uzebox"
+    ],
+    "extensions": [
+      "uze",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - uzem",
+      "unique_id": "uzebox.ra64.uzem",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - uzem",
+      "unique_id": "uzebox.ra32.uzem",
+      "default": false
+    },
+    {
+      "name": "RetroArch - uzem",
+      "unique_id": "uzebox.ra.uzem",
+      "default": false
+    }
+  ]
+}

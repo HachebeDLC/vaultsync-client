@@ -1,0 +1,33 @@
+{
+  "system": {
+    "id": "odyssey2",
+    "name": "Magnavox Odyssey 2",
+    "folders": [
+      "odyssey2",
+      "Magnavox Odyssey 2"
+    ],
+    "extensions": [
+      "bin",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - o2em",
+      "unique_id": "odyssey2.ra64.o2em",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - o2em",
+      "unique_id": "odyssey2.ra32.o2em",
+      "default": false
+    },
+    {
+      "name": "RetroArch - o2em",
+      "unique_id": "odyssey2.ra.o2em",
+      "default": false
+    }
+  ]
+}

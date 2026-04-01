@@ -1,0 +1,96 @@
+{
+  "system": {
+    "id": "snesmsu1",
+    "name": "Super Nintendo Entertainment System - MSU-1",
+    "folders": [
+      "snesmsu1",
+      "Super Nintendo Entertainment System - MSU-1"
+    ],
+    "extensions": [
+      "bml",
+      "bs",
+      "bsx",
+      "dx2",
+      "fig",
+      "gb",
+      "gbc",
+      "gd3",
+      "gd7",
+      "rom",
+      "sfc",
+      "smc",
+      "st",
+      "swc",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Snes9x EX",
+      "unique_id": "snesmsu1.com.explusalpha.Snes9xPlus",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - snes9x",
+      "unique_id": "snesmsu1.ra64.snes9x",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - bsnes",
+      "unique_id": "snesmsu1.ra64.bsnes",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - bsnes_hd_beta",
+      "unique_id": "snesmsu1.ra64.bsnes_hd_beta",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mesen-s",
+      "unique_id": "snesmsu1.ra64.mesen-s",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - snes9x",
+      "unique_id": "snesmsu1.ra32.snes9x",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - bsnes",
+      "unique_id": "snesmsu1.ra32.bsnes",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - bsnes_hd_beta",
+      "unique_id": "snesmsu1.ra32.bsnes_hd_beta",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mesen-s",
+      "unique_id": "snesmsu1.ra32.mesen-s",
+      "default": false
+    },
+    {
+      "name": "RetroArch - snes9x",
+      "unique_id": "snesmsu1.ra.snes9x",
+      "default": false
+    },
+    {
+      "name": "RetroArch - bsnes",
+      "unique_id": "snesmsu1.ra.bsnes",
+      "default": false
+    },
+    {
+      "name": "RetroArch - bsnes_hd_beta",
+      "unique_id": "snesmsu1.ra.bsnes_hd_beta",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mesen-s",
+      "unique_id": "snesmsu1.ra.mesen-s",
+      "default": false
+    }
+  ]
+}

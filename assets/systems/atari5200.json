@@ -1,0 +1,58 @@
+{
+  "system": {
+    "id": "atari5200",
+    "name": "Atari 5200",
+    "folders": [
+      "atari5200",
+      "Atari 5200"
+    ],
+    "extensions": [
+      "a52",
+      "atr",
+      "atx",
+      "bin",
+      "car",
+      "cas",
+      "cdm",
+      "com",
+      "rom",
+      "xex",
+      "xfd",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - atari800",
+      "unique_id": "atari5200.ra64.atari800",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - a5200",
+      "unique_id": "atari5200.ra64.a5200",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - atari800",
+      "unique_id": "atari5200.ra32.atari800",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - a5200",
+      "unique_id": "atari5200.ra32.a5200",
+      "default": false
+    },
+    {
+      "name": "RetroArch - atari800",
+      "unique_id": "atari5200.ra.atari800",
+      "default": false
+    },
+    {
+      "name": "RetroArch - a5200",
+      "unique_id": "atari5200.ra.a5200",
+      "default": false
+    }
+  ]
+}

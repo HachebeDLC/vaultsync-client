@@ -1,0 +1,32 @@
+{
+  "system": {
+    "id": "cannonball",
+    "name": "Cannonball OutRun Engine",
+    "folders": [
+      "cannonball",
+      "Cannonball OutRun Engine"
+    ],
+    "extensions": [
+      "game",
+      "88"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - cannonball",
+      "unique_id": "cannonball.ra64.cannonball",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - cannonball",
+      "unique_id": "cannonball.ra32.cannonball",
+      "default": false
+    },
+    {
+      "name": "RetroArch - cannonball",
+      "unique_id": "cannonball.ra.cannonball",
+      "default": false
+    }
+  ]
+}

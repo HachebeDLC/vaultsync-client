@@ -1,0 +1,33 @@
+{
+  "system": {
+    "id": "pico",
+    "name": "Sega Pico",
+    "folders": [
+      "pico",
+      "Sega Pico"
+    ],
+    "extensions": [
+      "md",
+      "7z",
+      "zip"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - picodrive",
+      "unique_id": "pico.ra64.picodrive",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - picodrive",
+      "unique_id": "pico.ra32.picodrive",
+      "default": false
+    },
+    {
+      "name": "RetroArch - picodrive",
+      "unique_id": "pico.ra.picodrive",
+      "default": false
+    }
+  ]
+}

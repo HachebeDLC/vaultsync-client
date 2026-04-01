@@ -1,0 +1,121 @@
+{
+  "system": {
+    "id": "mastersystem",
+    "name": "Sega Master System",
+    "folders": [
+      "mastersystem",
+      "Sega Master System"
+    ],
+    "extensions": [
+      "32x",
+      "68k",
+      "bin",
+      "bms",
+      "chd",
+      "cue",
+      "gen",
+      "gg",
+      "iso",
+      "m3u",
+      "md",
+      "mdx",
+      "pco",
+      "sg",
+      "sgd",
+      "smd",
+      "sms",
+      "zip",
+      "7z",
+      "col",
+      "rom"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "MD.emu",
+      "unique_id": "master.com.explusalpha.MdEmu",
+      "default": false
+    },
+    {
+      "name": "Pizza Boy SC Pro",
+      "unique_id": "master.it.dbtecno.pizzaboyscpro",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - genesis_plus_gx",
+      "unique_id": "master.ra64.genesis_plus_gx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - genesis_plus_gx_wide",
+      "unique_id": "master.ra64.genesis_plus_gx_wide",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - smsplus",
+      "unique_id": "master.ra64.smsplus",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - picodrive",
+      "unique_id": "master.ra64.picodrive",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - gearsystem",
+      "unique_id": "master.ra64.gearsystem",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - genesis_plus_gx",
+      "unique_id": "master.ra32.genesis_plus_gx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - genesis_plus_gx_wide",
+      "unique_id": "master.ra32.genesis_plus_gx_wide",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - smsplus",
+      "unique_id": "master.ra32.smsplus",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - picodrive",
+      "unique_id": "master.ra32.picodrive",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - gearsystem",
+      "unique_id": "master.ra32.gearsystem",
+      "default": false
+    },
+    {
+      "name": "RetroArch - genesis_plus_gx",
+      "unique_id": "master.ra.genesis_plus_gx",
+      "default": false
+    },
+    {
+      "name": "RetroArch - genesis_plus_gx_wide",
+      "unique_id": "master.ra.genesis_plus_gx_wide",
+      "default": false
+    },
+    {
+      "name": "RetroArch - smsplus",
+      "unique_id": "master.ra.smsplus",
+      "default": false
+    },
+    {
+      "name": "RetroArch - picodrive",
+      "unique_id": "master.ra.picodrive",
+      "default": false
+    },
+    {
+      "name": "RetroArch - gearsystem",
+      "unique_id": "master.ra.gearsystem",
+      "default": false
+    }
+  ]
+}

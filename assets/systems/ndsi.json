@@ -1,0 +1,100 @@
+{
+  "system": {
+    "id": "ndsi",
+    "name": "Nintendo DSi",
+    "folders": [
+      "ndsi",
+      "Nintendo DSi"
+    ],
+    "extensions": [
+      "nds",
+      "zip",
+      "7z",
+      "bin",
+      "rar"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "MelonDS",
+      "unique_id": "ndsi.me.magnum.melonds",
+      "default": false
+    },
+    {
+      "name": "Drastic",
+      "unique_id": "ndsi.com.dsemu.drastic",
+      "default": false
+    },
+    {
+      "name": "MelonDS Nightly",
+      "unique_id": "ndsi.me.magnum.melonds.nightly",
+      "default": false
+    },
+    {
+      "name": "MelonDS Dev (Dual Screen Fork)",
+      "unique_id": "ndsi.me.magnum.melonds.dev",
+      "default": false
+    },
+    {
+      "name": "NooDS",
+      "unique_id": "ndsi.com.hydra.noods",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - melonds",
+      "unique_id": "ndsi.ra64.melonds",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - melonds ds",
+      "unique_id": "ndsi.ra64.melondsds",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - desmume",
+      "unique_id": "ndsi.ra64.desmume",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - desmume2015",
+      "unique_id": "ndsi.ra64.desmume2015",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - melonds",
+      "unique_id": "ndsi.ra32.melonds",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - desmume",
+      "unique_id": "ndsi.ra32.desmume",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - desmume2015",
+      "unique_id": "ndsi.ra32.desmume2015",
+      "default": false
+    },
+    {
+      "name": "RetroArch - melonds",
+      "unique_id": "ndsi.ra.melonds",
+      "default": false
+    },
+    {
+      "name": "RetroArch - melonds ds",
+      "unique_id": "ndsi.ra.melondsds",
+      "default": false
+    },
+    {
+      "name": "RetroArch - desmume",
+      "unique_id": "ndsi.ra.desmume",
+      "default": false
+    },
+    {
+      "name": "RetroArch - desmume2015",
+      "unique_id": "ndsi.ra.desmume2015",
+      "default": false
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "system": {
+    "id": "psx",
+    "name": "Sony PlayStation",
+    "folders": [
+      "psx",
+      "Sony PlayStation"
+    ],
+    "extensions": [
+      "bin",
+      "chd",
+      "cue",
+      "ecm",
+      "exe",
+      "img",
+      "iso",
+      "m3u",
+      "mds",
+      "pbp",
+      "psexe",
+      "psf",
+      "toc",
+      "ccd",
+      "cbn",
+      "mdf"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "Duckstation (Legacy)",
+      "unique_id": "psx.com.github.stenzek.duckstation",
+      "default": false
+    },
+    {
+      "name": "FPse",
+      "unique_id": "psx.com.emulator.fpse",
+      "default": false
+    },
+    {
+      "name": "FPse64",
+      "unique_id": "psx.com.emulator.fpse64",
+      "default": false
+    },
+    {
+      "name": "ePSXe",
+      "unique_id": "psx.com.epsxe.ePSXe",
+      "default": false
+    },
+    {
+      "name": "Retroarch 64 - beetle psx hw",
+      "unique_id": "psx.ra64.mednafen_psx_hw",
+      "default": false
+    },
+    {
+      "name": "Retroarch 64 - beetle psx",
+      "unique_id": "psx.ra64.mednafen_psx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - duckstation",
+      "unique_id": "psx.ra64.duckstation",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - pcsx_rearmed",
+      "unique_id": "psx.ra64.pcsx_rearmed",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - swanstation",
+      "unique_id": "psx.ra64.swanstation",
+      "default": false
+    },
+    {
+      "name": "Retroarch 32 - beetle psx hw",
+      "unique_id": "psx.ra32.mednafen_psx_hw",
+      "default": false
+    },
+    {
+      "name": "Retroarch 32 - beetle psx",
+      "unique_id": "psx.ra32.mednafen_psx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - duckstation",
+      "unique_id": "psx.ra32.duckstation",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - pcsx_rearmed",
+      "unique_id": "psx.ra32.pcsx_rearmed",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - swanstation",
+      "unique_id": "psx.ra32.swanstation",
+      "default": false
+    },
+    {
+      "name": "Retroarch - beetle psx hw",
+      "unique_id": "psx.ra.mednafen_psx_hw",
+      "default": false
+    },
+    {
+      "name": "Retroarch - beetle psx",
+      "unique_id": "psx.ra.mednafen_psx",
+      "default": false
+    },
+    {
+      "name": "RetroArch - duckstation",
+      "unique_id": "psx.ra.duckstation",
+      "default": false
+    },
+    {
+      "name": "RetroArch - pcsx_rearmed",
+      "unique_id": "psx.ra.pcsx_rearmed",
+      "default": false
+    },
+    {
+      "name": "RetroArch - swanstation",
+      "unique_id": "psx.ra.swanstation",
+      "default": false
+    }
+  ]
+}

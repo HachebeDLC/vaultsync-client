@@ -10,53 +10,64 @@
     ],
     "extensions": [
       "zip",
-      "7z"
+      "7z",
+      "iso"
     ]
   },
   "emulators": [
     {
-      "name": "RetroArch64 FBNeo",
+      "name": "RetroArch (64 bits) - fbneo",
       "unique_id": "cps1.ra64.fbneo",
       "default": false
     },
     {
-      "name": "RetroArch64 FBAlpha2012",
+      "name": "RetroArch (64 bits) - fbalpha2012",
       "unique_id": "cps1.ra64.fbalpha2012",
       "default": false
     },
     {
-      "name": "RetroArch64 FBAlpha2012 CPS1",
+      "name": "RetroArch (64 bits) - fbalpha2012_cps1",
       "unique_id": "cps1.ra64.fbalpha2012_cps1",
       "default": false
     },
     {
-      "name": "RetroArch32 FBNeo",
+      "name": "RetroArch (32 bits) - fbneo",
       "unique_id": "cps1.ra32.fbneo",
       "default": false
     },
     {
-      "name": "RetroArch32 FBAlpha2012",
+      "name": "RetroArch (32 bits) - fbalpha2012",
       "unique_id": "cps1.ra32.fbalpha2012",
       "default": false
     },
     {
-      "name": "RetroArch32 FBAlpha2012 CPS1",
+      "name": "RetroArch (32 bits) - fbalpha2012_cps1",
       "unique_id": "cps1.ra32.fbalpha2012_cps1",
       "default": false
     },
     {
-      "name": "RetroArch FBNeo",
+      "name": "RetroArch - fbneo",
       "unique_id": "cps1.ra.fbneo",
       "default": true
     },
     {
-      "name": "RetroArch FBAlpha2012",
+      "name": "RetroArch - fbalpha2012",
       "unique_id": "cps1.ra.fbalpha2012",
       "default": false
     },
     {
-      "name": "RetroArch FBAlpha2012 CPS1",
+      "name": "RetroArch - fbalpha2012_cps1",
       "unique_id": "cps1.ra.fbalpha2012_cps1",
+      "default": false
+    },
+    {
+      "name": "NEO.EMU",
+      "unique_id": "cps1.com.explusalpha.neoemu",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - fbalpha",
+      "unique_id": "cps1.ra32.fbalpha",
       "default": false
     }
   ]

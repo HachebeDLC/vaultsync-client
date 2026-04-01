@@ -2,15 +2,121 @@
   "system": {
     "id": "c64",
     "name": "Commodore 64",
-    "folders": ["c64", "c128", "vic20", "c16"],
-    "extensions": ["d64", "g64", "t64", "x64", "prg", "tap", "crt", "zip", "7z"],
-    "ignored_folders": ["media", "cache"]
+    "folders": [
+      "c64",
+      "c128",
+      "vic20",
+      "c16"
+    ],
+    "extensions": [
+      "d64",
+      "g64",
+      "t64",
+      "x64",
+      "prg",
+      "tap",
+      "crt",
+      "zip",
+      "7z",
+      "bin",
+      "d6z",
+      "d71",
+      "d7z",
+      "d80",
+      "d81",
+      "d82",
+      "d8z",
+      "g41",
+      "g4z",
+      "g6z",
+      "gz",
+      "lnx",
+      "p00",
+      "x6z",
+      "cmd",
+      "d2m",
+      "d4m",
+      "m3u",
+      "nbz",
+      "nib",
+      "vfl",
+      "vsf"
+    ],
+    "ignored_folders": [
+      "media",
+      "cache"
+    ]
   },
   "emulators": [
     {
       "name": "RetroArch Vice",
       "unique_id": "c64.ra.vice",
       "default": true
+    },
+    {
+      "name": "com.explusalpha.C64Emu",
+      "unique_id": "c64.com.explusalpha.C64Emu",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - frodo",
+      "unique_id": "c64.ra64.frodo",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - x64sdl",
+      "unique_id": "c64.ra64.x64sdl",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - vice_x64",
+      "unique_id": "c64.ra64.vice_x64",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - vice_x64sc",
+      "unique_id": "c64.ra64.vice_x64sc",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - frodo",
+      "unique_id": "c64.ra32.frodo",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - x64sdl",
+      "unique_id": "c64.ra32.x64sdl",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - vice_x64",
+      "unique_id": "c64.ra32.vice_x64",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - vice_x64sc",
+      "unique_id": "c64.ra32.vice_x64sc",
+      "default": false
+    },
+    {
+      "name": "RetroArch - frodo",
+      "unique_id": "c64.ra.frodo",
+      "default": false
+    },
+    {
+      "name": "RetroArch - x64sdl",
+      "unique_id": "c64.ra.x64sdl",
+      "default": false
+    },
+    {
+      "name": "RetroArch - vice_x64",
+      "unique_id": "c64.ra.vice_x64",
+      "default": false
+    },
+    {
+      "name": "RetroArch - vice_x64sc",
+      "unique_id": "c64.ra.vice_x64sc",
+      "default": false
     }
   ]
 }

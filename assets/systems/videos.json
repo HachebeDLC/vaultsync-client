@@ -1,0 +1,58 @@
+{
+  "system": {
+    "id": "videos",
+    "name": "Video Player",
+    "folders": [
+      "videos",
+      "Video Player"
+    ],
+    "extensions": [
+      "mp4",
+      "avi",
+      "mpg",
+      "mpeg",
+      "mov",
+      "mkv",
+      "webm",
+      "m4a"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "VLC for Android",
+      "unique_id": "videos.org.videolan.vlc",
+      "default": false
+    },
+    {
+      "name": "mpv-android",
+      "unique_id": "videos.is.xyz.mpv",
+      "default": false
+    },
+    {
+      "name": "MXPlayer (Ad-sipported)",
+      "unique_id": "videos.com.mxtech.videoplayer.ad",
+      "default": false
+    },
+    {
+      "name": "MXPlayer Pro",
+      "unique_id": "videos.com.mxtech.videoplayer.pro",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - ffmpeg",
+      "unique_id": "videos.ra64.ffmpeg",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - ffmpeg",
+      "unique_id": "videos.ra32.ffmpeg",
+      "default": false
+    },
+    {
+      "name": "RetroArch - ffmpeg",
+      "unique_id": "videos.ra.ffmpeg",
+      "default": false
+    }
+  ]
+}

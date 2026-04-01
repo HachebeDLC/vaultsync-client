@@ -19,67 +19,67 @@
   },
   "emulators": [
     {
-      "name": "Mupen64Plus FZ",
+      "name": "Mupen64Plus",
       "unique_id": "n64.org.mupen64plusae.v3.fzurita",
       "default": false
     },
     {
-      "name": "Mupen64Plus AE",
+      "name": "Mupen64Plus (Alpha)",
       "unique_id": "n64.org.mupen64plusae.v3.alpha",
       "default": false
     },
     {
-      "name": "Mupen64Plus FZ Pro",
+      "name": "Mupen64Plus FZ Edition",
       "unique_id": "n64.org.mupen64plusae.v3.fzurita.pro",
       "default": false
     },
     {
-      "name": "Mupen64Plus",
+      "name": "Mupen64Plus-AE",
       "unique_id": "n64.paulscode.android.mupen64plusae",
       "default": false
     },
     {
-      "name": "RetroArch64 Mupen64Plus-Next GLES3",
+      "name": "RetroArch (64 bits) - mupen64plus_next_gles3",
       "unique_id": "n64.ra64.mupen64plus_next_gles3",
       "default": false
     },
     {
-      "name": "RetroArch64 Mupen64Plus-Next GLES2",
+      "name": "RetroArch (64 bits) - mupen64plus_next_gles2",
       "unique_id": "n64.ra64.mupen64plus_next_gles2",
       "default": false
     },
     {
-      "name": "RetroArch64 ParaLLEl N64",
+      "name": "RetroArch (64 bits) - parallel_n64",
       "unique_id": "n64.ra64.parallel_n64",
       "default": false
     },
     {
-      "name": "RetroArch32 Mupen64Plus-Next GLES3",
+      "name": "RetroArch (32 bits) - mupen64plus_next_gles3",
       "unique_id": "n64.ra32.mupen64plus_next_gles3",
       "default": false
     },
     {
-      "name": "RetroArch32 Mupen64Plus-Next GLES2",
+      "name": "RetroArch (32 bits) - mupen64plus_next_gles2",
       "unique_id": "n64.ra32.mupen64plus_next_gles2",
       "default": false
     },
     {
-      "name": "RetroArch32 ParaLLEl N64",
+      "name": "RetroArch (32 bits) - parallel_n64",
       "unique_id": "n64.ra32.parallel_n64",
       "default": false
     },
     {
-      "name": "RetroArch Mupen64Plus-Next GLES3",
+      "name": "RetroArch - mupen64plus_next_gles3",
       "unique_id": "n64.ra.mupen64plus_next_gles3",
       "default": true
     },
     {
-      "name": "RetroArch Mupen64Plus-Next GLES2",
+      "name": "RetroArch - mupen64plus_next_gles2",
       "unique_id": "n64.ra.mupen64plus_next_gles2",
       "default": false
     },
     {
-      "name": "RetroArch ParaLLEl N64",
+      "name": "RetroArch - parallel_n64",
       "unique_id": "n64.ra.parallel_n64",
       "default": false
     },

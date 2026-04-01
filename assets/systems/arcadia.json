@@ -1,0 +1,32 @@
+{
+  "system": {
+    "id": "arcadia",
+    "name": "Arcadia 2001",
+    "folders": [
+      "arcadia",
+      "Arcadia 2001"
+    ],
+    "extensions": [
+      "zip",
+      "cmd"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "DroidArcadia",
+      "unique_id": "arcadia.com.amigan.droidarcadia",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mess",
+      "unique_id": "arcadia.ra64.mess",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mess",
+      "unique_id": "arcadia.ra.mess",
+      "default": false
+    }
+  ]
+}

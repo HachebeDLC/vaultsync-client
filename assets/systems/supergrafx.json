@@ -1,0 +1,58 @@
+{
+  "system": {
+    "id": "supergrafx",
+    "name": "SuperGrafx",
+    "folders": [
+      "supergrafx"
+    ],
+    "extensions": [
+      "ccd",
+      "chd",
+      "cue",
+      "m3u",
+      "pce",
+      "sgx",
+      "toc",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "com.PceEmu",
+      "unique_id": "supergrafx.com.PceEmu",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mednafen_pce",
+      "unique_id": "supergrafx.ra64.mednafen_pce",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - mednafen_supergrafx",
+      "unique_id": "supergrafx.ra64.mednafen_supergrafx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mednafen_pce",
+      "unique_id": "supergrafx.ra32.mednafen_pce",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - mednafen_supergrafx",
+      "unique_id": "supergrafx.ra32.mednafen_supergrafx",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mednafen_pce",
+      "unique_id": "supergrafx.ra.mednafen_pce",
+      "default": false
+    },
+    {
+      "name": "RetroArch - mednafen_supergrafx",
+      "unique_id": "supergrafx.ra.mednafen_supergrafx",
+      "default": false
+    }
+  ]
+}

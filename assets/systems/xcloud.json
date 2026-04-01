@@ -1,0 +1,21 @@
+{
+  "system": {
+    "id": "xcloud",
+    "name": "XBox Game Pass",
+    "folders": [
+      "xcloud",
+      "XBox Game Pass"
+    ],
+    "extensions": [
+      "xcloud"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "XBPlay - Remote Play",
+      "unique_id": "xbplay.com.studio08.xbgamestream",
+      "default": false
+    }
+  ]
+}

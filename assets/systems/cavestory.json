@@ -1,0 +1,46 @@
+{
+  "system": {
+    "id": "cavestory",
+    "name": "Cave Story Game Engine",
+    "folders": [
+      "cavestory",
+      "Cave Story Game Engine"
+    ],
+    "extensions": [
+      "exe"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - nxengine",
+      "unique_id": "cavestory.ra64.nxengine",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - drs",
+      "unique_id": "cavestory.ra64.drs",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - nxengine",
+      "unique_id": "cavestory.ra32.nxengine",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - nxengine",
+      "unique_id": "cavestory.ra32.drs",
+      "default": false
+    },
+    {
+      "name": "RetroArch - nxengine",
+      "unique_id": "cavestory.ra.nxengine",
+      "default": false
+    },
+    {
+      "name": "RetroArch - drs",
+      "unique_id": "cavestory.ra.drs",
+      "default": false
+    }
+  ]
+}

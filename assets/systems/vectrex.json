@@ -1,0 +1,33 @@
+{
+  "system": {
+    "id": "vectrex",
+    "name": "Vectrex",
+    "folders": [
+      "vectrex"
+    ],
+    "extensions": [
+      "bin",
+      "vec",
+      "zip",
+      "7z"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - vecx",
+      "unique_id": "vectrex.ra64.vecx",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - vecx",
+      "unique_id": "vectrex.ra32.vecx",
+      "default": false
+    },
+    {
+      "name": "RetroArch - vecx",
+      "unique_id": "vectrex.ra.vecx",
+      "default": false
+    }
+  ]
+}

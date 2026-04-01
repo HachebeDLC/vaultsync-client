@@ -1,0 +1,47 @@
+{
+  "system": {
+    "id": "neogeocd",
+    "name": "Neo Geo CD",
+    "folders": [
+      "neogeocd",
+      "Neo Geo CD"
+    ],
+    "extensions": [
+      "chd",
+      "cue"
+    ],
+    "ignored_folders": []
+  },
+  "emulators": [
+    {
+      "name": "RetroArch (64 bits) - neocd",
+      "unique_id": "neogeocd.ra64.neocd",
+      "default": false
+    },
+    {
+      "name": "RetroArch (64 bits) - fbneo",
+      "unique_id": "neogeocd.ra64.fbneo",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - neocd",
+      "unique_id": "neogeocd.ra32.neocd",
+      "default": false
+    },
+    {
+      "name": "RetroArch (32 bits) - fbneo",
+      "unique_id": "neogeocd.ra32.fbneo",
+      "default": false
+    },
+    {
+      "name": "RetroArch - neocd",
+      "unique_id": "neogeocd.ra.neocd",
+      "default": false
+    },
+    {
+      "name": "RetroArch - fbneo",
+      "unique_id": "neogeocd.ra.fbneo",
+      "default": false
+    }
+  ]
+}
