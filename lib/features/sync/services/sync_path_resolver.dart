@@ -99,7 +99,6 @@ class SyncPathResolver {
            final path = f['relPath'] as String;
            final segments = path.split('/');
            for (final segment in segments) {
-               // Must be 32 chars AND not the Account ID (all zeros)
                if (profileRegex.hasMatch(segment) && segment != '00000000000000000000000000000000') {
                    foundProfileId = segment;
                    break;
@@ -108,15 +107,13 @@ class SyncPathResolver {
            if (foundProfileId != null) break;
        }
 
-       // Fallback to all-zeros if no real profile folder exists yet
+       // Final fallback if no profile discovered yet
        final profileId = foundProfileId ?? '00000000000000000000000000000000';
 
-       final bool hasFilesDir = lastScanList.any((f) => (f['relPath'] as String).startsWith('files/'));
-       final bool hasNandFolder = lastScanList.any((f) => (f['relPath'] as String).contains('nand/user/save'));
-
-       final prefix = (hasFilesDir && !hasNandFolder) ? 'files/' : '';
-       final result = '${prefix}nand/user/save/0000000000000000/$profileId/$cloudRelPath';
-       print('📂 RESOLVER: Switch $sid -> $result (Detected Profile: ${foundProfileId ?? "NONE, using zeros"})');
+       // We assume the root is the emulator root ('files/').
+       // We ALWAYS anchor on 'nand/user/save' for consistency.
+       final result = 'nand/user/save/0000000000000000/$profileId/$cloudRelPath';
+       print('📂 RESOLVER: Switch Target -> $result (Detected: ${foundProfileId ?? "NONE"})');
        return result;
     }
 
