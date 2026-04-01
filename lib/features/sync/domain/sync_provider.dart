@@ -1,7 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/sync_service.dart';
+import '../data/sync_repository.dart';
 import '../domain/sync_log_provider.dart';
 import '../../../core/errors/error_mapper.dart';
+
+final pendingOfflineJobsCountProvider = FutureProvider<int>((ref) async {
+  final db = ref.watch(syncStateDatabaseProvider);
+  final jobs = await db.getPendingOfflineJobs();
+  return jobs.length;
+});
 
 final syncProvider = StateNotifierProvider<SyncNotifier, SyncState>((ref) {
   final syncService = ref.watch(syncServiceProvider);

@@ -21,6 +21,7 @@ import 'features/sync/presentation/system_detail_screen.dart';
 import 'features/sync/presentation/conflict_screen.dart';
 import 'features/sync/presentation/sync_history_screen.dart';
 import 'features/sync/services/sync_service.dart';
+import 'core/utils/offline_banner.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -157,6 +158,19 @@ class VaultSyncApp extends ConsumerWidget {
       themeMode: themeMode,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            if (child != null) child,
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: OfflineBanner(),
+            ),
+          ],
+        );
+      },
     );
   }
 }

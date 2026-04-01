@@ -8,6 +8,7 @@ class SyncScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final syncState = ref.watch(syncProvider);
+    final offlineCount = ref.watch(pendingOfflineJobsCountProvider).value ?? 0;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Synchronization')),
@@ -21,6 +22,20 @@ class SyncScreen extends ConsumerWidget {
               const Icon(Icons.cloud_sync, size: 64, color: Colors.blue),
             const SizedBox(height: 20),
             Text(syncState.status, textAlign: TextAlign.center),
+            if (offlineCount > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  '$offlineCount pending offline changes',
+                  style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             if (syncState.isSyncing)
               LinearProgressIndicator(value: syncState.progress)
