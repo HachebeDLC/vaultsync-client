@@ -19,7 +19,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBindingObserver {
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
   bool _useShizuku = false;
   bool _autoSyncOnExit = false;
@@ -31,7 +31,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadSettings();
+    }
   }
 
   Future<void> _loadSettings() async {
@@ -121,7 +135,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (Platform.isAndroid) {
       await _platform.invokeMethod('openUsageStatsSettings');
     }
-    Future.delayed(const Duration(seconds: 2), _loadSettings);
   }
 
   @override

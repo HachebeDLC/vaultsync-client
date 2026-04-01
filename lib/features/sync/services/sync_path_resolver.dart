@@ -38,9 +38,11 @@ class SyncPathResolver {
 
     // 3. Wii Logic (Surgical Flattening)
     if (sid == 'wii') {
-      final anchorIdx = parts.indexOf('00010000');
-      if (anchorIdx != -1 && anchorIdx < parts.length - 1) {
-        return parts.sublist(anchorIdx + 1).join('/');
+      // Anchor on the 'title' directory to capture all title types
+      // (00010000 = retail, 00010001 = VC/DLC, 00010002 = system, 00010004 = WiiWare, etc.)
+      final titleIdx = parts.lastIndexWhere((p) => p.toLowerCase() == 'title');
+      if (titleIdx != -1 && titleIdx < parts.length - 1) {
+        return parts.sublist(titleIdx + 1).join('/');
       }
       return '';
     }
@@ -121,7 +123,7 @@ class SyncPathResolver {
 
     if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2' || sid == 'pcsx2' || sid == 'duckstation') {
        final prefix = hasFilesDir ? 'files/' : '';
-       if (cloudRelPath.startsWith('memcards/') || cloudRelPath.startsWith('sstates/') || cloudRelPath.startsWith('gamesettings/')) {
+       if (cloudRelPath.startsWith('memcards/') || cloudRelPath.startsWith('memcard/') || cloudRelPath.startsWith('sstates/') || cloudRelPath.startsWith('gamesettings/')) {
           return '$prefix$cloudRelPath';
        }
        return '${prefix}memcards/$cloudRelPath';
@@ -129,6 +131,12 @@ class SyncPathResolver {
 
     if (sid == 'wii') {
        final prefix = hasFilesDir ? 'files/' : '';
+       // cloudRelPath now includes the title type, e.g. '00010000/GAMEID/data.bin'.
+       // For backward compat with old saves that lack the title type prefix, fall back to 00010000.
+       const knownTitleTypes = ['00010000', '00010001', '00010002', '00010004', '00010005'];
+       if (knownTitleTypes.contains(cloudRelPath.split('/').first)) {
+         return '${prefix}Wii/title/$cloudRelPath';
+       }
        return '${prefix}Wii/title/00010000/$cloudRelPath';
     }
 

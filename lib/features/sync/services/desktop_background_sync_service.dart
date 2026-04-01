@@ -22,9 +22,6 @@ class DesktopBackgroundSyncService {
     _syncTimer = Timer.periodic(interval, (timer) {
       _triggerSync();
     });
-    
-    // Trigger once immediately
-    _triggerSync();
   }
 
   void stopAutoSync() {

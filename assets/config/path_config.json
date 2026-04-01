@@ -1,6 +1,6 @@
 {
   "standaloneDefaults": {
-    "ps2": "/storage/emulated/0/Android/data/xyz.aethersx2.android/files/memcards",
+    "ps2": "/storage/emulated/0/Android/data/xyz.aethersx2.android/files",
     "ps1": "/storage/emulated/0/Android/data/com.github.stenzek.duckstation/files/memcards",
     "psp": "/storage/emulated/0/PSP/SAVEDATA",
     "ppsspp": "/storage/emulated/0/PSP/SAVEDATA",
@@ -21,7 +21,7 @@
   },
   "desktopPaths": {
     "windows": {
-      "ps2": "Documents\\PCSX2\\memcards",
+      "ps2": "Documents\\PCSX2",
       "psp": "Documents\\PPSSPP\\SAVEDATA",
       "ppsspp": "Documents\\PPSSPP\\SAVEDATA",
       "dolphin": "Documents\\Dolphin Emulator",
@@ -30,7 +30,7 @@
       "retroarch": "AppData\\Roaming\\RetroArch\\saves"
     },
     "linux": {
-      "ps2": "$home/.config/PCSX2/memcards",
+      "ps2": "$home/.config/PCSX2",
       "psp": "$home/.config/ppsspp/PSP/SAVEDATA",
       "ppsspp": "$home/.config/ppsspp/PSP/SAVEDATA",
       "dolphin": "$home/.local/share/dolphin-emu",

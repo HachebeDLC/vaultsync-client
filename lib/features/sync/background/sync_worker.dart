@@ -58,7 +58,7 @@ void callbackDispatcher() {
         print("🕒 SYNC WORKER: Processing sync job queue...");
         await syncService.triggerQueueProcessing();
         return true;
-      } else if (task == "periodicSync") {
+      } else if (task == "periodicSync" || task == "syncTask") {
         print("🕒 SYNC WORKER: Starting battery-efficient periodic sync...");
         await syncService.runSync(
           fastSync: true,

@@ -35,7 +35,7 @@ class SyncService {
       await Workmanager().registerOneOffTask(
         "processQueueTask",
         "processQueue",
-        existingWorkPolicy: ExistingWorkPolicy.replace,
+        existingWorkPolicy: ExistingWorkPolicy.keep,
         constraints: Constraints(networkType: NetworkType.connected),
       );
     } else {

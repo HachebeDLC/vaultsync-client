@@ -55,7 +55,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       final blockA = List<int>.generate(1024 * 1024, (i) => i % 256);
       final blockB = List<int>.generate(1024 * 1024, (i) => (i + 1) % 256);
       final testData = Uint8List.fromList([...blockA, ...blockB]);
-      
+
       final deltaFile = File('${tempDir.path}/delta.bin');
       await deltaFile.writeAsBytes(testData);
 
@@ -63,11 +63,15 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
           ? await DartNativeCrypto.calculateBlockHashes(deltaFile.path)
           : await _platform.invokeMethod('calculateBlockHashes', {'path': deltaFile.path});
       final List initialHashes = json.decode(initialBlocksJson);
-      _log('📍 Initial Blocks: ${initialHashes.length}');
+      _log('📍 Initial Blocks: ${initialHashes.length} (block size: ${testData.length ~/ initialHashes.length} bytes)');
 
-      // Modify 1 byte in block 2 (Offset 1.5MB)
+      // Derive the actual block size from the hash count, then place the
+      // modification 100 bytes into block 1 so the test is correct regardless
+      // of whether the native layer uses 256KB or 1MB blocks.
+      final actualBlockSize = testData.length ~/ initialHashes.length;
+      final modifyOffset = actualBlockSize + 100;
       final modifiedData = Uint8List.fromList(testData);
-      modifiedData[1572864] = (modifiedData[1572864] + 1) % 256;
+      modifiedData[modifyOffset] = (modifiedData[modifyOffset] + 1) % 256;
       await deltaFile.writeAsBytes(modifiedData);
 
       final String modifiedBlocksJson = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)

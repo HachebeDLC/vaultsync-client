@@ -99,7 +99,17 @@ class SystemPathService {
         await setSystemPath(systemId, path);
       }
 
-      // 2. Pull Switch/Eden back to the 'files' root if it's too deep
+      // 2. Pull PS2 back to the 'files' root if it was previously set to files/memcards,
+      // so that sstates are also included in the scan.
+      if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2') {
+        if (path.endsWith('/memcards') || path.endsWith('\\memcards')) {
+          print('🛠️ PATH: Auto-migrating PS2 path from /memcards to /files root');
+          path = path.substring(0, path.lastIndexOf(path.contains('\\') ? '\\memcards' : '/memcards'));
+          await setSystemPath(systemId, path);
+        }
+      }
+
+      // 3. Pull Switch/Eden back to the 'files' root if it's too deep
       if (sid == 'switch' || sid == 'eden') {
         if (path.endsWith('nand/user/save')) {
            print('🛠️ PATH: Auto-migrating Switch POSIX path from /save to /files');
