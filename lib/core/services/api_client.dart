@@ -19,6 +19,10 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
+  final http.Client _client;
+  
+  ApiClient({http.Client? client}) : _client = client ?? http.Client();
+
   final _secureStorage = const FlutterSecureStorage(
     aOptions: AndroidOptions(
       encryptedSharedPreferences: true,
@@ -27,6 +31,8 @@ class ApiClient {
   
   String? _cachedBaseUrl;
   String? _cachedToken;
+  String? _cachedRefreshToken;
+  bool _isRefreshing = false;
 
   Future<String?> getBaseUrl() async {
     if (_cachedBaseUrl != null) return _cachedBaseUrl;
@@ -82,10 +88,23 @@ class ApiClient {
     _cachedToken = token;
   }
 
+  Future<String?> getRefreshToken() async {
+    if (_cachedRefreshToken != null) return _cachedRefreshToken;
+    _cachedRefreshToken = await _secureRead('refresh_token');
+    return _cachedRefreshToken;
+  }
+
+  Future<void> setRefreshToken(String token) async {
+    await _secureWrite('refresh_token', token);
+    _cachedRefreshToken = token;
+  }
+
   Future<void> clearToken() async {
     await _secureDelete('auth_token');
+    await _secureDelete('refresh_token');
     await _secureDelete('master_key');
     _cachedToken = null;
+    _cachedRefreshToken = null;
   }
 
   Future<bool> isConfigured() async {
@@ -109,71 +128,161 @@ class ApiClient {
     };
   }
 
-  Future<Map<String, dynamic>> get(String endpoint, {Map<String, String>? queryParams}) async {
-    var uri = await _buildUri(endpoint);
-    if (queryParams != null) {
-      uri = uri.replace(queryParameters: queryParams);
+  Future<Map<String, dynamic>> _handleResponse(http.Response response, Future<Map<String, dynamic>> Function() retry) async {
+    if (response.statusCode == 401 && !_isRefreshing) {
+      final success = await refreshAccessToken();
+      if (success) {
+        return await retry();
+      }
     }
-    final response = await http.get(
-      uri,
-      headers: await _getHeaders(includeJson: false),
-    );
-    if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, response.body.length > 100 ? response.body.substring(0, 100) : response.body);
-    }
-    return json.decode(response.body);
-  }
-
-  Future<Map<String, dynamic>> post(String endpoint, {Map<String, dynamic>? body}) async {
-    final response = await http.post(
-      await _buildUri(endpoint),
-      headers: await _getHeaders(),
-      body: json.encode(body),
-    );
+    
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw ApiException(response.statusCode, response.body.length > 100 ? response.body.substring(0, 100) : response.body);
     }
     return json.decode(response.body);
   }
 
-  Future<Map<String, dynamic>> delete(String endpoint, {Map<String, dynamic>? body}) async {
-    final response = await http.delete(
-      await _buildUri(endpoint),
-      headers: await _getHeaders(),
-      body: body != null ? json.encode(body) : null,
-    );
-    if (response.statusCode != 200) {
-      throw ApiException(response.statusCode, response.body.length > 100 ? response.body.substring(0, 100) : response.body);
+  Future<bool> refreshAccessToken() async {
+    if (_isRefreshing) return false;
+    _isRefreshing = true;
+    try {
+      print('🔐 AUTH: Attempting to refresh access token...');
+      final refreshToken = await getRefreshToken();
+      if (refreshToken == null) return false;
+
+      final response = await _client.post(
+        await _buildUri('/api/v1/auth/refresh'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'refresh_token': refreshToken}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        await setToken(data['token']);
+        print('✅ AUTH: Access token refreshed successfully.');
+        return true;
+      } else {
+        print('❌ AUTH: Refresh failed (${response.statusCode}): ${response.body}');
+        // If refresh fails, we might be permanently logged out
+        if (response.statusCode == 401) {
+           await clearToken();
+        }
+        return false;
+      }
+    } catch (e) {
+      print('❌ AUTH: Refresh error: $e');
+      return false;
+    } finally {
+      _isRefreshing = false;
     }
-    return json.decode(response.body);
+  }
+
+  Future<Map<String, dynamic>> get(String endpoint, {Map<String, String>? queryParams}) async {
+    return await _request(() async {
+      var uri = await _buildUri(endpoint);
+      if (queryParams != null) {
+        uri = uri.replace(queryParameters: queryParams);
+      }
+      return await _client.get(
+        uri,
+        headers: await _getHeaders(includeJson: false),
+      );
+    });
+  }
+
+  Future<Map<String, dynamic>> post(String endpoint, {Map<String, dynamic>? body}) async {
+    return await _request(() async {
+      return await _client.post(
+        await _buildUri(endpoint),
+        headers: await _getHeaders(),
+        body: json.encode(body),
+      );
+    });
+  }
+
+  Future<Map<String, dynamic>> delete(String endpoint, {Map<String, dynamic>? body}) async {
+    return await _request(() async {
+      return await _client.delete(
+        await _buildUri(endpoint),
+        headers: await _getHeaders(),
+        body: body != null ? json.encode(body) : null,
+      );
+    });
+  }
+
+  Future<Map<String, dynamic>> _request(Future<http.Response> Function() call) async {
+    final response = await call();
+    return await _handleResponse(response, () async {
+      final retryResponse = await call();
+      if (retryResponse.statusCode != 200 && retryResponse.statusCode != 201) {
+        throw ApiException(retryResponse.statusCode, retryResponse.body);
+      }
+      return json.decode(retryResponse.body);
+    });
   }
 
   Future<http.Response> postRaw(String endpoint, {dynamic body}) async {
-    return await http.post(
+    final response = await _client.post(
       await _buildUri(endpoint),
       headers: await _getHeaders(includeJson: false),
       body: body,
     );
+    if (response.statusCode == 401 && !_isRefreshing) {
+       final success = await refreshAccessToken();
+       if (success) return await postRaw(endpoint, body: body);
+    }
+    return response;
   }
 
   Future<http.Response> postJsonRaw(String endpoint, Map<String, dynamic> body) async {
-    return await http.post(
+    final response = await _client.post(
       await _buildUri(endpoint),
       headers: await _getHeaders(),
       body: json.encode(body),
     );
+    if (response.statusCode == 401 && !_isRefreshing) {
+       final success = await refreshAccessToken();
+       if (success) return await postJsonRaw(endpoint, body);
+    }
+    return response;
   }
 
   Future<http.Response> postForm(String endpoint, Map<String, String> fields) async {
+    final response = await _sendForm(endpoint, fields);
+    if (response.statusCode == 401 && !_isRefreshing) {
+       final success = await refreshAccessToken();
+       if (success) return await _sendForm(endpoint, fields);
+    }
+    return response;
+  }
+
+  Future<http.Response> _sendForm(String endpoint, Map<String, String> fields) async {
     var request = http.MultipartRequest('POST', await _buildUri(endpoint));
     final token = await getToken();
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     request.fields.addAll(fields);
-    final streamedResponse = await request.send();
+    final streamedResponse = await _client.send(request);
     return await http.Response.fromStream(streamedResponse);
   }
 
   Future<void> postMultipart(String endpoint, String filePath, String remotePath, {int? updatedAt, bool? force, String? deviceName, String? hash}) async {
+    final response = await _sendMultipart(endpoint, filePath, remotePath, updatedAt: updatedAt, force: force, deviceName: deviceName, hash: hash);
+    if (response.statusCode == 401 && !_isRefreshing) {
+       final success = await refreshAccessToken();
+       if (success) {
+         final retryResp = await _sendMultipart(endpoint, filePath, remotePath, updatedAt: updatedAt, force: force, deviceName: deviceName, hash: hash);
+         if (retryResp.statusCode != 200 && retryResp.statusCode != 201) {
+            throw ApiException(retryResp.statusCode, "Multipart retry failed");
+         }
+         return;
+       }
+    }
+    if (response.statusCode != 200 && response.statusCode != 201) {
+       throw ApiException(response.statusCode, "Multipart upload failed");
+    }
+  }
+
+  Future<http.Response> _sendMultipart(String endpoint, String filePath, String remotePath, {int? updatedAt, bool? force, String? deviceName, String? hash}) async {
     var request = http.MultipartRequest('POST', await _buildUri(endpoint));
     final token = await getToken();
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
@@ -185,9 +294,9 @@ class ApiClient {
     if (force == true) request.fields['force'] = 'true';
     
     request.files.add(await http.MultipartFile.fromPath('file', filePath));
-    await request.send();
+    final streamedResponse = await _client.send(request);
+    return await http.Response.fromStream(streamedResponse);
   }
-
 
   Future<void> deriveAndSaveMasterKey(String password, String salt) async {
     // Zero-Knowledge: The server never sees this derivation.

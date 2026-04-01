@@ -15,8 +15,10 @@ class AuthRepository {
       });
 
       final token = response['token'];
+      final refreshToken = response['refresh_token'];
       if (token != null) {
         await _apiClient.setToken(token);
+        if (refreshToken != null) await _apiClient.setRefreshToken(refreshToken);
         
         final userData = response['user'];
         final salt = userData['salt'] ?? email; // Fallback to email for legacy users
@@ -41,8 +43,10 @@ class AuthRepository {
       });
       
       final token = response['token'];
+      final refreshToken = response['refresh_token'];
       if (token != null) {
         await _apiClient.setToken(token);
+        if (refreshToken != null) await _apiClient.setRefreshToken(refreshToken);
         
         final userData = response['user'];
         final salt = userData['salt'] ?? email; // Fallback to email for legacy users
