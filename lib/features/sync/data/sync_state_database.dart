@@ -101,6 +101,33 @@ class SyncStateDatabase {
     );
   }
 
+  Future<List<Map<String, dynamic>>> getPendingOfflineJobs() async {
+    final db = await database;
+    return await db.query(
+      'sync_state',
+      where: 'status IN (?, ?)',
+      whereArgs: ['pending_offline_upload', 'pending_offline_download'],
+    );
+  }
+
+  Future<void> markOfflineJobsAsPending() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.update(
+        'sync_state',
+        {'status': 'pending_upload'},
+        where: 'status = ?',
+        whereArgs: ['pending_offline_upload'],
+      );
+      await txn.update(
+        'sync_state',
+        {'status': 'pending_download'},
+        where: 'status = ?',
+        whereArgs: ['pending_offline_download'],
+      );
+    });
+  }
+
   Future<void> updateStatus(String path, String status, {String? error}) async {
     final db = await database;
     await db.update(
