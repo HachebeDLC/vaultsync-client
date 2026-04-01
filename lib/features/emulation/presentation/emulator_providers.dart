@@ -1,40 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../data/emulator_repository.dart';
 import '../domain/emulator_config.dart';
 import '../../../core/services/emulator_detector.dart';
 
-// A provider that handles loading/saving the preference
-final showInstalledOnlyProvider = StateNotifierProvider<ShowInstalledOnlyNotifier, bool>((ref) {
-  return ShowInstalledOnlyNotifier();
-});
-
-class ShowInstalledOnlyNotifier extends StateNotifier<bool> {
-  ShowInstalledOnlyNotifier() : super(false) {
-    _load();
-  }
-
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    state = prefs.getBool('show_installed_only') ?? false;
-  }
-
-  Future<void> toggle() async {
-    state = !state;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('show_installed_only', state);
-  }
-
-  Future<void> set(bool value) async {
-    state = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('show_installed_only', state);
-  }
-}
-
 final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
   final repository = ref.watch(emulatorRepositoryProvider);
-  final showInstalledOnly = ref.watch(showInstalledOnlyProvider);
   final detector = ref.watch(emulatorDetectorProvider);
 
   final allSystems = await repository.loadSystems();
@@ -78,12 +48,8 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
 
     final processedSystem = systemConfig.copyWith(emulators: detectedEmulators);
 
-    // 3. Filter systems if showInstalledOnly is true
-    if (showInstalledOnly) {
-      if (detectedEmulators.any((e) => e.isInstalled)) {
-        processedSystems.add(processedSystem);
-      }
-    } else {
+    // 3. Filter systems: Only show systems that have at least one emulator installed
+    if (detectedEmulators.any((e) => e.isInstalled)) {
       processedSystems.add(processedSystem);
     }
   }

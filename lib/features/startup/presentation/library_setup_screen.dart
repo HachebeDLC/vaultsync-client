@@ -85,17 +85,12 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           final p = f['path'];
           
           final currentPath = await service.getSystemPath(sid);
-          final sysConf = systems.firstWhere((s) => s.system.id == sid);
+          
+          // Find system from the filtered list (already only contains systems with installed emus)
+          final sysConf = systems.firstWhere((s) => s.system.id == sid, orElse: () => throw Exception('System $sid has no installed emulators.'));
           
           // Auto-selected mapped emulator from EmuDeck detection
           final mappedEmuId = f['emulatorId'];
-          
-          // ── Override Logic ──────────────────────────────────────────
-          // We override the current path if:
-          // 1. It is a brand new system (currentPath == null).
-          // 2. We found a high-priority EmuDeck route but the current one isn’t.
-          // 3. We are on Android and the current path is just the ROM folder (Broken Legacy).
-          // 4. We are on Android, current path is generic RetroArch, but a standalone exists.
           
           bool shouldOverride = currentPath == null;
           final isEmuDeckRoute = mappedEmuId != null && p != null && p.toLowerCase().contains('emulation/saves');
@@ -107,17 +102,15 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           if (!shouldOverride && Platform.isAndroid && p != null) {
             final isBrokenLegacy = (currentPath == p);
             final isGenericRA = (currentPath?.contains('RetroArch/saves') ?? false);
-            final isOldMelonDS = (currentPath?.contains('me.arun.melonds') ?? false);
-            final isStandalone = (mappedEmuId == null); // Flat scan on Android is assumed standalone
+            final isStandalone = (mappedEmuId == null); 
             
-            if (isBrokenLegacy || (isGenericRA && isStandalone) || isOldMelonDS) {
+            if (isBrokenLegacy || (isGenericRA && isStandalone)) {
                shouldOverride = true;
-               print('🛠️ SETUP: Forcing override of legacy Android path for $sid');
             }
           }
 
           if (shouldOverride) {
-            final supportedEmus = sysConf.emulators.where((e) => PlatformUtils.isEmulatorSupported(e.uniqueId)).toList();
+            final supportedEmus = sysConf.emulators.where((e) => e.isInstalled && PlatformUtils.isEmulatorSupported(e.uniqueId)).toList();
             
             EmulatorInfo? selectedEmu;
             if (mappedEmuId != null && mappedEmuId.isNotEmpty) {
@@ -170,10 +163,12 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
 
     if (!mounted) return;
 
-    final supportedEmulators = system.emulators.where((e) => PlatformUtils.isEmulatorSupported(e.uniqueId)).toList();
+    // Filter ONLY installed and supported emulators
+    final supportedEmulators = system.emulators.where((e) => e.isInstalled && PlatformUtils.isEmulatorSupported(e.uniqueId)).toList();
+    
     if (supportedEmulators.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No supported emulators found for this platform.')),
+        SnackBar(content: Text('No installed emulators found for ${system.system.name}.')),
       );
       return;
     }
@@ -216,7 +211,6 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
 
     final emulator = system.emulators.firstWhere((e) => e.uniqueId == selectedEmulatorId);
     
-    // If the emulator changed, suggest the new emulator's path. Otherwise keep the existing one.
     final mappedPath = _foundSystems.where((f) => f['systemId'] == systemId).firstOrNull?['path'];
     String initialPath;
     if (selectedEmulatorId != currentEmulatorId) {
@@ -257,13 +251,9 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
                       onPressed: () async {
                         String? initialUri;
                         if (pathController.text.startsWith('content://')) {
-                          // Already a SAF URI — pass it directly as the picker hint
                           initialUri = pathController.text;
                         } else if (pathController.text.startsWith('/storage/emulated/0/')) {
                           String relPath = pathController.text.substring(20).replaceAll('/', '%2F');
-
-                          // SAF navigation to subfolders in Android/data is often restricted.
-                          // Target the package root in Android/data.
                           if (pathController.text.contains('/Android/data/')) {
                             final parts = pathController.text.split('/Android/data/');
                             if (parts.length > 1) {
@@ -273,8 +263,6 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
                               relPath = 'Android';
                             }
                           }
-
-                          // Use the 'tree' format for better reliability
                           initialUri = 'content://com.android.externalstorage.documents/tree/primary%3A$relPath';
                         }
                         String? picked = await ref.read(systemPathServiceProvider).openDirectoryPicker(initialUri: initialUri);
@@ -325,7 +313,6 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
                 ),
                 onPressed: () async {
                   ref.invalidate(systemPathsProvider);
-                  // Safety delay to allow persistence to settle and refresh to trigger
                   await Future.delayed(const Duration(milliseconds: 300));
                   if (mounted) context.go('/dashboard');
                 },
@@ -391,24 +378,17 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
             ),
           ),
           
-          // RIGHT PANEL: DETECTED SYSTEMS
           Expanded(
             flex: 1,
             child: _foundSystems.isEmpty 
               ? const Center(child: Text('No systems detected yet.\nSelect your ROMs root and click "Scan".', textAlign: TextAlign.center))
               : Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                       child: Row(
                         children: [
-                          const Text('DETECTED SYSTEMS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
-                          const Spacer(),
-                          const Text('Installed Only', style: TextStyle(fontSize: 12)),
-                          Switch(
-                            value: ref.watch(showInstalledOnlyProvider),
-                            onChanged: (val) => ref.read(showInstalledOnlyProvider.notifier).set(val),
-                          ),
+                          Text('DETECTED SYSTEMS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
                         ],
                       ),
                     ),
@@ -421,8 +401,13 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
                           final foundIds = _foundSystems.map((e) => e['systemId']).toList();
                           final systems = snapshot.data!.where((s) => foundIds.contains(s.system.id)).toList();
                           
-                          if (systems.isEmpty && ref.read(showInstalledOnlyProvider)) {
-                            return const Center(child: Text('No installed emulators found for these systems.'));
+                          if (systems.isEmpty) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(24.0),
+                                child: Text('No installed emulators found for the detected systems.', textAlign: TextAlign.center),
+                              ),
+                            );
                           }
 
                           return ListView.builder(

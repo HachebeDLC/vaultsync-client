@@ -20,7 +20,7 @@ void main() {
     when(() => mockDetector.isEmulatorInstalled(any())).thenAnswer((_) async => false);
   });
 
-  group('systemsProvider filtering and sorting', () {
+  group('systemsProvider mandatory filtering and sorting', () {
     test('should prioritize installed standalone emulators over RetroArch cores', () async {
       final systemConfig = EmulatorConfig(
         system: SystemInfo(id: 'snes', name: 'SNES', folders: ['snes'], extensions: ['smc'], ignoredFolders: []),
@@ -56,7 +56,7 @@ void main() {
       expect(emulators[1].isInstalled, isFalse);
     });
 
-    test('should filter systems when showInstalledOnly is true', () async {
+    test('should hide systems that have NO installed emulators', () async {
       final snesConfig = EmulatorConfig(
         system: SystemInfo(id: 'snes', name: 'SNES', folders: ['snes'], extensions: ['smc'], ignoredFolders: []),
         emulators: [
@@ -73,7 +73,7 @@ void main() {
 
       when(() => mockRepository.loadSystems()).thenAnswer((_) async => [snesConfig, ps2Config]);
       
-      // Mock: Only AetherSX2 is installed
+      // Mock: Only AetherSX2 is installed. Snes9x is NOT.
       when(() => mockDetector.isEmulatorInstalled('com.tahlreth.aethersx2.free')).thenAnswer((_) async => true);
       when(() => mockDetector.isEmulatorInstalled('ra.snes9x')).thenAnswer((_) async => false);
 
@@ -81,13 +81,12 @@ void main() {
         overrides: [
           emulatorRepositoryProvider.overrideWith((ref) => mockRepository),
           emulatorDetectorProvider.overrideWith((ref) => mockDetector),
-          showInstalledOnlyProvider.overrideWith((ref) => true),
         ],
       );
 
       final result = await container.read(systemsProvider.future);
       
-      // Only PS2 should be shown because it has an installed emulator
+      // Only PS2 should be shown
       expect(result.length, 1);
       expect(result.first.system.id, 'ps2');
     });
