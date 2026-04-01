@@ -44,6 +44,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     private lateinit var networkClient: NetworkClient
     private lateinit var uploadManager: UploadManager
     private lateinit var downloadManager: DownloadManager
+    private lateinit var connectivityMonitor: ConnectivityMonitor
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingResult: MethodChannel.Result? = null
@@ -107,6 +108,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         cryptoEngine = CryptoEngine()
         powerManagerHelper = PowerManagerHelper(ctx)
         automationEngine = AutomationEngine(ctx, methodChannel)
+        connectivityMonitor = ConnectivityMonitor(ctx, methodChannel)
         networkClient = NetworkClient()
         
         uploadManager = UploadManager(
@@ -119,12 +121,14 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             ::isShizukuPath, ::getCleanPath, ::getShizukuServiceSync, ::setFileTimestampInternal
         )
         
+        connectivityMonitor.startMonitoring()
         bindShizukuService()
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methodChannel.setMethodCallHandler(null)
         automationEngine.stopMonitoring()
+        connectivityMonitor.stopMonitoring()
         powerManagerHelper.releasePowerLock()
         executor.shutdown()
         syncExecutor.shutdown()
@@ -189,6 +193,9 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 ctx.startActivity(intent)
                 result.success(true)
+            }
+            "isOnline" -> {
+                result.success(connectivityMonitor.isCurrentlyConnected())
             }
             "getRecentlyClosedEmulator" -> {
                 val packages = call.argument<List<String>>("packages") ?: emptyList()
