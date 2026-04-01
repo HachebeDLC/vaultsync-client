@@ -19,7 +19,7 @@
     {
       "name": "MelonDS",
       "unique_id": "nds.me.magnum.melonds",
-      "default": false
+      "default": true
     },
     {
       "name": "MelonDualDS",
