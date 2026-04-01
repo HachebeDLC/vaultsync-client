@@ -21,6 +21,8 @@ class AuthRepository {
         if (refreshToken != null) await _apiClient.setRefreshToken(refreshToken);
         
         final userData = response['user'];
+        await _apiClient.setUserMetadata(userData);
+        
         final salt = userData['salt'] ?? email; // Fallback to email for legacy users
         await _apiClient.deriveAndSaveMasterKey(password, salt);
         
@@ -49,6 +51,8 @@ class AuthRepository {
         if (refreshToken != null) await _apiClient.setRefreshToken(refreshToken);
         
         final userData = response['user'];
+        await _apiClient.setUserMetadata(userData);
+        
         final salt = userData['salt'] ?? email; // Fallback to email for legacy users
         await _apiClient.deriveAndSaveMasterKey(password, salt);
         
@@ -72,8 +76,22 @@ class AuthRepository {
       final token = await _apiClient.getToken();
       if (token == null) return null;
       
+      // Try to get cached metadata first for instant resume
+      final cached = await _apiClient.getUserMetadata();
+      if (cached != null) {
+        // Run network check in background to verify but return cached for speed
+        _apiClient.get('/auth/me').then((response) {
+          _apiClient.setUserMetadata(response);
+        }).catchError((e) {
+          print('Background CheckAuth failed: $e');
+        });
+        
+        return User(id: cached['id'].toString(), email: cached['email']);
+      }
+
       final response = await _apiClient.get('/auth/me');
-      return User(id: response['id'], email: response['email']);
+      await _apiClient.setUserMetadata(response);
+      return User(id: response['id'].toString(), email: response['email']);
     } catch (e) {
       print('CheckAuth error: $e');
       return null;

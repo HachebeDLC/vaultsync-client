@@ -103,8 +103,23 @@ class ApiClient {
     await _secureDelete('auth_token');
     await _secureDelete('refresh_token');
     await _secureDelete('master_key');
+    await _secureDelete('user_metadata');
     _cachedToken = null;
     _cachedRefreshToken = null;
+  }
+
+  Future<void> setUserMetadata(Map<String, dynamic> metadata) async {
+    await _secureWrite('user_metadata', json.encode(metadata));
+  }
+
+  Future<Map<String, dynamic>?> getUserMetadata() async {
+    final raw = await _secureRead('user_metadata');
+    if (raw == null) return null;
+    try {
+      return json.decode(raw);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> isConfigured() async {
