@@ -51,18 +51,24 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
              }
            }
         } else {
-          // Normal package detection or manual mapping
+          // Manual mappings
           List<String> candidatePackages = [packageId];
-          if (packageId == 'azahar' || packageId == 'citra' || packageId == 'citra.desktop' || packageId == 'org.azahar_emu.azahar') {
+          if (packageId == 'azahar' || packageId == 'citra' || packageId == 'citra.desktop' || packageId == 'org.azahar_emu.azahar' || 
+              packageId == 'lime3ds' || packageId == 'lemonade' || packageId == 'mandarine') {
             candidatePackages = [
               'org.azahar_emu.azahar', 
               'org.citra.citra_emu', 
               'com.citra.emu', 
               'org.citra.emu', 
               'org.citra.citra_emu.canary', 
-              'org.citra.citra_emu.antimony'
+              'org.citra.citra_emu.antimony',
+              'io.github.lime3ds.android',
+              'org.gamerytb.lemonade.canary',
+              'io.github.mandarine3ds.mandarine',
+              'io.github.borked3ds.android'
             ];
           } else if (packageId.contains('melonds')) {
+
             candidatePackages = [
               'me.magnum.melonds',
               'me.arun.melonds',

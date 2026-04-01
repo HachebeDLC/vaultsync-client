@@ -17,18 +17,49 @@
       "cxi",
       "elf",
       "zcci",
-      "zcxi"
+      "zcxi",
+      "cia"
     ]
   },
   "emulators": [
     {
-      "name": "RetroArch Citra",
-      "unique_id": "3ds.ra.citra",
+      "name": "Azahar",
+      "unique_id": "3ds.org.azahar_emu.azahar",
+      "default": true
+    },
+    {
+      "name": "Lime 3DS",
+      "unique_id": "3ds.io.github.lime3ds.android",
       "default": false
     },
     {
-      "name": "RetroArch Citra2018",
-      "unique_id": "3ds.ra.citra2018",
+      "name": "Lemonade",
+      "unique_id": "3ds.org.gamerytb.lemonade.canary",
+      "default": false
+    },
+    {
+      "name": "Mandarine",
+      "unique_id": "3ds.io.github.mandarine3ds.mandarine",
+      "default": false
+    },
+    {
+      "name": "Citra",
+      "unique_id": "3ds.org.citra.citra_emu",
+      "default": false
+    },
+    {
+      "name": "Citra Canary",
+      "unique_id": "3ds.org.citra.citra_emu.canary",
+      "default": false
+    },
+    {
+      "name": "Azahar (Legacy)",
+      "unique_id": "3ds.azahar",
+      "default": false
+    },
+    {
+      "name": "RetroArch Citra",
+      "unique_id": "3ds.ra.citra",
       "default": false
     },
     {
@@ -42,42 +73,7 @@
       "default": false
     },
     {
-      "name": "RetroArch64 Citra2018",
-      "unique_id": "3ds.ra64.citra2018",
-      "default": false
-    },
-    {
-      "name": "RetroArch64 Citra Canary",
-      "unique_id": "3ds.ra64.citra_canary",
-      "default": false
-    },
-    {
-      "name": "RetroArch32 Citra",
-      "unique_id": "3ds.ra32.citra",
-      "default": false
-    },
-    {
-      "name": "RetroArch32 Citra2018",
-      "unique_id": "3ds.ra32.citra2018",
-      "default": false
-    },
-    {
-      "name": "RetroArch32 Citra Canary",
-      "unique_id": "3ds.ra32.citra_canary",
-      "default": false
-    },
-    {
-      "name": "Azahar",
-      "unique_id": "3ds.org.azahar_emu.azahar",
-      "default": true
-    },
-    {
-      "name": "Azahar (Legacy)",
-      "unique_id": "3ds.azahar",
-      "default": false
-    },
-    {
-      "name": "Citra",
+      "name": "Citra (Desktop)",
       "unique_id": "3ds.citra.desktop",
       "default": false
     }
