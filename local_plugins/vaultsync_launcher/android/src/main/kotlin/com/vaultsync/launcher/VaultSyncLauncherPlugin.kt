@@ -197,6 +197,15 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             "isOnline" -> {
                 result.success(connectivityMonitor.isCurrentlyConnected())
             }
+            "isPackageInstalled" -> {
+                val packageName = call.argument<String>("packageName") ?: return result.error("ARG_MISSING", "packageName missing", null)
+                try {
+                    ctx.packageManager.getPackageInfo(packageName, 0)
+                    result.success(true)
+                } catch (e: PackageManager.NameNotFoundException) {
+                    result.success(false)
+                }
+            }
             "getRecentlyClosedEmulator" -> {
                 val packages = call.argument<List<String>>("packages") ?: emptyList()
                 result.success(automationEngine.getRecentlyClosedEmulator(packages))
