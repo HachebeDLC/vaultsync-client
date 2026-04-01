@@ -74,6 +74,8 @@ class SyncEventService {
           // Check for 404 in the error message
           if (e.toString().contains('404')) {
              print('❌ SSE: Endpoint not found (404). Check if server code is updated.');
+          } else if (e.toString().contains('Connection closed while receiving data')) {
+             print('⚠️ SSE: Connection reset by server or proxy. Retrying...');
           } else {
              print('⚠️ SSE Error: $e');
           }
