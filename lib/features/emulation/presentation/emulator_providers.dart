@@ -44,11 +44,19 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
              }
            }
         } else {
-          // Normal package detection or manual mapping
+          // Manual mappings
           List<String> candidatePackages = [packageId];
-          if (packageId == 'azahar' || packageId == 'citra' || packageId == 'citra.desktop') {
-            candidatePackages = ['org.citra.citra_emu', 'com.citra.emu', 'org.citra.emu', 'org.citra.citra_emu.canary', 'org.citra.citra_emu.antimony'];
+          if (packageId == 'azahar' || packageId == 'citra' || packageId == 'citra.desktop' || packageId == 'org.azahar_emu.azahar') {
+            candidatePackages = [
+              'org.azahar_emu.azahar', 
+              'org.citra.citra_emu', 
+              'com.citra.emu', 
+              'org.citra.emu', 
+              'org.citra.citra_emu.canary', 
+              'org.citra.citra_emu.antimony'
+            ];
           } else if (packageId == 'pcsx2.desktop') {
+
             candidatePackages = ['com.pcsx2.pcsx2', 'xyz.aethersx2.android', 'xyz.nethersx2.android'];
           }
               

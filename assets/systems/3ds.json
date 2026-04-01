@@ -68,8 +68,13 @@
     },
     {
       "name": "Azahar",
-      "unique_id": "3ds.azahar",
+      "unique_id": "3ds.org.azahar_emu.azahar",
       "default": true
+    },
+    {
+      "name": "Azahar (Legacy)",
+      "unique_id": "3ds.azahar",
+      "default": false
     },
     {
       "name": "Citra",
