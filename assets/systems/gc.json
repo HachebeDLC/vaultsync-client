@@ -57,7 +57,7 @@
     {
       "name": "Dolphin Emulator",
       "unique_id": "gc.org.dolphinemu.dolphinemu",
-      "default": false
+      "default": true
     },
     {
       "name": "Dolphin Ishiiruka",
@@ -72,7 +72,7 @@
     {
       "name": "RetroArch - dolphin",
       "unique_id": "gc.ra.dolphin",
-      "default": true
+      "default": false
     },
     {
       "name": "Dolphin",

@@ -61,7 +61,7 @@
     {
       "name": "Dolphin Emulator",
       "unique_id": "wii.org.dolphinemu.dolphinemu",
-      "default": false
+      "default": true
     },
     {
       "name": "Dolphin MMJR3",
@@ -86,7 +86,7 @@
     {
       "name": "RetroArch - dolphin",
       "unique_id": "wii.ra.dolphin",
-      "default": true
+      "default": false
     },
     {
       "name": "Dolphin",

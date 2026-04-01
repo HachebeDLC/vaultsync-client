@@ -77,6 +77,19 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
             ];
           } else if (packageId == 'pcsx2.desktop') {
             candidatePackages = ['com.pcsx2.pcsx2', 'xyz.aethersx2.android', 'xyz.nethersx2.android'];
+          } else if (packageId == 'dolphinemu' || packageId == 'dolphin' || packageId == 'dolphin.desktop') {
+            candidatePackages = [
+              'org.dolphinemu.dolphinemu',
+              'org.dolphinemu.handheld',
+              'org.mm.jr',
+              'org.mm.j',
+              'org.dolphinemu.mmjr',
+              'org.dolphinemu.mmjr2',
+              'org.dolphinemu.mmjr3',
+              'org.dolphin.ishiirukadark',
+              'org.dolphinemu.dolphinemu.debug',
+              'org.shiiion.primehack'
+            ];
           }
 
           for (final pkg in candidatePackages) {

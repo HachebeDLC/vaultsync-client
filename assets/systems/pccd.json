@@ -4,6 +4,9 @@
     "name": "TurboGrafx-CD",
     "folders": [
       "pccd",
+      "tgcd",
+      "tg-cd",
+      "TurboGrafx-CD",
       "PCEngine CD",
       "NEC PC Engine CD"
     ],

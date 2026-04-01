@@ -1,10 +1,12 @@
 {
   "system": {
     "id": "ws",
-    "name": "WonderSwan",
+    "name": "WonderSwan / Color",
     "folders": [
       "ws",
-      "wonderswan"
+      "wsc",
+      "wonderswan",
+      "wonderswancolor"
     ],
     "extensions": [
       "ws",
@@ -21,19 +23,14 @@
       "default": false
     },
     {
-      "name": "RetroArch64 Beetle Cygne",
-      "unique_id": "ws.ra64.mednafen_wswan",
-      "default": false
-    },
-    {
-      "name": "RetroArch32 Beetle Cygne",
-      "unique_id": "ws.ra32.mednafen_wswan",
-      "default": false
-    },
-    {
       "name": "RetroArch Beetle Cygne",
       "unique_id": "ws.ra.mednafen_wswan",
       "default": true
+    },
+    {
+      "name": "RetroArch64 Beetle Cygne",
+      "unique_id": "ws.ra64.mednafen_wswan",
+      "default": false
     }
   ]
 }
