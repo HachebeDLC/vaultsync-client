@@ -4,6 +4,13 @@ class EmulatorConfig {
 
   EmulatorConfig({required this.system, required this.emulators});
 
+  EmulatorConfig copyWith({List<EmulatorInfo>? emulators}) {
+    return EmulatorConfig(
+      system: system,
+      emulators: emulators ?? this.emulators,
+    );
+  }
+
   factory EmulatorConfig.fromJson(Map<String, dynamic> json) {
     return EmulatorConfig(
       system: SystemInfo.fromJson(json['system']),
@@ -44,12 +51,23 @@ class EmulatorInfo {
   final String name;
   final String uniqueId;
   final bool defaultEmulator;
+  final bool isInstalled;
 
   EmulatorInfo({
     required this.name,
     required this.uniqueId,
     required this.defaultEmulator,
+    this.isInstalled = false,
   });
+
+  EmulatorInfo copyWith({bool? isInstalled}) {
+    return EmulatorInfo(
+      name: name,
+      uniqueId: uniqueId,
+      defaultEmulator: defaultEmulator,
+      isInstalled: isInstalled ?? this.isInstalled,
+    );
+  }
 
   factory EmulatorInfo.fromJson(Map<String, dynamic> json) {
     return EmulatorInfo(

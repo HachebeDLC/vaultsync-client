@@ -1,5 +1,10 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final emulatorDetectorProvider = Provider<EmulatorDetector>((ref) {
+  return EmulatorDetector.getPlatformDetector();
+});
 
 abstract class EmulatorDetector {
   Future<bool> isEmulatorInstalled(String uniqueId);

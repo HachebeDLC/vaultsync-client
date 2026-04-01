@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../presentation/emulator_providers.dart';
 import '../../sync/domain/sync_provider.dart';
 import '../../sync/services/system_path_service.dart';
 import '../../sync/services/shizuku_service.dart';
@@ -180,6 +181,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         title: const Text('VaultSync'),
         scrolledUnderElevation: 0,
         actions: [
+          IconButton(
+            icon: Icon(
+              ref.watch(showInstalledOnlyProvider) 
+                  ? Icons.filter_list_alt 
+                  : Icons.filter_list,
+              color: ref.watch(showInstalledOnlyProvider) ? Colors.blue : null,
+            ),
+            tooltip: 'Show Installed Only',
+            onPressed: () {
+              ref.read(showInstalledOnlyProvider.notifier).toggle();
+            },
+          ),
           IconButton(icon: const Icon(Icons.search), tooltip: 'Scan Library', onPressed: () => context.push('/library-setup')),
           Consumer(
             builder: (context, ref, _) {

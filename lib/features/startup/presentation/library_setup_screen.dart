@@ -192,7 +192,16 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
               final isSelected = emu.uniqueId == currentEmulatorId;
               return ListTile(
                 title: Text(emu.name, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-                subtitle: Text(emu.uniqueId),
+                subtitle: Row(
+                  children: [
+                    Text(emu.uniqueId, style: const TextStyle(fontSize: 10)),
+                    if (emu.isInstalled) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.check_circle, size: 12, color: Colors.green),
+                      const Text(' Installed', style: TextStyle(fontSize: 10, color: Colors.green)),
+                    ],
+                  ],
+                ),
                 selected: isSelected,
                 trailing: isSelected ? const Icon(Icons.check, color: Colors.blue) : null,
                 onTap: () => Navigator.pop(context, emu.uniqueId),
@@ -387,38 +396,63 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
             flex: 1,
             child: _foundSystems.isEmpty 
               ? const Center(child: Text('No systems detected yet.\nSelect your ROMs root and click "Scan".', textAlign: TextAlign.center))
-              : FutureBuilder<List<EmulatorConfig>>(
-                  future: ref.watch(systemsProvider.future),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                    final foundIds = _foundSystems.map((e) => e['systemId']).toList();
-                    final systems = snapshot.data!.where((s) => foundIds.contains(s.system.id)).toList();
-                    
-                    return ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: systems.length,
-                      itemBuilder: (context, index) {
-                        final sys = systems[index];
-                        final isConfigured = _configuredPaths.containsKey(sys.system.id);
-                        
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: Icon(
-                              Icons.gamepad, 
-                              color: isConfigured ? Colors.blue : Colors.orange
-                            ),
-                            title: Text(sys.system.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text(isConfigured ? 'Configured' : 'Needs Setup'),
-                            trailing: isConfigured 
-                              ? const Icon(Icons.check_circle, color: Colors.green)
-                              : const Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                            onTap: () => _configureSystem(sys.system.id),
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: Row(
+                        children: [
+                          const Text('DETECTED SYSTEMS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
+                          const Spacer(),
+                          const Text('Installed Only', style: TextStyle(fontSize: 12)),
+                          Switch(
+                            value: ref.watch(showInstalledOnlyProvider),
+                            onChanged: (val) => ref.read(showInstalledOnlyProvider.notifier).set(val),
                           ),
-                        );
-                      },
-                    );
-                  }
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: FutureBuilder<List<EmulatorConfig>>(
+                        future: ref.watch(systemsProvider.future),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                          final foundIds = _foundSystems.map((e) => e['systemId']).toList();
+                          final systems = snapshot.data!.where((s) => foundIds.contains(s.system.id)).toList();
+                          
+                          if (systems.isEmpty && ref.read(showInstalledOnlyProvider)) {
+                            return const Center(child: Text('No installed emulators found for these systems.'));
+                          }
+
+                          return ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: systems.length,
+                            itemBuilder: (context, index) {
+                              final sys = systems[index];
+                              final isConfigured = _configuredPaths.containsKey(sys.system.id);
+                              
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                child: ListTile(
+                                  leading: Icon(
+                                    Icons.gamepad, 
+                                    color: isConfigured ? Colors.blue : Colors.orange
+                                  ),
+                                  title: Text(sys.system.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  subtitle: Text(isConfigured ? 'Configured' : 'Needs Setup'),
+                                  trailing: isConfigured 
+                                    ? const Icon(Icons.check_circle, color: Colors.green)
+                                    : const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                                  onTap: () => _configureSystem(sys.system.id),
+                                ),
+                              );
+                            },
+                          );
+                        }
+                      ),
+                    ),
+                  ],
                 ),
           ),
         ];
