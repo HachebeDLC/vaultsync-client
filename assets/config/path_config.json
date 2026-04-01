@@ -52,7 +52,6 @@
     "wiiu": { "emulator": "Cemu", "desktopId": "wiiu.cemu.desktop" },
     "ps3": { "emulator": "rpcs3", "desktopId": "ps3.rpcs3.desktop" },
     "ps4": { "emulator": "shadps4", "desktopId": "ps4.shadps4.desktop" },
-    "vita": { "emulator": "Vita3K", "desktopId": "vita.vita3k.desktop" },
     "xbox": { "emulator": "xemu", "desktopId": "xbox.xemu.desktop" },
     "xbox360": { "emulator": "xenia", "desktopId": "xbox360.xenia.desktop" },
     "scummvm": { "emulator": "scummvm", "desktopId": "scummvm.scummvm.desktop" },
