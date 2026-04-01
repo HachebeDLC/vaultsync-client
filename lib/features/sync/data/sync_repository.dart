@@ -209,76 +209,86 @@ class SyncRepository {
   }
 
   Future<List<Map<String, dynamic>>> diffSystem(String systemId, String localPath, {List<String>? ignoredFolders}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final effectivePath = await _pathService.getEffectivePath(systemId);
-    
-    // Ensure base path exists so scanner doesn't fail
-    await _pathService.mkdirs(effectivePath);
-
-    final sid = systemId.toLowerCase();
-    final isSwitch = sid == 'eden' || sid == 'switch';
-    final response = await _apiClient.get('/api/v1/files', queryParams: {'prefix': isSwitch ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId)});
-    final List<dynamic> allRemoteFiles = response['files'] ?? [];
-
-    final remoteFilesList = allRemoteFiles.where((f) {
-      final path = f['path'] as String;
-      final rel = path.contains('/') ? path.split('/').skip(1).join('/') : path;
-      final firstSegment = rel.split('/').first.toLowerCase();
-      if (isSwitch) {
-         final isTitleId = RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(firstSegment);
-         final isSystemPath = ['nand', 'config', 'files', 'gpu_drivers'].contains(firstSegment);
-         return isTitleId && !isSystemPath;
-      }
-      if (sid == '3ds' || sid == 'azahar') return rel.startsWith('saves/');
-      return true;
-    }).toList();
-
-    final String cloudPrefix = isSwitch ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId);
-    final remoteFiles = { for (var f in remoteFilesList) f['path']: f };
-    final List<dynamic> localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
-    final localFiles = _conflictResolver.processLocalFiles(systemId, localList);
-
-    final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
-    final List<Map<String, dynamic>> results = [];
-
-    for (final relPath in cloudRelPaths) {
-      if (relPath.isEmpty) continue;
-      String remotePath = '$cloudPrefix/$relPath';
-      final localInfo = localFiles[relPath];
-      final remoteInfo = remoteFiles[remotePath];
-      String status = 'Synced';
-      String type = (relPath.toLowerCase().contains('.state') || relPath.toLowerCase().endsWith('.png')) ? 'State' : 'Save';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final effectivePath = await _pathService.getEffectivePath(systemId);
       
-      if (localInfo == null) status = 'Remote Only';
-      else if (remoteInfo == null) status = 'Local Only';
-      else {
-        final String remoteHash = remoteInfo['hash'];
-        if (_isJournaledSynced(prefs, systemId, relPath, remoteHash)) status = 'Synced';
+      // Ensure base path exists so scanner doesn't fail
+      try {
+        await _pathService.mkdirs(effectivePath);
+      } catch (e) {
+        print('⚠️ DIFF: Failed to ensure base path exists: $e');
+      }
+
+      final sid = systemId.toLowerCase();
+      final isSwitch = sid == 'eden' || sid == 'switch';
+      final response = await _apiClient.get('/api/v1/files', queryParams: {'prefix': isSwitch ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId)});
+      final List<dynamic> allRemoteFiles = response['files'] ?? [];
+
+      final remoteFilesList = allRemoteFiles.where((f) {
+        final path = f['path'] as String;
+        final rel = path.contains('/') ? path.split('/').skip(1).join('/') : path;
+        final firstSegment = rel.split('/').first.toLowerCase();
+        if (isSwitch) {
+           final isTitleId = RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(firstSegment);
+           final isSystemPath = ['nand', 'config', 'files', 'gpu_drivers'].contains(firstSegment);
+           return isTitleId && !isSystemPath;
+        }
+        if (sid == '3ds' || sid == 'azahar') return rel.startsWith('saves/');
+        return true;
+      }).toList();
+
+      final String cloudPrefix = isSwitch ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId);
+      final remoteFiles = { for (var f in remoteFilesList) f['path']: f };
+      final List<dynamic> localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
+      final localFiles = _conflictResolver.processLocalFiles(systemId, localList);
+
+      final Set<String> cloudRelPaths = { ...localFiles.keys, ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)) };
+      final List<Map<String, dynamic>> results = [];
+
+      for (final relPath in cloudRelPaths) {
+        if (relPath.isEmpty) continue;
+        String remotePath = '$cloudPrefix/$relPath';
+        final localInfo = localFiles[relPath];
+        final remoteInfo = remoteFiles[remotePath];
+        String status = 'Synced';
+        String type = (relPath.toLowerCase().contains('.state') || relPath.toLowerCase().endsWith('.png')) ? 'State' : 'Save';
+        
+        if (localInfo == null) status = 'Remote Only';
+        else if (remoteInfo == null) status = 'Local Only';
         else {
-          // Check SQLite cache for a more robust verify
-          final cached = await _syncStateDb.getState(localInfo['uri']);
-          final int localTs = (localInfo['lastModified'] as num).toInt();
-          final int localSize = (localInfo['size'] as num).toInt();
-          
-          if (cached != null && 
-              cached['size'] == localSize && 
-              (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) && 
-              cached['hash'] == remoteHash) {
-            status = 'Synced';
-            // Proactively update journal so we skip checking DB next time
-            _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
-          } else {
-            // Fallback to loose server-timestamp match if not in DB
-            final int remoteTs = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
-            if (localInfo['size'] != remoteInfo['size'] || (localTs ~/ 1000) != remoteTs) {
-              status = 'Modified';
+          final String remoteHash = remoteInfo['hash'];
+          if (_isJournaledSynced(prefs, systemId, relPath, remoteHash)) status = 'Synced';
+          else {
+            // Check SQLite cache for a more robust verify
+            final cached = await _syncStateDb.getState(localInfo['uri']);
+            final int localTs = (localInfo['lastModified'] as num).toInt();
+            final int localSize = (localInfo['size'] as num).toInt();
+            
+            if (cached != null && 
+                cached['size'] == localSize && 
+                (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) && 
+                cached['hash'] == remoteHash) {
+              status = 'Synced';
+              // Proactively update journal so we skip checking DB next time
+              _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
+            } else {
+              // Fallback to loose server-timestamp match if not in DB
+              final int remoteTs = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
+              if (localInfo['size'] != remoteInfo['size'] || (localTs ~/ 1000) != remoteTs) {
+                status = 'Modified';
+              }
             }
           }
         }
+        results.add({ 'relPath': relPath, 'remotePath': remotePath, 'status': status, 'type': type, 'localInfo': localInfo, 'remoteInfo': remoteInfo, 'isDirectory': false, 'name': relPath.split('/').last });
       }
-      results.add({ 'relPath': relPath, 'remotePath': remotePath, 'status': status, 'type': type, 'localInfo': localInfo, 'remoteInfo': remoteInfo, 'isDirectory': false, 'name': relPath.split('/').last });
+      return _conflictResolver.sortResults(results);
+    } catch (e) {
+      print('❌ DIFF ERROR for $systemId: $e');
+      _ref?.read(notificationLogProvider.notifier).addError(e, systemId: systemId);
+      rethrow;
     }
-    return _conflictResolver.sortResults(results);
   }
 
   Future<void> syncSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, String? filenameFilter, bool fastSync = false, bool Function()? isCancelled}) async {
@@ -286,13 +296,17 @@ class SyncRepository {
       final prefs = await SharedPreferences.getInstance();
       final effectivePath = await _pathService.getEffectivePath(systemId);
 
-      // Ensure the base path exists. For Switch/Eden on fresh install,
-      // we might need to create the 'save' directory.
-      await _pathService.mkdirs(effectivePath);
-
       final String cloudPrefix = (systemId.toLowerCase() == 'eden') ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId);
       
       final bool isOnline = _ref?.read(isOnlineProvider) ?? true;
+
+      // Ensure the base path exists. For Switch/Eden on fresh install,
+      // we might need to create the 'save' directory.
+      try {
+        await _pathService.mkdirs(effectivePath);
+      } catch (e) {
+        print('⚠️ SYNC: Failed to ensure base path exists: $e');
+      }
 
       if (!isOnline) {
         print('🕒 SYNC: Offline mode. Queuing local changes for $systemId...');

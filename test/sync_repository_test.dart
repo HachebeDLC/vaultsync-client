@@ -57,6 +57,7 @@ void main() {
   group('SyncRepository Error Handling', () {
     test('syncSystem should call onError when API fails', () async {
       when(() => mockPathService.getEffectivePath(any())).thenAnswer((_) async => '/test/path');
+      when(() => mockPathService.mkdirs(any())).thenAnswer((_) async => true);
       when(() => mockApiClient.get('/api/v1/files', queryParams: any(named: 'queryParams')))
           .thenThrow(Exception('Network error'));
 
