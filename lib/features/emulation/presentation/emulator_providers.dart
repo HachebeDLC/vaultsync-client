@@ -18,7 +18,7 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
     for (var emulator in systemConfig.emulators) {
       bool isInstalled = false;
       final lowerId = emulator.uniqueId.toLowerCase();
-      
+
       final isRA = lowerId.contains('.ra.') || lowerId.contains('.ra64.') || lowerId.contains('.ra32.');
 
       // Extract potential packageId from system prefix (e.g. "3ds.azahar" -> "azahar")
@@ -27,7 +27,14 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
           : lowerId;
 
       // Check if this matches a known manual mapping (even if not a package format)
-      final isManualMapping = (packageId == 'azahar' || packageId == 'citra' || packageId == 'citra.desktop' || packageId == 'pcsx2.desktop');
+      final isManualMapping = (
+        packageId == 'azahar' || 
+        packageId == 'citra' || 
+        packageId == 'citra.desktop' || 
+        packageId == 'pcsx2.desktop' ||
+        packageId == 'org.azahar_emu.azahar' ||
+        packageId.contains('melonds')
+      );
 
       // Determine if this looks like an Android package (has .com. .org. etc)
       final dotCount = '.'.allMatches(lowerId).length;
@@ -44,7 +51,7 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
              }
            }
         } else {
-          // Manual mappings
+          // Normal package detection or manual mapping
           List<String> candidatePackages = [packageId];
           if (packageId == 'azahar' || packageId == 'citra' || packageId == 'citra.desktop' || packageId == 'org.azahar_emu.azahar') {
             candidatePackages = [
@@ -55,11 +62,17 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
               'org.citra.citra_emu.canary', 
               'org.citra.citra_emu.antimony'
             ];
+          } else if (packageId.contains('melonds')) {
+            candidatePackages = [
+              'me.magnum.melonds',
+              'me.arun.melonds',
+              'me.magnum.melonds.nightly',
+              'me.magnum.melondualds'
+            ];
           } else if (packageId == 'pcsx2.desktop') {
-
             candidatePackages = ['com.pcsx2.pcsx2', 'xyz.aethersx2.android', 'xyz.nethersx2.android'];
           }
-              
+
           for (final pkg in candidatePackages) {
             if (await detector.isEmulatorInstalled(pkg)) {
               isInstalled = true;
@@ -68,14 +81,19 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
           }
         }
       } 
-      
+
       // If still not detected, try as a desktop emulator if on desktop
       if (!isInstalled && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
         isInstalled = await detector.isEmulatorInstalled(emulator.uniqueId);
       }
-      
+
+      if (isInstalled) {
+        print('✅ DETECTED: ${systemConfig.system.id} -> ${emulator.name} ($packageId)');
+      }
+
       detectedEmulators.add(emulator.copyWith(isInstalled: isInstalled));
     }
+
 
     // 2. Sort emulators: Installed Standalone > Installed RetroArch > Uninstalled
     detectedEmulators.sort((a, b) {

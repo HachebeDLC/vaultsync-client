@@ -57,6 +57,32 @@ void main() {
       expect(emulators[1].isInstalled, isFalse);
     });
 
+    test('should detect MelonDS via multiple package candidates', () async {
+      final systemConfig = EmulatorConfig(
+        system: SystemInfo(id: 'nds', name: 'DS', folders: ['nds'], extensions: ['nds'], ignoredFolders: []),
+        emulators: [
+          EmulatorInfo(name: 'MelonDS', uniqueId: 'nds.me.magnum.melonds', defaultEmulator: true),
+        ],
+      );
+
+      when(() => mockRepository.loadSystems()).thenAnswer((_) async => [systemConfig]);
+      
+      // Mock: MelonDS is installed
+      when(() => mockDetector.isEmulatorInstalled('me.magnum.melonds')).thenAnswer((_) async => true);
+
+      final container = ProviderContainer(
+        overrides: [
+          emulatorRepositoryProvider.overrideWith((ref) => mockRepository),
+          emulatorDetectorProvider.overrideWith((ref) => mockDetector),
+        ],
+      );
+
+      final result = await container.read(systemsProvider.future);
+      
+      expect(result.length, 1);
+      expect(result.first.emulators.first.isInstalled, isTrue);
+    });
+
     test('should detect Azahar/Citra via multiple package candidates', () async {
       final systemConfig = EmulatorConfig(
         system: SystemInfo(id: '3ds', name: '3DS', folders: ['3ds'], extensions: ['3ds'], ignoredFolders: []),
