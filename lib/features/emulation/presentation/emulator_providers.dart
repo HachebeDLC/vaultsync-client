@@ -40,6 +40,7 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
       final dotCount = '.'.allMatches(lowerId).length;
       final looksLikePackage = dotCount >= 2;
 
+      // Only attempt complex detection/filtering if on Android or if it's a known package
       if (Platform.isAndroid || looksLikePackage || isRA || isManualMapping) {
         // Special case: RetroArch cores
         if (isRA) {
@@ -123,15 +124,13 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
         return a.isInstalled ? -1 : 1;
       }
       
-      // Both have same installation status, sort by type (Standalone vs RetroArch)
       final aIsRA = a.uniqueId.contains('.ra.') || a.uniqueId.contains('.ra64.') || a.uniqueId.contains('.ra32.');
       final bIsRA = b.uniqueId.contains('.ra.') || b.uniqueId.contains('.ra64.') || b.uniqueId.contains('.ra32.');
       
       if (aIsRA != bIsRA) {
-        return aIsRA ? 1 : -1; // Standalone (-1) before RetroArch (1)
+        return aIsRA ? 1 : -1;
       }
       
-      // Finally, default emulator first
       if (a.defaultEmulator != b.defaultEmulator) {
         return a.defaultEmulator ? -1 : 1;
       }
@@ -141,8 +140,15 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
 
     final processedSystem = systemConfig.copyWith(emulators: detectedEmulators);
 
-    // 3. Filter systems: Only show systems that have at least one emulator installed
-    if (detectedEmulators.any((e) => e.isInstalled)) {
+    // 3. Filter systems: 
+    // CRITICAL: Only filter on Android. On Linux/Windows, detection is unreliable 
+    // (standalone emus not in PATH), so we show all supported systems.
+    if (Platform.isAndroid) {
+      if (detectedEmulators.any((e) => e.isInstalled)) {
+        processedSystems.add(processedSystem);
+      }
+    } else {
+      // Desktop: Show everything
       processedSystems.add(processedSystem);
     }
   }
