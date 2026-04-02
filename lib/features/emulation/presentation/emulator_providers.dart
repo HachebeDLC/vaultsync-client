@@ -18,7 +18,7 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
     for (var emulator in systemConfig.emulators) {
       bool isInstalled = false;
       final lowerId = emulator.uniqueId.toLowerCase();
-
+      
       final isRA = lowerId.contains('.ra.') || lowerId.contains('.ra64.') || lowerId.contains('.ra32.');
 
       // Extract potential packageId from system prefix (e.g. "3ds.azahar" -> "azahar")
@@ -41,17 +41,22 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
       final looksLikePackage = dotCount >= 2;
 
       if (Platform.isAndroid || looksLikePackage || isRA || isManualMapping) {
-        // Special case: RetroArch cores (Android specific detection)
+        // Special case: RetroArch cores
         if (isRA) {
-           final raPackages = ['com.retroarch', 'com.retroarch.aarch64', 'com.retroarch.ra32'];
-           for (final pkg in raPackages) {
-             if (await detector.isEmulatorInstalled(pkg)) {
-               isInstalled = true;
-               break;
-             }
+           if (Platform.isAndroid) {
+              final raPackages = ['com.retroarch', 'com.retroarch.aarch64', 'com.retroarch.ra32'];
+              for (final pkg in raPackages) {
+                if (await detector.isEmulatorInstalled(pkg)) {
+                  isInstalled = true;
+                  break;
+                }
+              }
+           } else {
+              // On desktop, we check for the main retroarch command or flatpak
+              isInstalled = await detector.isEmulatorInstalled('retroarch');
            }
         } else {
-          // Manual mappings
+          // Normal package detection or manual mapping
           List<String> candidatePackages = [packageId];
           if (packageId == 'azahar' || packageId == 'citra' || packageId == 'citra.desktop' || packageId == 'org.azahar_emu.azahar' || 
               packageId == 'lime3ds' || packageId == 'lemonade' || packageId == 'mandarine') {
@@ -68,7 +73,6 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
               'io.github.borked3ds.android'
             ];
           } else if (packageId.contains('melonds')) {
-
             candidatePackages = [
               'me.magnum.melonds',
               'me.arun.melonds',
@@ -91,7 +95,7 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
               'org.shiiion.primehack'
             ];
           }
-
+              
           for (final pkg in candidatePackages) {
             if (await detector.isEmulatorInstalled(pkg)) {
               isInstalled = true;
@@ -100,19 +104,18 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
           }
         }
       } 
-
+      
       // If still not detected, try as a desktop emulator if on desktop
       if (!isInstalled && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {
         isInstalled = await detector.isEmulatorInstalled(emulator.uniqueId);
       }
-
+      
       if (isInstalled) {
         print('✅ DETECTED: ${systemConfig.system.id} -> ${emulator.name} ($packageId)');
       }
-
+      
       detectedEmulators.add(emulator.copyWith(isInstalled: isInstalled));
     }
-
 
     // 2. Sort emulators: Installed Standalone > Installed RetroArch > Uninstalled
     detectedEmulators.sort((a, b) {

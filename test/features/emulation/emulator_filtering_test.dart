@@ -5,6 +5,7 @@ import 'package:vaultsync_client/features/emulation/domain/emulator_config.dart'
 import 'package:vaultsync_client/features/emulation/data/emulator_repository.dart';
 import 'package:vaultsync_client/features/emulation/presentation/emulator_providers.dart';
 import 'package:vaultsync_client/core/services/emulator_detector.dart';
+import 'dart:io';
 
 class MockEmulatorRepository extends Mock implements EmulatorRepository {}
 class MockDetector extends Mock implements EmulatorDetector {}
@@ -34,8 +35,14 @@ void main() {
       when(() => mockRepository.loadSystems()).thenAnswer((_) async => [systemConfig]);
       
       // Mock: Only standalone Snes9x EX+ is installed
-      when(() => mockDetector.isEmulatorInstalled('com.explusplus.snes9x')).thenAnswer((_) async => true);
-      when(() => mockDetector.isEmulatorInstalled('com.retroarch')).thenAnswer((_) async => false);
+      if (Platform.isAndroid) {
+        when(() => mockDetector.isEmulatorInstalled('com.explusplus.snes9x')).thenAnswer((_) async => true);
+        when(() => mockDetector.isEmulatorInstalled('com.retroarch')).thenAnswer((_) async => false);
+      } else {
+        // Desktop check uses uniqueId stripped of prefix for standalone
+        when(() => mockDetector.isEmulatorInstalled('com.explusplus.snes9x')).thenAnswer((_) async => true);
+        when(() => mockDetector.isEmulatorInstalled('retroarch')).thenAnswer((_) async => false);
+      }
 
       final container = ProviderContainer(
         overrides: [
@@ -94,6 +101,7 @@ void main() {
       when(() => mockRepository.loadSystems()).thenAnswer((_) async => [systemConfig]);
       
       // Mock: Azahar is installed using one of the common Citra package names
+      // On Android it checks several, we mock one. On Linux it also checks these candidates.
       when(() => mockDetector.isEmulatorInstalled('org.citra.citra_emu')).thenAnswer((_) async => true);
 
       final container = ProviderContainer(
@@ -120,7 +128,11 @@ void main() {
       when(() => mockRepository.loadSystems()).thenAnswer((_) async => [systemConfig]);
       
       // Mock: RetroArch is installed
-      when(() => mockDetector.isEmulatorInstalled('com.retroarch.aarch64')).thenAnswer((_) async => true);
+      if (Platform.isAndroid) {
+        when(() => mockDetector.isEmulatorInstalled('com.retroarch.aarch64')).thenAnswer((_) async => true);
+      } else {
+        when(() => mockDetector.isEmulatorInstalled('retroarch')).thenAnswer((_) async => true);
+      }
 
       final container = ProviderContainer(
         overrides: [
@@ -153,10 +165,15 @@ void main() {
       when(() => mockRepository.loadSystems()).thenAnswer((_) async => [snesConfig, ps2Config]);
       
       // Mock: Only AetherSX2 is installed. RetroArch is NOT.
-      when(() => mockDetector.isEmulatorInstalled('com.tahlreth.aethersx2.free')).thenAnswer((_) async => true);
-      when(() => mockDetector.isEmulatorInstalled('com.retroarch')).thenAnswer((_) async => false);
-      when(() => mockDetector.isEmulatorInstalled('com.retroarch.aarch64')).thenAnswer((_) async => false);
-      when(() => mockDetector.isEmulatorInstalled('com.retroarch.ra32')).thenAnswer((_) async => false);
+      if (Platform.isAndroid) {
+        when(() => mockDetector.isEmulatorInstalled('com.tahlreth.aethersx2.free')).thenAnswer((_) async => true);
+        when(() => mockDetector.isEmulatorInstalled('com.retroarch')).thenAnswer((_) async => false);
+        when(() => mockDetector.isEmulatorInstalled('com.retroarch.aarch64')).thenAnswer((_) async => false);
+        when(() => mockDetector.isEmulatorInstalled('com.retroarch.ra32')).thenAnswer((_) async => false);
+      } else {
+        when(() => mockDetector.isEmulatorInstalled('com.tahlreth.aethersx2.free')).thenAnswer((_) async => true);
+        when(() => mockDetector.isEmulatorInstalled('retroarch')).thenAnswer((_) async => false);
+      }
 
       final container = ProviderContainer(
         overrides: [
