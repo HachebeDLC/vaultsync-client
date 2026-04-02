@@ -49,7 +49,7 @@ class SyncService {
     await triggerQueueProcessing();
   }
 
-  Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false, bool isBackground = false}) async {
+  Future<void> runSync({Function(String)? onProgress, Function(String)? onError, bool Function()? isCancelled, bool fastSync = false, bool isBackground = false, bool ignoreConnectivity = false}) async {
     await _notificationService.init();
     if (isBackground) {
       await _notificationService.showSyncStatus('VaultSync', 'Performing background maintenance...');
@@ -112,7 +112,8 @@ class SyncService {
             onProgress: onProgress, 
             onError: onError, 
             fastSync: fastSync,
-            isCancelled: isCancelled
+            isCancelled: isCancelled,
+            ignoreConnectivity: ignoreConnectivity
           );
           syncedPaths.add(syncKey);
         }
@@ -131,7 +132,7 @@ class SyncService {
     }
   }
 
-  Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false, bool isBackground = false}) async {
+  Future<void> syncSpecificSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, bool fastSync = false, bool isBackground = false, bool ignoreConnectivity = false}) async {
     await _notificationService.init();
     if (isBackground) await _notificationService.showSyncStatus('VaultSync', 'Syncing $systemId...');
     await _powerManager.acquireSyncLock();
@@ -162,7 +163,8 @@ class SyncService {
           ignoredFolders: ignoredFolders, 
           onProgress: onProgress, 
           onError: onError, 
-          fastSync: fastSync
+          fastSync: fastSync,
+          ignoreConnectivity: ignoreConnectivity
         );
       }
       await triggerQueueProcessing();

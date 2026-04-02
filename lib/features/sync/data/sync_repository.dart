@@ -291,14 +291,14 @@ class SyncRepository {
     }
   }
 
-  Future<void> syncSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, String? filenameFilter, bool fastSync = false, bool Function()? isCancelled}) async {
+  Future<void> syncSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, String? filenameFilter, bool fastSync = false, bool Function()? isCancelled, bool ignoreConnectivity = false}) async {
     await _syncLock.protect(() async {
       final prefs = await SharedPreferences.getInstance();
       final effectivePath = await _pathService.getEffectivePath(systemId);
 
       final String cloudPrefix = (systemId.toLowerCase() == 'eden') ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId);
       
-      final bool isOnline = _ref?.read(isOnlineProvider) ?? true;
+      final bool isOnline = ignoreConnectivity || (_ref?.read(isOnlineProvider) ?? true);
 
       // Ensure the base path exists. For Switch/Eden on fresh install,
       // we might need to create the 'save' directory.

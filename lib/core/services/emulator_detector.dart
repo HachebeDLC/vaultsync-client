@@ -80,7 +80,7 @@ class LinuxEmulatorDetector implements EmulatorDetector {
       'azahar': ['citra', 'citra-qt', 'org.citra_emu.citra', 'io.github.lime3ds.Lime3DS'],
       'dolphin.desktop': ['dolphin-emu', 'dolphin', 'org.DolphinEmu.dolphin-emu'],
       'ppsspp.desktop': ['PPSSPPSDL', 'ppsspp', 'org.ppsspp.PPSSPP'],
-      'melonds.desktop': ['melonds', 'org.melonds.melonDS'],
+      'melonds.desktop': ['melonds', 'net.kuribo64.melonDS', 'org.melonds.melonDS'],
       'duckstation.desktop': ['duckstation', 'org.duckstation.DuckStation'],
       'yuzu.desktop': ['yuzu', 'org.yuzu_emu.yuzu'],
       'ryujinx.desktop': ['ryujinx', 'org.ryujinx.Ryujinx'],

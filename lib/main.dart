@@ -21,6 +21,7 @@ import 'features/sync/presentation/system_detail_screen.dart';
 import 'features/sync/presentation/conflict_screen.dart';
 import 'features/sync/presentation/sync_history_screen.dart';
 import 'features/sync/services/sync_service.dart';
+import 'core/services/decky_bridge_service.dart';
 import 'core/utils/offline_banner.dart';
 
 @pragma('vm:entry-point')
@@ -143,11 +144,24 @@ void main() async {
   runApp(const ProviderScope(child: VaultSyncApp()));
 }
 
-class VaultSyncApp extends ConsumerWidget {
+class VaultSyncApp extends ConsumerStatefulWidget {
   const VaultSyncApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VaultSyncApp> createState() => _VaultSyncAppState();
+}
+
+class _VaultSyncAppState extends ConsumerState<VaultSyncApp> {
+  @override
+  void initState() {
+    super.initState();
+    if (Platform.isLinux) {
+      ref.read(deckyBridgeServiceProvider).start();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
     final router = ref.watch(routerProvider);
 
