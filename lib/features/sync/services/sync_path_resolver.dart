@@ -83,7 +83,7 @@ class SyncPathResolver {
     return localRelPath;
   }
 
-  String getLocalRelPath(String systemId, String cloudRelPath, Map<String, dynamic> localFiles, List<dynamic> lastScanList) {
+  String getLocalRelPath(String systemId, String cloudRelPath, Map<String, dynamic> localFiles, List<dynamic> lastScanList, {String? probedProfileId}) {
     final sid = systemId.toLowerCase();
     final isSwitch = sid == 'switch' || sid == 'eden';
     
@@ -93,20 +93,22 @@ class SyncPathResolver {
     }
     
     if (isSwitch) {
-       // Probing: Find the FIRST valid 32-char Profile ID on the device
-       String? foundProfileId;
+       // Probing: Use the explicitly provided profile ID or find the FIRST valid 32-char Profile ID on the device
+       String? foundProfileId = probedProfileId;
        final profileRegex = RegExp(r'^[0-9A-Fa-f]{32}$');
 
-       for (final f in lastScanList) {
-           final path = f['relPath'] as String;
-           final segments = path.split('/');
-           for (final segment in segments) {
-               if (profileRegex.hasMatch(segment) && segment != '00000000000000000000000000000000') {
-                   foundProfileId = segment;
-                   break;
-               }
-           }
-           if (foundProfileId != null) break;
+       if (foundProfileId == null) {
+         for (final f in lastScanList) {
+             final path = f['relPath'] as String;
+             final segments = path.split('/');
+             for (final segment in segments) {
+                 if (profileRegex.hasMatch(segment) && segment != '00000000000000000000000000000000') {
+                     foundProfileId = segment;
+                     break;
+                 }
+             }
+             if (foundProfileId != null) break;
+         }
        }
 
        // Final fallback if no profile discovered yet

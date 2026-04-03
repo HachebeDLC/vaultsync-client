@@ -264,7 +264,7 @@ class SyncRepository {
             }
           } else if (localInfo == null && remoteInfo != null) {
             onProgress?.call('Queueing $relPath for download...');
-            final destRelPath = _pathResolver.getLocalRelPath(systemId, relPath, localFiles, _lastScanList);
+            final destRelPath = _pathResolver.getLocalRelPath(systemId, relPath, localFiles, _lastScanList, probedProfileId: (systemId.toLowerCase() == 'switch' || systemId.toLowerCase() == 'eden') ? await _pathService.probeProfileId(effectivePath) : null);
             final destUri = p.join(effectivePath, destRelPath);
             developer.log('SYNC: Queueing download: $relPath -> $destUri', name: 'VaultSync', level: 800);
             await _syncStateDb.upsertState(destUri, remoteInfo['size'], remoteInfo['updated_at'], remoteInfo['hash'], 'pending_download', systemId: systemId, remotePath: remotePath, relPath: destRelPath);
@@ -363,7 +363,7 @@ class SyncRepository {
     final paths = await _pathService.getAllSystemPaths();
     if (!paths.containsKey(systemId)) return;
 
-    final destRelPath = _pathResolver.getLocalRelPath(systemId, path.split('/').skip(1).join('/'), {}, _lastScanList);
+    final destRelPath = _pathResolver.getLocalRelPath(systemId, path.split('/').skip(1).join('/'), {}, _lastScanList, probedProfileId: (systemId.toLowerCase() == 'switch' || systemId.toLowerCase() == 'eden') ? await _pathService.probeProfileId(await _pathService.getEffectivePath(systemId)) : null);
     final effectivePath = await _pathService.getEffectivePath(systemId);
     final destUri = p.join(effectivePath, destRelPath);
 
