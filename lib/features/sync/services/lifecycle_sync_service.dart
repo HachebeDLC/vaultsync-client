@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,7 +27,7 @@ class LifecycleSyncService with WidgetsBindingObserver {
   void _initConnectivityListener() {
     _ref.listen<bool>(isOnlineProvider, (previous, next) {
       if (previous == false && next == true) {
-        print('🕒 LIFECYCLE: Device is back online. Triggering offline queue...');
+        developer.log('LIFECYCLE: Device is back online. Triggering offline queue...', name: 'VaultSync', level: 800);
         _ref.read(syncServiceProvider).processOfflineQueue();
       }
     }, fireImmediately: true);
@@ -81,12 +82,12 @@ class LifecycleSyncService with WidgetsBindingObserver {
       }
 
       if (closedPackage != null) {
-        print('Lifecycle: Detected recently active emulator $closedPackage. Triggering sync.');
+        developer.log('LIFECYCLE: Detected recently active emulator $closedPackage. Triggering sync.', name: 'VaultSync', level: 800);
         // For now, trigger a full 'fastSync' to be safe
         _ref.read(syncProvider.notifier).sync();
       }
     } catch (e) {
-      print('Lifecycle Sync Error: $e');
+      developer.log('LIFECYCLE: Sync error', name: 'VaultSync', level: 1000, error: e);
     }
   }
 }

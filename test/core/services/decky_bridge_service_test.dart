@@ -23,7 +23,21 @@ void main() {
     HttpOverrides.global = null;
     mockSyncService = MockSyncService();
     mockPathService = MockSystemPathService();
-    
+
+    // Register stubs up-front so they're available regardless of async handler timing.
+    when(() => mockPathService.getAllSystemPaths())
+        .thenAnswer((_) async => {'ps2': '/path/to/ps2'});
+    when(() => mockPathService.getEffectivePath(any()))
+        .thenAnswer((_) async => '/path/to/system');
+    when(() => mockSyncService.runSync(
+          onProgress: any(named: 'onProgress'),
+          onError: any(named: 'onError'),
+          isCancelled: any(named: 'isCancelled'),
+          fastSync: any(named: 'fastSync'),
+          isBackground: any(named: 'isBackground'),
+          ignoreConnectivity: any(named: 'ignoreConnectivity'),
+        )).thenAnswer((_) async {});
+
     container = ProviderContainer(
       overrides: [
         syncServiceProvider.overrideWith((ref) => mockSyncService),
@@ -33,7 +47,9 @@ void main() {
     );
   });
 
-  tearDown(() {
+  // Async tearDown ensures in-flight handlers (drained by service.stop()) finish
+  // before the container is disposed, preventing _ref.read() on a dead container.
+  tearDown(() async {
     container.dispose();
   });
 
@@ -54,8 +70,6 @@ void main() {
   });
 
   test('DeckyBridgeService /systems returns configured systems', () async {
-    when(() => mockPathService.getAllSystemPaths()).thenAnswer((_) async => {'ps2': '/path/to/ps2'});
-
     final service = container.read(deckyBridgeServiceProvider);
     await service.start(port: 0);
     final port = service.port;
@@ -71,11 +85,6 @@ void main() {
   });
 
   test('DeckyBridgeService /sync triggers global sync with ignoreConnectivity', () async {
-    when(() => mockSyncService.runSync(
-      onProgress: any(named: 'onProgress'),
-      ignoreConnectivity: true,
-    )).thenAnswer((_) async => {});
-
     final service = container.read(deckyBridgeServiceProvider);
     await service.start(port: 0);
     final port = service.port;
@@ -83,15 +92,15 @@ void main() {
     try {
       final response = await http.post(Uri.parse('http://127.0.0.1:$port/sync'));
       expect(response.statusCode, 200);
-      
-      // Wait for async task
-      await Future.delayed(const Duration(milliseconds: 100));
-      verify(() => mockSyncService.runSync(
-        onProgress: any(named: 'onProgress'),
-        ignoreConnectivity: true,
-      )).called(1);
     } finally {
+      // stop() drains _activeHandlers including the _triggerSync() task,
+      // so the sync is guaranteed to have run by the time we verify below.
       await service.stop();
     }
+
+    verify(() => mockSyncService.runSync(
+          onProgress: any(named: 'onProgress'),
+          ignoreConnectivity: true,
+        )).called(1);
   });
 }

@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,28 +36,28 @@ class ShizukuService {
 
   Future<ShizukuStatus> getStatus() async {
     if (!Platform.isAndroid) return ShizukuStatus(isRunning: false, isAuthorized: false);
-    print('🛡️ SHIZUKU: Requesting status from native...');
+    developer.log('SHIZUKU: Requesting status from native...', name: 'VaultSync', level: 800);
     try {
       final Map<dynamic, dynamic> result = await _platform.invokeMethod('checkShizukuStatus');
       final status = ShizukuStatus.fromMap(result);
-      print('🛡️ SHIZUKU: Status running=${status.isRunning}, auth=${status.isAuthorized}');
+      developer.log('SHIZUKU: Status running=${status.isRunning}, auth=${status.isAuthorized}', name: 'VaultSync', level: 800);
       return status;
     } catch (e) {
       // Catches both PlatformException and MissingPluginException (FlutterError)
-      print('🛡️ SHIZUKU ERROR: $e');
+      developer.log('SHIZUKU ERROR', name: 'VaultSync', level: 1000, error: e);
       return ShizukuStatus(isRunning: false, isAuthorized: false);
     }
   }
 
   Future<bool> requestPermission() async {
     if (!Platform.isAndroid) return false;
-    print('🛡️ SHIZUKU: Requesting permission...');
+    developer.log('SHIZUKU: Requesting permission...', name: 'VaultSync', level: 800);
     try {
       final bool result = await _platform.invokeMethod('requestShizukuPermission');
-      print('🛡️ SHIZUKU: Permission result: $result');
+      developer.log('SHIZUKU: Permission result: $result', name: 'VaultSync', level: 800);
       return result;
     } on PlatformException catch (e) {
-      print('🛡️ SHIZUKU ERROR: ${e.message}');
+      developer.log('SHIZUKU ERROR: ${e.message}', name: 'VaultSync', level: 1000);
       return false;
     }
   }
@@ -66,7 +67,7 @@ class ShizukuService {
     try {
       await _platform.invokeMethod('openShizukuApp');
     } catch (e) {
-      print('⚠️ SHIZUKU: Could not open app: $e');
+      developer.log('SHIZUKU: Could not open app', name: 'VaultSync', level: 900, error: e);
     }
   }
 

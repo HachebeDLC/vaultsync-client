@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 class SyncPathResolver {
   String getCloudRelPath(String systemId, String localRelPath) {
     final sid = systemId.toLowerCase();
@@ -21,7 +23,7 @@ class SyncPathResolver {
       }
       
       if (!isNested) {
-         print('📂 RESOLVER: Ignoring non-nested Switch path: $localRelPath');
+         developer.log('RESOLVER: Ignoring non-nested Switch path: $localRelPath', name: 'VaultSync', level: 800);
          return ''; 
       }
       
@@ -117,7 +119,7 @@ class SyncPathResolver {
        // We assume the root is the emulator root ('files/').
        // We ALWAYS anchor on 'nand/user/save' for consistency.
        final result = 'nand/user/save/0000000000000000/$profileId/$cloudRelPath';
-       print('📂 RESOLVER: Switch Target -> $result (Detected: ${foundProfileId ?? "NONE"})');
+       developer.log('RESOLVER: Switch Target -> $result (Detected: ${foundProfileId ?? "NONE"})', name: 'VaultSync', level: 800);
        return result;
     }
 

@@ -114,7 +114,11 @@ class SyncDiffService {
             final int localTs = (localInfo['lastModified'] as num).toInt();
             final int localSize = (localInfo['size'] as num).toInt();
 
-            if (cached != null &&
+            if (cached != null && cached['status'] == 'synced' && cached['hash'] == remoteHash) {
+              // If the DB knows it's synced and the hashes match, trust it even if timestamps drifted slightly
+              status = 'Synced';
+              recordSyncSuccess(prefs, systemId, relPath, remoteHash);
+            } else if (cached != null &&
                 cached['size'] == localSize &&
                 (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) &&
                 cached['hash'] == remoteHash) {

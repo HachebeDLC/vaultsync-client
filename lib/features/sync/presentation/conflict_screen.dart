@@ -52,7 +52,7 @@ class ConflictScreen extends ConsumerWidget {
          final datePart = path.split('.sync-conflict-')[1].split('-')[0];
          cloudDate = DateTime.parse(datePart); // Simple parse for now
        } catch (e) {
-         print('⚠️ UI: Conflict date parse failed: $e');
+         developer.log('UI: Conflict date parse failed', name: 'VaultSync', level: 900, error: e);
        }
     }
 

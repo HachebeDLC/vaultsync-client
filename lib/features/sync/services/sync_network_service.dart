@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -60,7 +61,7 @@ class SyncNetworkService {
           return; 
         }
         dirtyIndices = List<int>.from(missing);
-      } catch (e) { print('⚠️ Delta check failed: $e'); }
+      } catch (e) { developer.log('Delta check failed', name: 'VaultSync', level: 900, error: e); }
     }
 
     final uploadArgs = { 
@@ -130,7 +131,7 @@ class SyncNetworkService {
        for (int i = 0; i < remoteHashes.length; i++) { if (i >= localHashes.length || localHashes[i] != remoteHashes[i]) { dirty.add(i); } }
        if (dirty.isNotEmpty && dirty.length < remoteHashes.length) { patchIndices = dirty; }
        } catch (e) {
-         print('⚠️ Block Hash calculation failed for $localUri. Falling back to full download. Error: $e');
+         developer.log('Block Hash calculation failed for $localUri. Falling back to full download.', name: 'VaultSync', level: 900, error: e);
        }
     }
     

@@ -16,6 +16,7 @@ class DeckyBridgeService {
   bool _isSyncing = false;
   String _lastProgress = 'Idle';
   DateTime? _lastSyncTime;
+  final List<Future<void>> _activeHandlers = [];
 
   DeckyBridgeService(this._ref);
 
@@ -23,38 +24,43 @@ class DeckyBridgeService {
     try {
       _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
       developer.log('DECKY BRIDGE: Server running on ${_server!.address.address}:${_server!.port}', name: 'VaultSync', level: 800);
-      
-      _server!.listen((HttpRequest request) async {
-        final path = request.uri.path;
-        final method = request.method;
 
-        try {
-          if (path == '/status' && method == 'GET') {
-            await _handleStatus(request);
-          } else if (path == '/systems' && method == 'GET') {
-            await _handleSystems(request);
-          } else if (path == '/conflicts' && method == 'GET') {
-            await _handleConflicts(request);
-          } else if (path == '/sync' && method == 'POST') {
-            await _handleGlobalSync(request);
-          } else if (path.startsWith('/sync/') && method == 'POST') {
-            final systemId = path.substring(6);
-            await _handleSystemSync(request, systemId);
-          } else {
-            request.response
-              ..statusCode = HttpStatus.notFound
-              ..write(jsonEncode({'error': 'Not Found'}))
-              ..close();
-          }
-        } catch (e) {
-          request.response
-            ..statusCode = HttpStatus.internalServerError
-            ..write(jsonEncode({'error': e.toString()}))
-            ..close();
-        }
+      _server!.listen((HttpRequest request) {
+        final handler = _dispatch(request);
+        _activeHandlers.add(handler);
+        handler.whenComplete(() => _activeHandlers.remove(handler));
       });
     } catch (e) {
       developer.log('DECKY BRIDGE FAILED', name: 'VaultSync', level: 1000, error: e);
+    }
+  }
+
+  Future<void> _dispatch(HttpRequest request) async {
+    final path = request.uri.path;
+    final method = request.method;
+    try {
+      if (path == '/status' && method == 'GET') {
+        await _handleStatus(request);
+      } else if (path == '/systems' && method == 'GET') {
+        await _handleSystems(request);
+      } else if (path == '/conflicts' && method == 'GET') {
+        await _handleConflicts(request);
+      } else if (path == '/sync' && method == 'POST') {
+        await _handleGlobalSync(request);
+      } else if (path.startsWith('/sync/') && method == 'POST') {
+        final systemId = path.substring(6);
+        await _handleSystemSync(request, systemId);
+      } else {
+        request.response
+          ..statusCode = HttpStatus.notFound
+          ..write(jsonEncode({'error': 'Not Found'}))
+          ..close();
+      }
+    } catch (e) {
+      request.response
+        ..statusCode = HttpStatus.internalServerError
+        ..write(jsonEncode({'error': e.toString()}))
+        ..close();
     }
   }
 
@@ -94,9 +100,12 @@ class DeckyBridgeService {
       _sendJsonResponse(request, {'error': 'Sync already in progress'}, statusCode: HttpStatus.badRequest);
       return;
     }
-    
-    // We allow forcing a sync from the bridge even if connectivity says offline
-    _triggerSync();
+
+    // We allow forcing a sync from the bridge even if connectivity says offline.
+    // Track the async sync task so stop() can drain it before container disposal.
+    final task = _triggerSync();
+    _activeHandlers.add(task);
+    task.whenComplete(() => _activeHandlers.remove(task));
     _sendJsonResponse(request, {'message': 'Sync triggered'});
   }
 
@@ -105,7 +114,9 @@ class DeckyBridgeService {
       _sendJsonResponse(request, {'error': 'Sync already in progress'}, statusCode: HttpStatus.badRequest);
       return;
     }
-    _triggerSync(systemId: systemId);
+    final task = _triggerSync(systemId: systemId);
+    _activeHandlers.add(task);
+    task.whenComplete(() => _activeHandlers.remove(task));
     _sendJsonResponse(request, {'message': 'Sync triggered for $systemId'});
   }
 
@@ -141,6 +152,9 @@ class DeckyBridgeService {
   Future<void> stop() async {
     await _server?.close(force: true);
     _server = null;
+    if (_activeHandlers.isNotEmpty) {
+      await Future.wait(_activeHandlers);
+    }
     developer.log('DECKY BRIDGE: Server stopped', name: 'VaultSync', level: 800);
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:system_tray/system_tray.dart';
@@ -32,7 +33,7 @@ class DesktopTrayService {
       MenuItemLabel(
         label: 'Sync All', 
         onClicked: (menuItem) {
-          print('🚀 TRAY: Triggering manual sync...');
+          developer.log('TRAY: Triggering manual sync...', name: 'VaultSync', level: 800);
           _ref.read(desktopBackgroundSyncServiceProvider).sync();
         }
       ),

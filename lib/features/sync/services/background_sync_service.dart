@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,7 +35,7 @@ class BackgroundSyncService {
       final String package = call.arguments;
       final systemId = _packageToSystem[package];
       
-      print('🕒 BACKGROUND: Emulator closed ($package). Auto-syncing $systemId...');
+      developer.log('BACKGROUND: Emulator closed ($package). Auto-syncing $systemId...', name: 'VaultSync', level: 800);
       
       if (systemId != null) {
         final path = await _pathService.getEffectivePath(systemId);
@@ -46,10 +47,10 @@ class BackgroundSyncService {
             systemId, 
             path, 
             ignoredFolders: config?.system.ignoredFolders,
-            onProgress: (msg) => print('🕒 BACKGROUND: $msg'),
+            onProgress: (msg) => developer.log('BACKGROUND: $msg', name: 'VaultSync', level: 800),
           );
         } catch (e) {
-          print('❌ BACKGROUND SYNC FAILED: $e');
+          developer.log('BACKGROUND SYNC FAILED', name: 'VaultSync', level: 1000, error: e);
         }
       }
     }
