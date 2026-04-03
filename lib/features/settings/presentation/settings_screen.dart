@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter/services.dart';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:workmanager/workmanager.dart';
 import '../../../core/theme/theme_provider.dart';
@@ -57,7 +58,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
     if (Platform.isAndroid) {
       try {
         usage = await _platform.invokeMethod<bool>('hasUsageStatsPermission') ?? false;
-      } catch (e) { print('⚠️ Settings: checkShizukuStatus failed: $e'); }
+      } catch (e) { developer.log('Settings: checkShizukuStatus failed', name: 'VaultSync', level: 900, error: e); }
     }
 
     if (mounted) {
@@ -107,7 +108,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
 
     if (Platform.isAndroid || Platform.isIOS) {
       if (value) {
-        print('🕒 SCHEDULER: Registering periodic sync (6 hours)');
+        developer.log('SCHEDULER: Registering periodic sync (6 hours)', name: 'VaultSync', level: 800);
         await Workmanager().registerPeriodicTask(
           "periodic-sync",
           "syncTask",
@@ -118,7 +119,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
           ),
         );
       } else {
-        print('🕒 SCHEDULER: Cancelling periodic sync');
+        developer.log('SCHEDULER: Cancelling periodic sync', name: 'VaultSync', level: 800);
         await Workmanager().cancelByUniqueName("periodic-sync");
       }
     } else if (Platform.isWindows || Platform.isLinux) {
@@ -128,7 +129,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
         ref.read(desktopBackgroundSyncServiceProvider).stopAutoSync();
       }
     } else {
-      print('🕒 SCHEDULER: Background sync is not supported on this platform');
+      developer.log('SCHEDULER: Background sync is not supported on this platform', name: 'VaultSync', level: 800);
     }
   }
   Future<void> _grantUsageStats() async {

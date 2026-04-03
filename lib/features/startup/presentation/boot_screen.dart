@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,7 +41,7 @@ class _BootScreenState extends ConsumerState<BootScreen> {
         return;
       }
 
-      print('🌐 BOOT: Checking connectivity to $baseUrl');
+      developer.log('BOOT: Checking connectivity to $baseUrl', name: 'VaultSync', level: 800);
       
       // Attempt Auth initialization
       await ref.read(authProvider.notifier).init();
@@ -60,13 +61,13 @@ class _BootScreenState extends ConsumerState<BootScreen> {
         context.go('/auth');
       }
     } on SocketException catch (e) {
-      print('🌐 BOOT: Network unreachable ($e). Likely device lock or no signal.');
+      developer.log('BOOT: Network unreachable. Likely device lock or no signal.', name: 'VaultSync', level: 900, error: e);
       if (mounted) context.go('/auth');
     } on FormatException catch (e) {
-      print('❌ BOOT: Malformed server response ($e). URL configuration might be invalid.');
+      developer.log('BOOT: Malformed server response. URL configuration might be invalid.', name: 'VaultSync', level: 1000, error: e);
       if (mounted) context.go('/setup');
     } catch (e) {
-      print('❌ BOOT: Unexpected error during startup: $e');
+      developer.log('BOOT: Unexpected error during startup', name: 'VaultSync', level: 1000, error: e);
       if (mounted) context.go('/auth');
     }
   }

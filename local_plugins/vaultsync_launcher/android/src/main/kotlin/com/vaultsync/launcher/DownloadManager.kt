@@ -10,7 +10,6 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
-import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.util.concurrent.ExecutorService
 
@@ -204,31 +203,8 @@ class DownloadManager(
             return
         }
 
-        val ringBuffer = ByteBuffer.allocate(expectedBlockSize * 2)
-        val block = ByteArray(expectedBlockSize)
-        val decryptedBuffer = ByteArray(expectedBlockSize + 32)
-        var currentIdx = 0
-        
         inputStream.use { input ->
-            val chunk = ByteArray(65536)
-            while (true) {
-                val readCount = input.read(chunk)
-                if (readCount == -1) break
-                
-                ringBuffer.put(chunk, 0, readCount)
-                ringBuffer.flip()
-                while (ringBuffer.remaining() >= expectedBlockSize) {
-                    ringBuffer.get(block, 0, expectedBlockSize)
-                    val decryptedLength = cryptoEngine.decryptBlock(block, expectedBlockSize, secretKey, decryptedBuffer)
-                    
-                    val blockIndex = if (patchIndices != null) patchIndices[currentIdx].toLong() else currentIdx.toLong()
-                    val offset = blockIndex * plainBlockSize
-                    output.position(offset)
-                    output.write(ByteBuffer.wrap(decryptedBuffer, 0, decryptedLength))
-                    currentIdx++
-                }
-                ringBuffer.compact()
-            }
+            decryptEncryptedStream(input, output, secretKey, cryptoEngine, patchIndices, fileSize)
         }
     }
 }

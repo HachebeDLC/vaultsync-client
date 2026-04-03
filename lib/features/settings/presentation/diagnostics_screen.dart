@@ -1,6 +1,7 @@
 import '../../sync/data/dart_native_crypto.dart';
-import 'dart:io';
 import 'dart:convert';
+import 'dart:developer' as developer;
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,7 +95,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       _log('🛡️ Checking Shizuku...');
       Map? shizuku;
       if (Platform.isAndroid) {
-        try { shizuku = await _platform.invokeMethod<Map>('checkShizukuStatus'); } catch (e) { print('⚠️ Diagnostics: checkShizukuStatus failed: $e'); }
+        try { shizuku = await _platform.invokeMethod<Map>('checkShizukuStatus'); } catch (e) { developer.log('Diagnostics: checkShizukuStatus failed', name: 'VaultSync', level: 900, error: e); }
       }
       
       if (shizuku != null) {

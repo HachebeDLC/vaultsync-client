@@ -30,6 +30,8 @@ void main() {
         }
       } on PlatformException catch (e) {
         print('⚠️ Skipping Platform Test: Not running on a real device/emulator. ($e)');
+      } on MissingPluginException catch (e) {
+        print('⚠️ Skipping Platform Test: No plugin implementation found. ($e)');
       }
     });
 
@@ -54,6 +56,8 @@ void main() {
         print('✅ PASSED: Native Read Bridge is binary-accurate.');
       } on PlatformException catch (e) {
         print('⚠️ Skipping Platform Test: Not running on a real device. ($e)');
+      } on MissingPluginException catch (e) {
+        print('⚠️ Skipping Platform Test: No plugin implementation found. ($e)');
       }
     });
 
@@ -71,6 +75,8 @@ void main() {
         }
       } on PlatformException catch (e) {
         print('⚠️ Skipping Platform Test: Not running on a real device. ($e)');
+      } on MissingPluginException catch (e) {
+        print('⚠️ Skipping Platform Test: No plugin implementation found. ($e)');
       }
     });
 
@@ -106,6 +112,8 @@ void main() {
         }
       } on PlatformException catch (e) {
         print('⚠️ Skipping Platform Test: Not running on a real device. ($e)');
+      } on MissingPluginException catch (e) {
+        print('⚠️ Skipping Platform Test: No plugin implementation found. ($e)');
       }
     });
   });

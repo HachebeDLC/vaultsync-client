@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,7 +45,7 @@ class SyncService {
   }
 
   Future<void> processOfflineQueue() async {
-    print('🕒 SYNC: Restoring offline queue to active status...');
+    developer.log('SYNC: Restoring offline queue to active status', name: 'VaultSync', level: 800);
     await _repository.restoreOfflineQueue();
     await triggerQueueProcessing();
   }
@@ -68,7 +69,7 @@ class SyncService {
       try { 
         shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); 
       } catch (e) { 
-        print('⚠️ SyncService: checkShizukuStatus failed: $e'); 
+        developer.log('SyncService: checkShizukuStatus failed', name: 'VaultSync', level: 900, error: e);
       }
       final bool shizukuRunning = shizukuStatus?['running'] == true;
       final bool shizukuAuthorized = shizukuStatus?['authorized'] == true;
@@ -92,7 +93,7 @@ class SyncService {
           if (path.startsWith('shizuku://')) {
             if (!shizukuRunning || !shizukuAuthorized) {
               final reason = !shizukuRunning ? 'Shizuku not running' : 'Shizuku not authorized';
-              print('⚠️ SKIPPING $systemId: $reason');
+              developer.log('SKIPPING $systemId: $reason', name: 'VaultSync', level: 900);
               _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Skipped: $reason', isError: true);
               continue;
             }
@@ -126,6 +127,7 @@ class SyncService {
       final userError = ErrorMapper.map(e);
       _ref?.read(syncLogProvider.notifier).addLog('All', userError.message, isError: true, errorTitle: userError.title);
       onError?.call(userError.toString());
+      if (userError.action == SyncAction.login) rethrow;
     } finally {
       if (isBackground) await _notificationService.clearSyncStatus();
       await _powerManager.releaseSyncLock();
@@ -141,7 +143,7 @@ class SyncService {
       try { 
         shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus'); 
       } catch (e) { 
-        print('⚠️ SyncService: checkShizukuStatus failed: $e'); 
+        developer.log('SyncService: checkShizukuStatus failed', name: 'VaultSync', level: 900, error: e);
       }
       final bool shizukuRunning = shizukuStatus?['running'] == true;
       final bool shizukuAuthorized = shizukuStatus?['authorized'] == true;
@@ -174,6 +176,7 @@ class SyncService {
       final userError = ErrorMapper.map(e);
       _ref?.read(syncLogProvider.notifier).addLog(systemId, userError.message, isError: true, errorTitle: userError.title);
       onError?.call(userError.toString());
+      if (userError.action == SyncAction.login) rethrow;
     } finally {
       if (isBackground) await _notificationService.clearSyncStatus();
       await _powerManager.releaseSyncLock();

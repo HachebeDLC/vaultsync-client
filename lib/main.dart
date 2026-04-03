@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,7 +28,7 @@ import 'core/utils/offline_banner.dart';
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
-    print("🕒 WORKER: Executing background task: $task");
+    developer.log('WORKER: Executing background task: $task', name: 'VaultSync', level: 800);
     
     // Initialize a lightweight container for background sync.
     // We override essential providers to avoid instantiating the full UI-heavy graph.
@@ -42,9 +43,15 @@ void callbackDispatcher() {
     try {
       final apiClient = container.read(apiClientProvider);
 
+      // Initialize the logout callback so if we hit a 401 we can stop the madness
+      apiClient.setForceLogoutCallback(() async {
+        developer.log('WORKER: Force Logout triggered in background. Cancelling all future tasks.', name: 'VaultSync', level: 1000);
+        await Workmanager().cancelAll();
+      });
+
       // 1. Check if server is even configured
       if (!await apiClient.isConfigured()) {
-        print("🕒 WORKER: Server not configured. Skipping background sync.");
+        developer.log('WORKER: Server not configured. Skipping background sync.', name: 'VaultSync', level: 800);
         // We don't necessarily cancelAll here as the user might be mid-setup, 
         // but we return true to stop this specific execution.
         return true;
@@ -55,7 +62,7 @@ void callbackDispatcher() {
       
       // If we've lost our session or logged out, stop the background worker permanently
       if (token == null || token.isEmpty) {
-        print("🕒 WORKER: No auth token found. User is logged out. Cancelling background tasks.");
+        developer.log('WORKER: No auth token found. User is logged out. Cancelling background tasks.', name: 'VaultSync', level: 900);
         await Workmanager().cancelAll();
         return true; 
       }
@@ -66,14 +73,18 @@ void callbackDispatcher() {
       await syncService.runSync(
         fastSync: true,
         isBackground: true,
-        onProgress: (msg) => print("🕒 WORKER: $msg"),
+        onProgress: (msg) => developer.log('WORKER: $msg', name: 'VaultSync', level: 800),
       );
       
       // Wait for any final log writes to complete
       await Future.delayed(const Duration(seconds: 1));
       return true;
     } catch (e) {
-      print("❌ WORKER FAILED: $e");
+      developer.log('WORKER FAILED', name: 'VaultSync', level: 1000, error: e);
+      if (e is ApiException && (e.statusCode == 401 || e.statusCode == 403)) {
+        developer.log('WORKER: Auth failed permanently. Cancelling background tasks.', name: 'VaultSync', level: 1000);
+        await Workmanager().cancelAll();
+      }
       return false;
     } finally {
       container.dispose();
@@ -116,9 +127,9 @@ Categories=Utility;Game;
     
     await desktopFile.writeAsString(content);
     await Process.run('chmod', ['+x', desktopFile.path]);
-    print('✅ Installed Linux desktop shortcut at ${desktopFile.path}');
+    developer.log('Installed Linux desktop shortcut at ${desktopFile.path}', name: 'VaultSync', level: 800);
   } catch (e) {
-    print('⚠️ Failed to install Linux shortcut: $e');
+    developer.log('Failed to install Linux shortcut', name: 'VaultSync', level: 900, error: e);
   }
 }
 

@@ -66,11 +66,11 @@ class CryptoEngine {
     }
 
     private val encryptCipherThreadLocal = object : ThreadLocal<Cipher>() {
-        override fun initialValue() = Cipher.getInstance("AES/CBC/PKCS7Padding")
+        override fun initialValue() = Cipher.getInstance("AES/CBC/PKCS5Padding")
     }
 
     private val decryptCipherThreadLocal = object : ThreadLocal<Cipher>() {
-        override fun initialValue() = Cipher.getInstance("AES/CBC/PKCS7Padding")
+        override fun initialValue() = Cipher.getInstance("AES/CBC/PKCS5Padding")
     }
 
     /**

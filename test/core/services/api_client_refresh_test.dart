@@ -57,7 +57,7 @@ void main() {
     });
 
     when(() => mockClient.post(
-      Uri.parse('http://localhost:5436/api/v1/auth/refresh'),
+      Uri.parse('http://localhost:5436/refresh'),
       headers: any(named: 'headers'),
       body: any(named: 'body'),
     )).thenAnswer((_) async => http.Response(json.encode({'token': 'new_access_token'}), 200));
@@ -69,7 +69,7 @@ void main() {
     expect(callCount, 2);
     
     verify(() => mockClient.post(
-      Uri.parse('http://localhost:5436/api/v1/auth/refresh'),
+      Uri.parse('http://localhost:5436/refresh'),
       headers: any(named: 'headers'),
       body: any(named: 'body'),
     )).called(1);
@@ -82,7 +82,7 @@ void main() {
     )).thenAnswer((_) async => http.Response('Unauthorized', 401));
 
     when(() => mockClient.post(
-      Uri.parse('http://localhost:5436/api/v1/auth/refresh'),
+      Uri.parse('http://localhost:5436/refresh'),
       headers: any(named: 'headers'),
       body: any(named: 'body'),
     )).thenAnswer((_) async => http.Response('Refresh token expired', 401));
@@ -111,7 +111,7 @@ void main() {
     });
 
     when(() => mockClient.post(
-      Uri.parse('http://localhost:5436/api/v1/auth/refresh'),
+      Uri.parse('http://localhost:5436/refresh'),
       headers: any(named: 'headers'),
       body: any(named: 'body'),
     )).thenAnswer((_) async {

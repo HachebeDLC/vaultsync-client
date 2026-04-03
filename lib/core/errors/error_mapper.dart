@@ -23,8 +23,19 @@ class UserFacingError {
 
 class ErrorMapper {
   static UserFacingError map(dynamic error) {
-    if (error is ApiException) {
-      if (error.statusCode == 401 || error.statusCode == 403) {
+    final errStr = error.toString();
+    
+    if (error is ApiException || errStr.contains('HTTP 401') || errStr.contains('HTTP 403')) {
+      int statusCode = 0;
+      if (error is ApiException) {
+        statusCode = error.statusCode;
+      } else if (errStr.contains('HTTP 401')) {
+        statusCode = 401;
+      } else if (errStr.contains('HTTP 403')) {
+        statusCode = 403;
+      }
+
+      if (statusCode == 401 || statusCode == 403) {
         return UserFacingError(
           title: 'Session Expired',
           message: 'Your login session has expired. Please log in again.',
@@ -32,9 +43,10 @@ class ErrorMapper {
           originalError: error,
         );
       }
+      
       return UserFacingError(
         title: 'Server Error',
-        message: 'The server returned an error (${error.statusCode}). Please try again later.',
+        message: 'The server returned an error ($statusCode). Please try again later.',
         originalError: error,
       );
     }
@@ -59,8 +71,8 @@ class ErrorMapper {
       }
     }
 
-    final errStr = error.toString().toLowerCase();
-    if (errStr.contains('shizuku not running') || errStr.contains('shizuku not authorized')) {
+    final lowerErr = errStr.toLowerCase();
+    if (lowerErr.contains('shizuku not running') || lowerErr.contains('shizuku not authorized')) {
       return UserFacingError(
         title: 'Shizuku Required',
         message: 'Shizuku is not running or authorized. It is required to access restricted system folders.',
@@ -69,7 +81,7 @@ class ErrorMapper {
       );
     }
 
-    if (errStr.contains('permission denied') || errStr.contains('saf permission')) {
+    if (lowerErr.contains('permission denied') || lowerErr.contains('saf permission')) {
        return UserFacingError(
         title: 'Permission Denied',
         message: 'VaultSync does not have permission to access this folder. Please re-select it in Settings.',

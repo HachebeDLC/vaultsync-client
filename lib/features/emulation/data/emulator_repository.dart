@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/emulator_config.dart';
@@ -10,18 +11,18 @@ final emulatorRepositoryProvider = Provider<EmulatorRepository>((ref) {
 class EmulatorRepository {
   Future<List<EmulatorConfig>> loadSystems() async {
     try {
-      print('Loading systems from AssetManifest...');
+      developer.log('Loading systems from AssetManifest...', name: 'VaultSync', level: 800);
       final AssetManifest manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
       final allAssets = manifest.listAssets();
-      print('Total assets in manifest: ${allAssets.length}');
+      developer.log('Total assets in manifest: ${allAssets.length}', name: 'VaultSync', level: 800);
       
       final systemFiles = allAssets
           .where((String key) => key.contains('assets/systems/') && key.endsWith('.json'))
           .toList();
 
-      print('Found ${systemFiles.length} system files in manifest');
+      developer.log('Found ${systemFiles.length} system files in manifest', name: 'VaultSync', level: 800);
       if (systemFiles.isEmpty) {
-        print('Sample asset keys: ${allAssets.take(10).join(', ')}');
+        developer.log('Sample asset keys: ${allAssets.take(10).join(', ')}', name: 'VaultSync', level: 800);
       }
 
       List<EmulatorConfig> systems = [];
@@ -31,22 +32,22 @@ class EmulatorRepository {
           final Map<String, dynamic> jsonMap = json.decode(jsonString);
           systems.add(EmulatorConfig.fromJson(jsonMap));
         } catch (e) {
-          print('Error loading system file $file: $e');
+          developer.log('Error loading system file $file', name: 'VaultSync', level: 900, error: e);
         }
       }
       return systems;
     } catch (e) {
-      print('Error loading AssetManifest via new API: $e');
+      developer.log('Error loading AssetManifest via new API', name: 'VaultSync', level: 900, error: e);
       // Fallback for older Flutter versions
       try {
-        print('Trying fallback manifest loading...');
+        developer.log('Trying fallback manifest loading...', name: 'VaultSync', level: 800);
         final manifestContent = await rootBundle.loadString('AssetManifest.json');
         final Map<String, dynamic> manifest = json.decode(manifestContent);
         final systemFiles = manifest.keys
             .where((String key) => key.contains('assets/systems/') && key.endsWith('.json'))
             .toList();
         
-        print('Found ${systemFiles.length} system files in fallback manifest');
+        developer.log('Found ${systemFiles.length} system files in fallback manifest', name: 'VaultSync', level: 800);
 
         List<EmulatorConfig> systems = [];
         for (final file in systemFiles) {
@@ -56,7 +57,7 @@ class EmulatorRepository {
         }
         return systems;
       } catch (e2) {
-        print('Fallback Error loading AssetManifest.json: $e2');
+        developer.log('Fallback Error loading AssetManifest.json', name: 'VaultSync', level: 900, error: e2);
         return [];
       }
     }

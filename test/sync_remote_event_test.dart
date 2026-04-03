@@ -2,6 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vaultsync_client/features/sync/data/sync_repository.dart';
+import 'package:vaultsync_client/features/sync/data/switch_profile_resolver.dart';
+import 'package:vaultsync_client/features/sync/data/sync_diff_service.dart';
+import 'package:vaultsync_client/features/sync/data/sync_job_queue.dart';
 import 'package:vaultsync_client/features/sync/services/system_path_service.dart';
 import 'package:vaultsync_client/features/sync/data/file_cache.dart';
 import 'package:vaultsync_client/core/services/api_client.dart';
@@ -21,6 +24,9 @@ class MockSyncPathResolver extends Mock implements SyncPathResolver {}
 class MockSyncStateDatabase extends Mock implements SyncStateDatabase {}
 class MockFileHashService extends Mock implements FileHashService {}
 class MockConflictResolver extends Mock implements ConflictResolver {}
+class MockSwitchProfileResolver extends Mock implements SwitchProfileResolver {}
+class MockSyncDiffService extends Mock implements SyncDiffService {}
+class MockSyncJobQueue extends Mock implements SyncJobQueue {}
 
 // Subclass to mock internal protected method
 class TestSyncRepository extends SyncRepository {
@@ -35,6 +41,10 @@ class TestSyncRepository extends SyncRepository {
     super.syncStateDb,
     super.hashService,
     super.conflictResolver,
+    super.switchResolver,
+    super.diffService,
+    super.jobQueue,
+    super.ref,
   );
 
   @override
@@ -54,6 +64,9 @@ void main() {
   late MockSyncStateDatabase mockSyncStateDb;
   late MockFileHashService mockFileHashService;
   late MockConflictResolver mockConflictResolver;
+  late MockSwitchProfileResolver mockSwitchResolver;
+  late MockSyncDiffService mockSyncDiffService;
+  late MockSyncJobQueue mockSyncJobQueue;
 
   setUp(() {
     mockApiClient = MockApiClient();
@@ -64,6 +77,9 @@ void main() {
     mockSyncStateDb = MockSyncStateDatabase();
     mockFileHashService = MockFileHashService();
     mockConflictResolver = MockConflictResolver();
+    mockSwitchResolver = MockSwitchProfileResolver();
+    mockSyncDiffService = MockSyncDiffService();
+    mockSyncJobQueue = MockSyncJobQueue();
     
     repository = TestSyncRepository(
       mockApiClient, 
@@ -74,6 +90,10 @@ void main() {
       mockSyncStateDb,
       mockFileHashService,
       mockConflictResolver,
+      mockSwitchResolver,
+      mockSyncDiffService,
+      mockSyncJobQueue,
+      null,
     );
     
     registerFallbackValue(<String, dynamic>{});

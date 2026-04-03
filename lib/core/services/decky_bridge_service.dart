@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/sync/services/sync_service.dart';
@@ -21,7 +22,7 @@ class DeckyBridgeService {
   Future<void> start({int port = 5437}) async {
     try {
       _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
-      print('🚀 DECKY BRIDGE: Server running on ${_server!.address.address}:${_server!.port}');
+      developer.log('DECKY BRIDGE: Server running on ${_server!.address.address}:${_server!.port}', name: 'VaultSync', level: 800);
       
       _server!.listen((HttpRequest request) async {
         final path = request.uri.path;
@@ -32,6 +33,8 @@ class DeckyBridgeService {
             await _handleStatus(request);
           } else if (path == '/systems' && method == 'GET') {
             await _handleSystems(request);
+          } else if (path == '/conflicts' && method == 'GET') {
+            await _handleConflicts(request);
           } else if (path == '/sync' && method == 'POST') {
             await _handleGlobalSync(request);
           } else if (path.startsWith('/sync/') && method == 'POST') {
@@ -51,7 +54,7 @@ class DeckyBridgeService {
         }
       });
     } catch (e) {
-      print('❌ DECKY BRIDGE FAILED: $e');
+      developer.log('DECKY BRIDGE FAILED', name: 'VaultSync', level: 1000, error: e);
     }
   }
 
@@ -74,6 +77,16 @@ class DeckyBridgeService {
     final paths = await pathService.getAllSystemPaths();
     final systems = paths.keys.toList();
     _sendJsonResponse(request, {'systems': systems});
+  }
+
+  Future<void> _handleConflicts(HttpRequest request) async {
+    try {
+      final syncService = _ref.read(syncServiceProvider);
+      final conflicts = await syncService.getConflicts();
+      _sendJsonResponse(request, {'conflicts': conflicts});
+    } catch (e) {
+      _sendJsonResponse(request, {'error': e.toString()}, statusCode: HttpStatus.internalServerError);
+    }
   }
 
   Future<void> _handleGlobalSync(HttpRequest request) async {
@@ -114,7 +127,7 @@ class DeckyBridgeService {
         final path = await pathService.getEffectivePath(systemId);
         await syncService.syncSpecificSystem(systemId, path, onProgress: (msg) => _lastProgress = msg);
       } else {
-        await syncService.runSync(onProgress: (msg) => _lastProgress = msg);
+        await syncService.runSync(onProgress: (msg) => _lastProgress = msg, ignoreConnectivity: true);
       }
       _lastSyncTime = DateTime.now();
       _lastProgress = 'Sync complete';
@@ -128,6 +141,6 @@ class DeckyBridgeService {
   Future<void> stop() async {
     await _server?.close(force: true);
     _server = null;
-    print('🛑 DECKY BRIDGE: Server stopped');
+    developer.log('DECKY BRIDGE: Server stopped', name: 'VaultSync', level: 800);
   }
 }

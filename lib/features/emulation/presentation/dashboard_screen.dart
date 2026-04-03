@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'dart:developer' as developer;
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -97,7 +98,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         if (decoded.contains('primary:')) return '/storage/emulated/0/${decoded.split('primary:').last}';
         return decoded.split('/').last;
       } catch (e) {
-        print('⚠️ UI: Path formatting failed: $e');
+        developer.log('UI: Path formatting failed', name: 'VaultSync', level: 900, error: e);
       }
     }
     return path;

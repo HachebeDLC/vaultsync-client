@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
@@ -29,7 +30,7 @@ class SyncStateDatabase {
 
     return await openDatabase(
       dbPath,
-      version: 2,
+      version: 3,
       onConfigure: (db) async {
         await db.rawQuery('PRAGMA journal_mode = WAL');
         await db.execute('PRAGMA synchronous = NORMAL');
@@ -51,10 +52,28 @@ class SyncStateDatabase {
           )
         ''');
         await db.execute('CREATE INDEX idx_sync_status ON sync_state (status)');
+        await db.execute('''
+          CREATE TABLE sync_block_hashes(
+            path TEXT NOT NULL,
+            block_hash TEXT NOT NULL,
+            PRIMARY KEY (path, block_hash)
+          )
+        ''');
+        await db.execute('CREATE INDEX idx_block_hash ON sync_block_hashes (block_hash)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute('ALTER TABLE sync_state ADD COLUMN block_hashes TEXT');
+        }
+        if (oldVersion < 3) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS sync_block_hashes(
+              path TEXT NOT NULL,
+              block_hash TEXT NOT NULL,
+              PRIMARY KEY (path, block_hash)
+            )
+          ''');
+          await db.execute('CREATE INDEX IF NOT EXISTS idx_block_hash ON sync_block_hashes (block_hash)');
         }
       },
     );
@@ -62,23 +81,37 @@ class SyncStateDatabase {
 
   Future<void> upsertState(String path, int size, int lastModified, String hash, String status, {String? systemId, String? remotePath, String? relPath, String? blockHashes}) async {
     final db = await database;
-    await db.insert(
-      'sync_state',
-      {
-        'path': path,
-        'size': size,
-        'last_modified': lastModified,
-        'hash': hash,
-        'status': status,
-        'system_id': systemId,
-        'remote_path': remotePath,
-        'rel_path': relPath,
-        'block_hashes': blockHashes,
-        'retry_count': 0,
-        'error': null,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.transaction((txn) async {
+      await txn.insert(
+        'sync_state',
+        {
+          'path': path,
+          'size': size,
+          'last_modified': lastModified,
+          'hash': hash,
+          'status': status,
+          'system_id': systemId,
+          'remote_path': remotePath,
+          'rel_path': relPath,
+          'block_hashes': blockHashes,
+          'retry_count': 0,
+          'error': null,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      await txn.delete('sync_block_hashes', where: 'path = ?', whereArgs: [path]);
+      if (blockHashes != null && blockHashes.isNotEmpty) {
+        final List<String> hashes = List<String>.from(jsonDecode(blockHashes));
+        for (final bh in hashes) {
+          await txn.insert(
+            'sync_block_hashes',
+            {'path': path, 'block_hash': bh},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+        }
+      }
+    });
   }
 
   Future<Map<String, dynamic>?> getState(String path) async {
@@ -142,18 +175,31 @@ class SyncStateDatabase {
     );
   }
 
+  Future<void> requeueJob(String path, String status, int retryCount, {String? error}) async {
+    final db = await database;
+    await db.update(
+      'sync_state',
+      {'status': status, 'retry_count': retryCount, 'error': error},
+      where: 'path = ?',
+      whereArgs: [path],
+    );
+  }
+
   Future<void> deleteState(String path) async {
     final db = await database;
-    await db.delete('sync_state', where: 'path = ?', whereArgs: [path]);
+    await db.transaction((txn) async {
+      await txn.delete('sync_block_hashes', where: 'path = ?', whereArgs: [path]);
+      await txn.delete('sync_state', where: 'path = ?', whereArgs: [path]);
+    });
   }
 
   Future<List<Map<String, dynamic>>> findEntriesByBlockHash(String blockHash) async {
     final db = await database;
-    // Note: Simple JSON substring search. Efficient enough for 1MB block hashes.
-    return await db.query(
-      'sync_state',
-      where: 'block_hashes LIKE ?',
-      whereArgs: ['%$blockHash%'],
+    return await db.rawQuery(
+      'SELECT s.* FROM sync_state s '
+      'INNER JOIN sync_block_hashes b ON s.path = b.path '
+      'WHERE b.block_hash = ?',
+      [blockHash],
     );
   }
 }

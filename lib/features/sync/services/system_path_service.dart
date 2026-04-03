@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/services.dart';
@@ -37,7 +38,7 @@ class SystemPathService {
       final jsonStr = await rootBundle.loadString('assets/config/path_config.json');
       _config = json.decode(jsonStr);
     } catch (e) {
-      print('⚠️ CONFIG: Failed to load path_config.json: $e');
+      developer.log('CONFIG: Failed to load path_config.json', name: 'VaultSync', level: 900, error: e);
       _config = {};
     }
   }
@@ -113,7 +114,7 @@ class SystemPathService {
       }
 
       if (systemId != null && !validIds.contains(systemId.toLowerCase())) {
-        print('🗑️ PURGE: Removing orphaned config for unknown system: $systemId');
+        developer.log('PURGE: Removing orphaned config for unknown system: $systemId', name: 'VaultSync', level: 800);
         
         // Get associated path value BEFORE removing the key to clean up SAF permissions
         final pathValue = prefs.getString(key);
@@ -129,7 +130,7 @@ class SystemPathService {
 
     if (purgedCount > 0) {
       _cachedPaths = null;
-      print('🗑️ PURGE: Successfully cleaned up $purgedCount orphaned settings.');
+      developer.log('PURGE: Cleaned up $purgedCount orphaned settings', name: 'VaultSync', level: 800);
     }
   }
 
@@ -145,7 +146,7 @@ class SystemPathService {
       // 1. Force 3DS into the cleaner 'saves' folder if it's pointing to the root
       // Only for POSIX paths to avoid corrupting SAF URIs.
       if ((sid == '3ds' || sid == 'azahar') && !path.contains('content://') && (path.endsWith('Azahar') || path.endsWith('Azahar/'))) {
-        print('🛠️ PATH: Auto-correcting 3DS path to include /saves');
+        developer.log('PATH: Auto-correcting 3DS path to include /saves', name: 'VaultSync', level: 800);
         path = p.join(path, 'saves');
         await setSystemPath(systemId, path);
       }
@@ -154,7 +155,7 @@ class SystemPathService {
       // so that sstates are also included in the scan.
       if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2') {
         if (path.endsWith('/memcards') || path.endsWith('\\memcards')) {
-          print('🛠️ PATH: Auto-migrating PS2 path from /memcards to /files root');
+          developer.log('PATH: Auto-migrating PS2 path from /memcards to /files root', name: 'VaultSync', level: 800);
           path = path.substring(0, path.lastIndexOf(path.contains('\\') ? '\\memcards' : '/memcards'));
           await setSystemPath(systemId, path);
         }
@@ -163,11 +164,11 @@ class SystemPathService {
       // 3. Pull Switch/Eden back to the 'files' root if it's too deep
       if (sid == 'switch' || sid == 'eden') {
         if (path.endsWith('nand/user/save')) {
-           print('🛠️ PATH: Auto-migrating Switch POSIX path from /save to /files');
+           developer.log('PATH: Auto-migrating Switch POSIX path from /save to /files', name: 'VaultSync', level: 800);
            path = path.substring(0, path.lastIndexOf('/nand/user/save'));
            await setSystemPath(systemId, path);
         } else if (path.contains('nand%2Fuser%2Fsave')) {
-           print('🛠️ PATH: Auto-migrating Switch SAF path from /save to /files');
+           developer.log('PATH: Auto-migrating Switch SAF path from /save to /files', name: 'VaultSync', level: 800);
            path = path.split('nand%2Fuser%2Fsave').first;
            if (path.endsWith('%2F')) path = path.substring(0, path.length - 3);
            await setSystemPath(systemId, path);
@@ -276,7 +277,7 @@ class SystemPathService {
     }
     if (emuDeckSaves != null) {
       await prefs.setString('emudeck_saves_path', emuDeckSaves);
-      print('🛠️ EMUDECK: Detected saves at $emuDeckSaves');
+      developer.log('EMUDECK: Detected saves at $emuDeckSaves', name: 'VaultSync', level: 800);
     } else {
       await prefs.remove('emudeck_saves_path');
     }
@@ -351,13 +352,13 @@ class SystemPathService {
           if (fileName.startsWith('.')) continue;
           final ext = fileName.contains('.') ? fileName.split('.').last : '';
           if (ext.isNotEmpty && extSet.contains(ext)) {
-            print("🎮 SCAN: Found valid ROM: $fileName");
+            developer.log('SCAN: Found valid ROM: $fileName', name: 'VaultSync', level: 800);
             return true;
           }
         }
       }
     } catch (e) {
-      print('⚠️ SCAN: Error checking ROMs in ${dir.path}: $e');
+      developer.log('SCAN: Error checking ROMs in ${dir.path}', name: 'VaultSync', level: 900, error: e);
     }
     return false;
   }
@@ -378,7 +379,7 @@ class SystemPathService {
           if (name.toLowerCase() == target.toLowerCase()) return entity.path;
         }
       } catch (e) {
-        print('⚠️ EMUDECK: Error finding folder $target in $parent: $e');
+        developer.log('EMUDECK: Error finding folder $target in $parent', name: 'VaultSync', level: 900, error: e);
       }
       // Fallback: return fabricated path if not found, preserving the requested casing
       return "$parent/$target";
@@ -425,7 +426,7 @@ class SystemPathService {
     if (rawPath != null && emulatorId != null && Platform.isAndroid) {
       if (RegExp(r'\.ra\d*\.').hasMatch(emulatorId)) {
         if (rawPath.contains('com.mgba.android') || rawPath.contains('com.github.stenzek.duckstation')) {
-          print('🛠️ PATH: Migrating legacy standalone path for RA core $emulatorId');
+          developer.log('PATH: Migrating legacy standalone path for RA core $emulatorId', name: 'VaultSync', level: 800);
           rawPath = '/storage/emulated/0/RetroArch/saves';
           // Persist the fix so we don't keep re-migrating
           await setSystemPath(systemId, rawPath);
@@ -447,19 +448,19 @@ class SystemPathService {
 
     if (posixPath.toLowerCase().contains('android/data')) {
        if (rawPath.startsWith('content://')) {
-          print('🛠️ PATH: Using SAF effective path for $systemId: $rawPath');
+          developer.log('PATH: Using SAF effective path for $systemId: $rawPath', name: 'VaultSync', level: 800);
           return rawPath;
        }
        final persistedUri = prefs.getString("saf_uri_$posixPath");
        if (persistedUri != null) {
-          print('🛠️ PATH: Using persisted SAF URI for $systemId: $persistedUri');
+          developer.log('PATH: Using persisted SAF URI for $systemId: $persistedUri', name: 'VaultSync', level: 800);
           return persistedUri;
        }
-       print('🛠️ PATH: Falling back to POSIX for $systemId: $posixPath');
+       developer.log('PATH: Falling back to POSIX for $systemId: $posixPath', name: 'VaultSync', level: 800);
        return rawPath; 
     }
     
-    print('🛠️ PATH: Using POSIX effective path for $systemId: $posixPath');
+    developer.log('PATH: Using POSIX effective path for $systemId: $posixPath', name: 'VaultSync', level: 800);
     return posixPath;
   }
 
@@ -470,7 +471,7 @@ class SystemPathService {
       String rawPath = _convertToPosix(inputPath);
       final path = rawPath.endsWith('/') ? rawPath.substring(0, rawPath.length - 1) : rawPath;
       final dir = Directory(path);
-      print('🔍 SCAN: Starting Library Scan for path: "$path"');
+      developer.log('SCAN: Starting Library Scan for path: "$path"', name: 'VaultSync', level: 800);
       if (!await dir.exists()) return [];
       Directory romsDir = dir;
       Directory? emuDeckSaves;
@@ -510,7 +511,7 @@ class SystemPathService {
           }
         }
       }
-    } catch (e) { print('⚠️ SCAN: Library scan failed: $e'); }
+    } catch (e) { developer.log('SCAN: Library scan failed', name: 'VaultSync', level: 900, error: e); }
     await logConfiguredPaths();
     return results;
   }
@@ -518,16 +519,12 @@ class SystemPathService {
   Future<void> logConfiguredPaths() async {
     final paths = await getAllSystemPaths();
     final prefs = await SharedPreferences.getInstance();
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('🛠️ VAULTSYNC CONFIGURATION DUMP');
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    final buf = StringBuffer('VAULTSYNC CONFIGURATION DUMP\n');
     for (final entry in paths.entries) {
       final emu = prefs.getString("system_emulator_${entry.key}");
-      print('👾 ${entry.key.toUpperCase()}:');
-      print('   Path: ${entry.value}');
-      print('   Core: ${emu ?? "NOT SET"}');
+      buf.writeln('  ${entry.key.toUpperCase()}: path=${entry.value}, core=${emu ?? "NOT SET"}');
     }
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    developer.log(buf.toString().trimRight(), name: 'VaultSync', level: 800);
   }
 
   Future<bool> mkdirs(String path) async {
@@ -538,7 +535,7 @@ class SystemPathService {
     try {
       return await _platform.invokeMethod<bool>('mkdirs', {'path': path}) ?? false;
     } catch (e) {
-      print('⚠️ PATH: mkdirs failed for $path: $e');
+      developer.log('PATH: mkdirs failed for $path', name: 'VaultSync', level: 900, error: e);
       return false;
     }
   }
@@ -556,14 +553,14 @@ class SystemPathService {
       // 1. Try to read the real ID from Eden's profiles.dat first
       final edenId = await _platform.invokeMethod<String?>('readEdenUserId', {'uri': effectivePath});
       if (edenId != null) {
-        print('🎮 EDEN: Discovered real User ID via profiles.dat: $edenId');
+        developer.log('EDEN: Discovered real User ID via profiles.dat: $edenId', name: 'VaultSync', level: 800);
         return edenId;
       }
 
       // 2. Fallback to general Switch profile discovery
       return await _platform.invokeMethod<String?>('findSwitchProfileId', {'uri': effectivePath});
     } catch (e) {
-      print('⚠️ PROBE: Native profile discovery failed: $e');
+      developer.log('PROBE: Native profile discovery failed', name: 'VaultSync', level: 900, error: e);
     }
 
     // Fallback for simple non-restricted POSIX paths (SD card, etc)

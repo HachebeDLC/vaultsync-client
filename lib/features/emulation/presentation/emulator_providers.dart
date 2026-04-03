@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/emulator_repository.dart';
@@ -112,7 +113,7 @@ final systemsProvider = FutureProvider<List<EmulatorConfig>>((ref) async {
       }
       
       if (isInstalled) {
-        print('✅ DETECTED: ${systemConfig.system.id} -> ${emulator.name} ($packageId)');
+        developer.log('DETECTED: ${systemConfig.system.id} -> ${emulator.name} ($packageId)', name: 'VaultSync', level: 800);
       }
       
       detectedEmulators.add(emulator.copyWith(isInstalled: isInstalled));

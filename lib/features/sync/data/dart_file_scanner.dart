@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
 /// Utility for recursively scanning the local filesystem for emulator-specific save files.
@@ -97,7 +98,7 @@ class DartFileScanner {
           }
         }
       } catch (e) {
-        print('⚠️ SCAN: Skipped ${dir.path} due to error: $e');
+        developer.log('SCAN: Skipped ${dir.path} due to error', name: 'VaultSync', level: 900, error: e);
       }
     }
 

@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:typed_data';
 import 'dart:isolate';
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,29 +31,30 @@ class ApiClient {
     ),
   );
   
-  String? _cachedBaseUrl;
   String? _cachedToken;
   String? _cachedRefreshToken;
-  bool _isRefreshing = false;
+  Completer<bool>? _refreshCompleter;
+  Function()? _onForceLogout;
+
+  void setForceLogoutCallback(Function() callback) {
+    _onForceLogout = callback;
+  }
 
   Future<String?> getBaseUrl() async {
-    if (_cachedBaseUrl != null) return _cachedBaseUrl;
     final prefs = await SharedPreferences.getInstance();
-    _cachedBaseUrl = prefs.getString('api_base_url');
-    return _cachedBaseUrl;
+    return prefs.getString('api_base_url');
   }
 
   Future<void> setBaseUrl(String url) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('api_base_url', url);
-    _cachedBaseUrl = url;
   }
 
   Future<String?> _secureRead(String key) async {
     try {
       return await _secureStorage.read(key: key);
     } on PlatformException catch (e) {
-      print('⚠️ SECURE STORAGE FAILED: ${e.code} - ${e.message}. Falling back to SharedPreferences for $key.');
+      developer.log('SECURE STORAGE FAILED: ${e.code} - ${e.message}. Falling back to SharedPreferences for $key.', name: 'VaultSync', level: 900, error: e);
       final prefs = await SharedPreferences.getInstance();
       return prefs.getString('fallback_$key');
     }
@@ -61,7 +64,7 @@ class ApiClient {
     try {
       await _secureStorage.write(key: key, value: value);
     } on PlatformException catch (e) {
-      print('⚠️ SECURE STORAGE FAILED: ${e.code} - ${e.message}. Falling back to SharedPreferences for $key.');
+      developer.log('SECURE STORAGE FAILED: ${e.code} - ${e.message}. Falling back to SharedPreferences for $key.', name: 'VaultSync', level: 900, error: e);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('fallback_$key', value);
     }
@@ -71,7 +74,7 @@ class ApiClient {
     try {
       await _secureStorage.delete(key: key);
     } on PlatformException catch (e) {
-      print('⚠️ SECURE STORAGE FAILED: ${e.code} - ${e.message}. Falling back to SharedPreferences for $key.');
+      developer.log('SECURE STORAGE FAILED: ${e.code} - ${e.message}. Falling back to SharedPreferences for $key.', name: 'VaultSync', level: 900, error: e);
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('fallback_$key');
     }
@@ -144,13 +147,16 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> _handleResponse(http.Response response, Future<Map<String, dynamic>> Function() retry) async {
-    if (response.statusCode == 401 && !_isRefreshing) {
-      final success = await refreshAccessToken();
-      if (success) {
-        return await retry();
-      }
+    if (response.statusCode == 401) {
+      // If a refresh is already in flight, wait for it rather than throwing immediately.
+      // Without this, concurrent requests that all get 401 would skip the retry and
+      // propagate 401 errors that look like a real auth failure to the rest of the app.
+      final success = _refreshCompleter != null
+          ? await _refreshCompleter!.future
+          : await refreshAccessToken();
+      if (success) return await retry();
     }
-    
+
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw ApiException(response.statusCode, response.body.length > 100 ? response.body.substring(0, 100) : response.body);
     }
@@ -158,15 +164,22 @@ class ApiClient {
   }
 
   Future<bool> refreshAccessToken() async {
-    if (_isRefreshing) return false;
-    _isRefreshing = true;
+    if (_refreshCompleter != null) return _refreshCompleter!.future;
+    
+    _refreshCompleter = Completer<bool>();
     try {
-      print('🔐 AUTH: Attempting to refresh access token...');
+      developer.log('AUTH: Attempting to refresh access token', name: 'VaultSync', level: 800);
       final refreshToken = await getRefreshToken();
-      if (refreshToken == null) return false;
+      if (refreshToken == null) {
+        developer.log('AUTH: No refresh token found', name: 'VaultSync', level: 1000);
+        await clearToken();
+        _onForceLogout?.call();
+        _refreshCompleter!.complete(false);
+        return false;
+      }
 
       final response = await _client.post(
-        await _buildUri('/api/v1/auth/refresh'),
+        await _buildUri('/refresh'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'refresh_token': refreshToken}),
       );
@@ -174,21 +187,28 @@ class ApiClient {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         await setToken(data['token']);
-        print('✅ AUTH: Access token refreshed successfully.');
+        if (data['refresh_token'] != null) {
+          await setRefreshToken(data['refresh_token']);
+        }
+        developer.log('AUTH: Access token refreshed successfully', name: 'VaultSync', level: 800);
+        _refreshCompleter!.complete(true);
         return true;
       } else {
-        print('❌ AUTH: Refresh failed (${response.statusCode}): ${response.body}');
-        // If refresh fails, we might be permanently logged out
-        if (response.statusCode == 401) {
-           await clearToken();
+        developer.log('AUTH: Refresh failed (${response.statusCode}): ${response.body}', name: 'VaultSync', level: 1000);
+        // If refresh fails with 401 or 403, we are permanently logged out
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          await clearToken();
+          _onForceLogout?.call();
         }
+        _refreshCompleter!.complete(false);
         return false;
       }
     } catch (e) {
-      print('❌ AUTH: Refresh error: $e');
+      developer.log('AUTH: Refresh error', name: 'VaultSync', level: 1000, error: e);
+      _refreshCompleter?.complete(false);
       return false;
     } finally {
-      _isRefreshing = false;
+      _refreshCompleter = null;
     }
   }
 
@@ -242,9 +262,11 @@ class ApiClient {
       headers: await _getHeaders(includeJson: false),
       body: body,
     );
-    if (response.statusCode == 401 && !_isRefreshing) {
-       final success = await refreshAccessToken();
-       if (success) return await postRaw(endpoint, body: body);
+    if (response.statusCode == 401) {
+      final success = _refreshCompleter != null
+          ? await _refreshCompleter!.future
+          : await refreshAccessToken();
+      if (success) return await postRaw(endpoint, body: body);
     }
     return response;
   }
@@ -255,18 +277,22 @@ class ApiClient {
       headers: await _getHeaders(),
       body: json.encode(body),
     );
-    if (response.statusCode == 401 && !_isRefreshing) {
-       final success = await refreshAccessToken();
-       if (success) return await postJsonRaw(endpoint, body);
+    if (response.statusCode == 401) {
+      final success = _refreshCompleter != null
+          ? await _refreshCompleter!.future
+          : await refreshAccessToken();
+      if (success) return await postJsonRaw(endpoint, body);
     }
     return response;
   }
 
   Future<http.Response> postForm(String endpoint, Map<String, String> fields) async {
     final response = await _sendForm(endpoint, fields);
-    if (response.statusCode == 401 && !_isRefreshing) {
-       final success = await refreshAccessToken();
-       if (success) return await _sendForm(endpoint, fields);
+    if (response.statusCode == 401) {
+      final success = _refreshCompleter != null
+          ? await _refreshCompleter!.future
+          : await refreshAccessToken();
+      if (success) return await _sendForm(endpoint, fields);
     }
     return response;
   }
@@ -282,18 +308,20 @@ class ApiClient {
 
   Future<void> postMultipart(String endpoint, String filePath, String remotePath, {int? updatedAt, bool? force, String? deviceName, String? hash}) async {
     final response = await _sendMultipart(endpoint, filePath, remotePath, updatedAt: updatedAt, force: force, deviceName: deviceName, hash: hash);
-    if (response.statusCode == 401 && !_isRefreshing) {
-       final success = await refreshAccessToken();
-       if (success) {
-         final retryResp = await _sendMultipart(endpoint, filePath, remotePath, updatedAt: updatedAt, force: force, deviceName: deviceName, hash: hash);
-         if (retryResp.statusCode != 200 && retryResp.statusCode != 201) {
-            throw ApiException(retryResp.statusCode, "Multipart retry failed");
-         }
-         return;
-       }
+    if (response.statusCode == 401) {
+      final success = _refreshCompleter != null
+          ? await _refreshCompleter!.future
+          : await refreshAccessToken();
+      if (success) {
+        final retryResp = await _sendMultipart(endpoint, filePath, remotePath, updatedAt: updatedAt, force: force, deviceName: deviceName, hash: hash);
+        if (retryResp.statusCode != 200 && retryResp.statusCode != 201) {
+          throw ApiException(retryResp.statusCode, "Multipart retry failed");
+        }
+        return;
+      }
     }
     if (response.statusCode != 200 && response.statusCode != 201) {
-       throw ApiException(response.statusCode, "Multipart upload failed");
+      throw ApiException(response.statusCode, "Multipart upload failed");
     }
   }
 
@@ -328,7 +356,7 @@ class ApiClient {
     });
     
     await _secureWrite('master_key', masterKey);
-    print('🔐 AUTH: Zero-Knowledge Master Key derived via PBKDF2 (100k iterations) and secured locally.');
+    developer.log('AUTH: Zero-Knowledge Master Key derived via PBKDF2 (100k iterations) and secured locally', name: 'VaultSync', level: 800);
   }
 
   Future<String?> getEncryptionKey() async {
@@ -410,6 +438,6 @@ class ApiClient {
 
     // 4. Save locally
     await _secureWrite('master_key', masterKey);
-    print('🔐 AUTH: Master Key restored locally via Recovery Fail-Safe.');
+    developer.log('AUTH: Master Key restored locally via Recovery Fail-Safe', name: 'VaultSync', level: 800);
   }
 }

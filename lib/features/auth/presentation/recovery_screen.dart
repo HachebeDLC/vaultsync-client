@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../domain/auth_provider.dart';
 import '../domain/recovery_constants.dart';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 class RecoveryScreen extends ConsumerStatefulWidget {
   const RecoveryScreen({super.key});
@@ -50,7 +51,7 @@ class _RecoveryScreenState extends ConsumerState<RecoveryScreen> {
           final metadata = json.decode(metadataJson);
           indices = List<int>.from(metadata['q']);
         } catch (e) {
-          print('⚠️ RECOVERY: Metadata parse failed: $e');
+          developer.log('RECOVERY: Metadata parse failed', name: 'VaultSync', level: 900, error: e);
         }
       }
 

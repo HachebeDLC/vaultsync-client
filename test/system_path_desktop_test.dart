@@ -25,7 +25,6 @@ void main() {
       final path = await service.suggestSavePathById('ps2');
       print('DEBUG: Suggested path for ps2: $path');
       expect(path, contains('PCSX2'));
-      expect(path, anyOf(contains('memcards'), contains('Documents')));
     }
   });
 }

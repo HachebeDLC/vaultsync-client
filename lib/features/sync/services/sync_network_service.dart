@@ -76,12 +76,33 @@ class SyncNetworkService {
     };
 
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      await DartNativeCrypto.uploadFileNative(uploadArgs);
+      try {
+        await DartNativeCrypto.uploadFileNative(uploadArgs);
+      } catch (e) {
+        await _handleNativeError(e);
+      }
     } else {
-      await _platform.invokeMethod('uploadFileNative', uploadArgs);
+      try {
+        await _platform.invokeMethod('uploadFileNative', uploadArgs);
+      } catch (e) {
+        await _handleNativeError(e);
+      }
     }
 
     onRecordSuccess(systemId, relPath, hash);
+  }
+
+  Future<void> _handleNativeError(dynamic e) async {
+    final errStr = e.toString();
+    if (errStr.contains('HTTP 401')) {
+      // Proactively trigger refresh which will fire force-logout if it fails
+      await _apiClient.refreshAccessToken();
+      throw ApiException(401, "Session expired during native operation");
+    }
+    if (errStr.contains('HTTP 403')) {
+      throw ApiException(403, "Forbidden during native operation");
+    }
+    throw e;
   }
 
   Future<dynamic> downloadFile(
@@ -128,10 +149,18 @@ class SyncNetworkService {
     };
 
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      await DartNativeCrypto.downloadFileNative(downloadArgs);
-      return true;
+      try {
+        await DartNativeCrypto.downloadFileNative(downloadArgs);
+        return true;
+      } catch (e) {
+        await _handleNativeError(e);
+      }
     } else {
-      return await _platform.invokeMethod('downloadFileNative', downloadArgs);
+      try {
+        return await _platform.invokeMethod('downloadFileNative', downloadArgs);
+      } catch (e) {
+        await _handleNativeError(e);
+      }
     }
   }
 
@@ -158,10 +187,18 @@ class SyncNetworkService {
     };
 
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      await DartNativeCrypto.downloadFileNative(args);
-      return true;
+      try {
+        await DartNativeCrypto.downloadFileNative(args);
+        return true;
+      } catch (e) {
+        await _handleNativeError(e);
+      }
     } else {
-      return await _platform.invokeMethod('downloadFileNative', args);
+      try {
+        return await _platform.invokeMethod('downloadFileNative', args);
+      } catch (e) {
+        await _handleNativeError(e);
+      }
     }
   }
 }

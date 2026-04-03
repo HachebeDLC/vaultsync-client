@@ -23,8 +23,24 @@ class AuthNotifier extends StateNotifier<User?> {
   AuthNotifier(this._repository, this._eventService) : super(null);
   
   Future<void> init() async {
+    // Register before checkAuth so the background network call it launches
+    // can trigger force-logout if the token is already dead.
+    _repository.setForceLogoutCallback(_forceLogout);
     state = await _repository.checkAuth();
     if (state != null) _eventService.startListening();
+  }
+
+  void _forceLogout() {
+    forceLogout();
+  }
+
+  Future<void> forceLogout() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      await Workmanager().cancelAll();
+    }
+    _eventService.stopListening();
+    await _repository.clearLocalAuth();
+    state = null;
   }
 
   Future<bool> login(String email, String password) async {

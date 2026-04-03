@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import '../../../core/services/api_client.dart';
 
 /// Handles user authentication, registration, and master key management.
@@ -30,7 +31,7 @@ class AuthRepository {
       }
       return null;
     } catch (e) {
-      print('Login error: $e');
+      developer.log('Login error', name: 'VaultSync', level: 1000, error: e);
       return null;
     }
   }
@@ -60,13 +61,25 @@ class AuthRepository {
       }
       return null;
     } catch (e) {
-      print('Register error: $e');
+      developer.log('Register error', name: 'VaultSync', level: 1000, error: e);
       return null;
     }
   }
 
+  /// Registers a callback that is invoked when the server invalidates the session
+  /// (e.g. refresh token rejected with 401). Allows the auth layer to react
+  /// without ApiClient needing to know about Riverpod or navigation.
+  void setForceLogoutCallback(Function() callback) {
+    _apiClient.setForceLogoutCallback(callback);
+  }
+
   /// Wipes the local session token and logs out the user.
   Future<void> logout() async {
+    await _apiClient.clearToken();
+  }
+
+  /// Wipes local auth data without attempting to notify the server.
+  Future<void> clearLocalAuth() async {
     await _apiClient.clearToken();
   }
   
@@ -83,7 +96,7 @@ class AuthRepository {
         _apiClient.get('/auth/me').then((response) {
           _apiClient.setUserMetadata(response);
         }).catchError((e) {
-          print('Background CheckAuth failed: $e');
+          developer.log('Background CheckAuth failed', name: 'VaultSync', level: 900, error: e);
         });
         
         return User(id: cached['id'].toString(), email: cached['email']);
@@ -93,7 +106,7 @@ class AuthRepository {
       await _apiClient.setUserMetadata(response);
       return User(id: response['id'].toString(), email: response['email']);
     } catch (e) {
-      print('CheckAuth error: $e');
+      developer.log('CheckAuth error', name: 'VaultSync', level: 900, error: e);
       return null;
     }
   }

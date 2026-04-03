@@ -20,6 +20,7 @@ void main() {
   late ProviderContainer container;
 
   setUp(() {
+    HttpOverrides.global = null;
     mockSyncService = MockSyncService();
     mockPathService = MockSystemPathService();
     

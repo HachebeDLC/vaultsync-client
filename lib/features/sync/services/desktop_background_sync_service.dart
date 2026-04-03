@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/sync_provider.dart';
@@ -17,7 +18,7 @@ class DesktopBackgroundSyncService {
     if (!Platform.isWindows && !Platform.isLinux) return;
     
     stopAutoSync();
-    print('🚀 DESKTOP: Starting periodic background sync (every ${interval.inMinutes}m)');
+    developer.log('DESKTOP: Starting periodic background sync (every ${interval.inMinutes}m)', name: 'VaultSync', level: 800);
     
     _syncTimer = Timer.periodic(interval, (timer) {
       _triggerSync();
@@ -34,11 +35,11 @@ class DesktopBackgroundSyncService {
   }
 
   Future<void> _triggerSync() async {
-    print('🔄 DESKTOP: Triggering background sync...');
+    developer.log('DESKTOP: Triggering background sync...', name: 'VaultSync', level: 800);
     try {
       await _ref.read(syncProvider.notifier).sync();
     } catch (e) {
-      print('❌ DESKTOP: Background sync failed: $e');
+      developer.log('DESKTOP: Background sync failed', name: 'VaultSync', level: 1000, error: e);
     }
   }
 }

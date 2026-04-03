@@ -1,3 +1,4 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,7 +32,7 @@ class AndroidEmulatorDetector implements EmulatorDetector {
       final bool installed = await _methodChannel.invokeMethod('isPackageInstalled', {'packageName': uniqueId});
       return installed;
     } on PlatformException catch (e) {
-      print('Failed to check if emulator is installed: ${e.message}');
+      developer.log('Failed to check if emulator is installed: ${e.message}', name: 'VaultSync', level: 900, error: e);
       return false;
     }
   }

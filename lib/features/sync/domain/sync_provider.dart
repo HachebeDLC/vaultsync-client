@@ -1,7 +1,10 @@
+import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/sync_service.dart';
 import '../data/sync_repository.dart';
 import '../domain/sync_log_provider.dart';
+import '../../auth/domain/auth_provider.dart';
+import '../../../core/services/api_client_provider.dart';
 import '../../../core/errors/error_mapper.dart';
 
 final pendingOfflineJobsCountProvider = FutureProvider<int>((ref) async {
@@ -64,7 +67,7 @@ class SyncNotifier extends StateNotifier<SyncState> {
       final conflicts = await _syncService.getConflicts();
       state = state.copyWith(conflicts: conflicts);
     } catch (e) {
-      print('Error fetching conflicts: $e');
+      developer.log('Error fetching conflicts', name: 'VaultSync', level: 900, error: e);
       _addError(e, systemId: 'All');
     }
   }
@@ -75,7 +78,18 @@ class SyncNotifier extends StateNotifier<SyncState> {
     
     String? actionLabel;
     switch (userError.action) {
-      case SyncAction.login: actionLabel = 'Login'; break;
+      case SyncAction.login: 
+        actionLabel = 'Login'; 
+        // Only trigger logout if we actually lost the session permanently
+        _ref.read(apiClientProvider).getToken().then((token) {
+          if (token == null) {
+            developer.log('SYNC: Session is terminal. Force logging out.', name: 'VaultSync', level: 1000);
+            _ref.read(authProvider.notifier).forceLogout();
+          } else {
+            developer.log('SYNC: 401 occurred but token exists. Refresh likely handled it.', name: 'VaultSync', level: 800);
+          }
+        });
+        break;
       case SyncAction.openShizuku: actionLabel = 'Fix Shizuku'; break;
       case SyncAction.checkNetwork: actionLabel = 'Retry'; break;
       case SyncAction.reselectFolder: actionLabel = 'Settings'; break;
