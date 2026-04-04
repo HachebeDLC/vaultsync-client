@@ -292,7 +292,12 @@ class SyncRepository {
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
             } else {
               onProgress?.call('Queueing $relPath for patching (Cloud Newer)...');
-              await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'pending_download', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
+              // Use originalRelPath (local-relative) so the job queue passes the correct
+              // path to Kotlin's downloadFile. Using the cloud-relative relPath here
+              // would cause the file to be written to a ghost location (e.g. missing
+              // the Switch profile-ID directory).
+              final localRelPath = (localInfo['originalRelPath'] as String?) ?? relPath;
+              await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'pending_download', systemId: systemId, remotePath: remotePath, relPath: localRelPath, blockHashes: json.encode(currentBlockHashes));
             }
           }
         }
