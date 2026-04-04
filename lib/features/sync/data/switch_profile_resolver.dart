@@ -19,17 +19,33 @@ class SwitchProfileResolver {
     final probed = await _pathService.probeProfileId(effectivePath);
 
     if (probed != null) {
-      // Remove entries containing a different 32-char profile ID under the
-      // save path — those are stale/wrong folders from a previous bad sync.
+      final String requiredPrefix = 'nand/user/save/0000000000000000/$probed';
+      
+      // Filter out ANY Switch file that is not in the correct profile directory
       result = result.where((f) {
         final path = (f['relPath'] as String?) ?? '';
-        if (!path.contains('nand/user/save/0000000000000000/')) return true;
         final segments = path.split('/');
-        final zeroIdx = segments.indexOf('0000000000000000');
-        if (zeroIdx != -1 && zeroIdx + 1 < segments.length) {
-          final candidate = segments[zeroIdx + 1];
-          if (_profileRegex.hasMatch(candidate) && candidate != probed) {
+        
+        // Find if this path contains a Title ID anywhere
+        final titleIdx = segments.indexWhere((s) => RegExp(r'^0100[0-9A-Fa-f]{12}$').hasMatch(s));
+        
+        if (titleIdx != -1) {
+          // If the relative path contains 'nand/user/save', it MUST be preceded by the correct profile path.
+          // (If it doesn't contain it, it means the scanner anchored deep inside the profile already, which is fine).
+          if (path.contains('nand/user/save') && !path.contains(requiredPrefix)) {
+            print('📂 FILTER: Rejecting Switch file in wrong location: $path');
             return false;
+          }
+        }
+        
+        // Also remove other 32-char folders under the save root just in case
+        if (path.contains('nand/user/save/0000000000000000/')) {
+          final zeroIdx = segments.indexOf('0000000000000000');
+          if (zeroIdx != -1 && zeroIdx + 1 < segments.length) {
+            final candidate = segments[zeroIdx + 1];
+            if (_profileRegex.hasMatch(candidate) && candidate != probed) {
+              return false;
+            }
           }
         }
         return true;
