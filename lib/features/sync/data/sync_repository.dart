@@ -272,16 +272,20 @@ class SyncRepository {
             final String remoteHash = remoteInfo['hash'];
             final int localTs = (localInfo['lastModified'] as num).toInt();
             final int localSize = (localInfo['size'] as num).toInt();
-            if (_isJournaledSynced(prefs, systemId, relPath, remoteHash)) continue;
+            // SAF content:// URIs have unreliable lastModified on Android/data/ files —
+            // the MediaStore cursor doesn't update it when the app writes its own files.
+            // Bypass all timestamp-based early-exits and force fresh hash computation.
+            final bool isSafUri = localInfo['uri'].toString().startsWith('content://');
+            if (!isSafUri && _isJournaledSynced(prefs, systemId, relPath, remoteHash)) continue;
             final cached = await _syncStateDb.getState(localInfo['uri']);
-            if (cached != null && cached['size'] == localSize && (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) && cached['hash'] == remoteHash && cached['status'] == 'synced') {
+            if (!isSafUri && cached != null && cached['size'] == localSize && (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) && cached['hash'] == remoteHash && cached['status'] == 'synced') {
               _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
               continue;
             }
             onProgress?.call('Checking $relPath blocks...');
             final masterKey = await _getMasterKey();
             final currentBlockHashes = await _networkService.getBlockHashes(localInfo['uri'], masterKey);
-            final String localHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs);
+            final String localHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs, forceFresh: isSafUri);
             if (localHash == remoteHash) {
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'synced', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
               _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
