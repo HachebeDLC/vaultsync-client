@@ -307,6 +307,10 @@ class FileScanner(private val context: Context) {
         val combinedIgnoreSet = combinedIgnores.map { it.lowercase() }.toHashSet()
 
         val uriStr = uri.toString().lowercase()
+        // Files inside Android/data/ are app-private — MediaStore can't index them,
+        // so the SAF cursor's LAST_MODIFIED is unreliable. Only pay the Os.fstat()
+        // IPC cost for these paths; everywhere else the cursor value is trustworthy.
+        val needsAccurateMtime = uriStr.contains("android%2fdata") || uriStr.contains("android/data")
 
         val treeUri = getTreeUri(uri)
         val startDocId = getDocIdSafely(uri)
@@ -377,12 +381,15 @@ class FileScanner(private val context: Context) {
                             // SAF cursor LAST_MODIFIED is unreliable for Android/data/ files —
                             // MediaStore can't index app-private directories. Use Os.fstat() on
                             // the file descriptor to get the actual kernel mtime instead.
-                            try {
-                                context.contentResolver.openFileDescriptor(docUri, "r")?.use { pfd ->
-                                    val stat = Os.fstat(pfd.fileDescriptor)
-                                    if (stat.st_mtime > 0L) fLast = stat.st_mtime * 1000L
-                                }
-                            } catch (_: Exception) { /* fall back to cursor value */ }
+                            // Skipped for non-Android/data paths where the cursor is trustworthy.
+                            if (needsAccurateMtime) {
+                                try {
+                                    context.contentResolver.openFileDescriptor(docUri, "r")?.use { pfd ->
+                                        val stat = Os.fstat(pfd.fileDescriptor)
+                                        if (stat.st_mtime > 0L) fLast = stat.st_mtime * 1000L
+                                    }
+                                } catch (_: Exception) { /* fall back to cursor value */ }
+                            }
 
                             results.put(JSONObject().apply {
                                 put("name", name)
