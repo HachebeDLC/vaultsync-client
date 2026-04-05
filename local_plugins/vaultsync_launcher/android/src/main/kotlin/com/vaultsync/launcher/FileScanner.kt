@@ -3,6 +3,7 @@ package com.vaultsync.launcher
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.system.Os
 import androidx.documentfile.provider.DocumentFile
 import org.json.JSONArray
 import org.json.JSONObject
@@ -366,12 +367,22 @@ class FileScanner(private val context: Context) {
                         if (shouldSyncFile(sid, relPath, name)) {
                             var fSize = cursor.getLong(3)
                             var fLast = cursor.getLong(4)
-                            
+
                             if (fSize <= 0) {
                                 val df = currentLevelMap[name]
                                 fSize = df?.length() ?: 0
                                 fLast = df?.lastModified() ?: 0
                             }
+
+                            // SAF cursor LAST_MODIFIED is unreliable for Android/data/ files —
+                            // MediaStore can't index app-private directories. Use Os.fstat() on
+                            // the file descriptor to get the actual kernel mtime instead.
+                            try {
+                                context.contentResolver.openFileDescriptor(docUri, "r")?.use { pfd ->
+                                    val stat = Os.fstat(pfd.fileDescriptor)
+                                    if (stat.st_mtime > 0L) fLast = stat.st_mtime * 1000L
+                                }
+                            } catch (_: Exception) { /* fall back to cursor value */ }
 
                             results.put(JSONObject().apply {
                                 put("name", name)

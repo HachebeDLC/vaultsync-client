@@ -131,8 +131,8 @@ class SyncRepository {
 
   final Map<String, String> _pendingJournal = {};
 
-  void _recordSyncSuccess(SharedPreferences prefs, String systemId, String relPath, String hash) {
-    _pendingJournal['journal_${systemId}_$relPath'] = hash;
+  void _recordSyncSuccess(SharedPreferences prefs, String systemId, String relPath, String hash, [int? localTs]) {
+    _pendingJournal['journal_${systemId}_$relPath'] = localTs != null ? '$localTs:$hash' : hash;
   }
 
   Future<void> _commitSyncJournal(SharedPreferences prefs) async {
@@ -141,10 +141,14 @@ class SyncRepository {
     _pendingJournal.clear();
   }
 
-  bool _isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash) {
+  bool _isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash, {int? localTs}) {
     final key = 'journal_${systemId}_$relPath';
-    if (_pendingJournal.containsKey(key)) return _pendingJournal[key] == remoteHash;
-    return _conflictResolver.isJournaledSynced(prefs, systemId, relPath, remoteHash);
+    if (_pendingJournal.containsKey(key)) {
+      final stored = _pendingJournal[key]!;
+      if (localTs != null) return stored == '$localTs:$remoteHash';
+      return stored == remoteHash || stored.endsWith(':$remoteHash');
+    }
+    return _conflictResolver.isJournaledSynced(prefs, systemId, relPath, remoteHash, localTs: localTs);
   }
 
   // --- Local filesystem scan with 30s cache ---
@@ -272,23 +276,19 @@ class SyncRepository {
             final String remoteHash = remoteInfo['hash'];
             final int localTs = (localInfo['lastModified'] as num).toInt();
             final int localSize = (localInfo['size'] as num).toInt();
-            // SAF content:// URIs have unreliable lastModified on Android/data/ files —
-            // the MediaStore cursor doesn't update it when the app writes its own files.
-            // Bypass all timestamp-based early-exits and force fresh hash computation.
-            final bool isSafUri = localInfo['uri'].toString().startsWith('content://');
-            if (!isSafUri && _isJournaledSynced(prefs, systemId, relPath, remoteHash)) continue;
+            if (_isJournaledSynced(prefs, systemId, relPath, remoteHash, localTs: localTs)) continue;
             final cached = await _syncStateDb.getState(localInfo['uri']);
-            if (!isSafUri && cached != null && cached['size'] == localSize && (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) && cached['hash'] == remoteHash && cached['status'] == 'synced') {
-              _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
+            if (cached != null && cached['size'] == localSize && (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) && cached['hash'] == remoteHash && cached['status'] == 'synced') {
+              _recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
               continue;
             }
             onProgress?.call('Checking $relPath blocks...');
             final masterKey = await _getMasterKey();
             final currentBlockHashes = await _networkService.getBlockHashes(localInfo['uri'], masterKey);
-            final String localHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs, forceFresh: isSafUri);
+            final String localHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs);
             if (localHash == remoteHash) {
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'synced', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
-              _recordSyncSuccess(prefs, systemId, relPath, remoteHash);
+              _recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
               continue;
             }
             if (localTs > (remoteInfo['updated_at'] as num)) {

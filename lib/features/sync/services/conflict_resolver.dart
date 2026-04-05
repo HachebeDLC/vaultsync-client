@@ -6,9 +6,13 @@ class ConflictResolver {
 
   ConflictResolver(this._pathResolver);
 
-  bool isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash) {
+  bool isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash, {int? localTs}) {
     final key = 'journal_${systemId}_$relPath';
-    return prefs.getString(key) == remoteHash;
+    final stored = prefs.getString(key);
+    if (stored == null) return false;
+    if (localTs != null) return stored == '$localTs:$remoteHash';
+    // Legacy format (no localTs) or callers that don't provide it.
+    return stored == remoteHash || stored.endsWith(':$remoteHash');
   }
 
   Map<String, Map<String, dynamic>> processLocalFiles(String systemId, List<dynamic> localList) {
