@@ -4,6 +4,7 @@
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
+#include <cstdlib>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -54,10 +55,21 @@ static void my_application_activate(GApplication* application) {
 
   gtk_window_set_default_size(window, 1280, 720);
 
+  // Resolve icon path relative to the executable so it works regardless of CWD
+  // (e.g. when launched by Steam or a file manager in game mode).
   g_autoptr(GError) error = nullptr;
-  g_autoptr(GdkPixbuf) icon = gdk_pixbuf_new_from_file("data/flutter_assets/assets/vaultsync_icon.png", &error);
-  if (icon != nullptr) {
-    gtk_window_set_icon(window, icon);
+  char* exe_path = realpath("/proc/self/exe", nullptr);
+  if (exe_path != nullptr) {
+    gchar* exe_dir = g_path_get_dirname(exe_path);
+    gchar* icon_path = g_build_filename(exe_dir, "data", "flutter_assets",
+                                        "assets", "vaultsync_icon.png", nullptr);
+    g_autoptr(GdkPixbuf) icon = gdk_pixbuf_new_from_file(icon_path, nullptr);
+    if (icon != nullptr) {
+      gtk_window_set_icon(window, icon);
+    }
+    g_free(icon_path);
+    g_free(exe_dir);
+    free(exe_path);
   }
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
