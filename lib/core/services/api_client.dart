@@ -26,26 +26,18 @@ class ApiClient {
   
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
-  final _secureStorage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(
-      encryptedSharedPreferences: true,
-    ),
-  );
-  
-  // Track if secure storage is working. On some Linux environments (like Steam Deck Game Mode),
-  // libsecret might be unavailable or fail to unlock, causing loud errors or hangs.
-  static bool _useSecureStorage = _checkInitialStorageSafety();
+  // On Linux, libsecret (keyring/kwallet) is frequently unavailable or locked
+  // (Steam Deck game mode, minimal WMs, etc.). Never instantiate FlutterSecureStorage
+  // there so the native plugin is never invoked and libsecret is never touched.
+  static final bool _useSecureStorage = !Platform.isLinux;
 
-  static bool _checkInitialStorageSafety() {
-    // On Linux, we move to SharedPreferences as the primary storage tradeoff.
-    // libsecret (keyring/kwallet) is frequently unavailable or locked on many Linux 
-    // environments (Steam Deck, minimal WMs, etc.), causing crashes or loud errors.
-    if (Platform.isLinux) {
-      developer.log('SECURE STORAGE: Linux detected. Using SharedPreferences as the reliable storage tradeoff.', name: 'VaultSync', level: 800);
-      return false;
-    }
-    return true;
-  }
+  final FlutterSecureStorage? _secureStorage = Platform.isLinux
+      ? null
+      : const FlutterSecureStorage(
+          aOptions: AndroidOptions(
+            encryptedSharedPreferences: true,
+          ),
+        );
 
   String? _cachedToken;
   String? _cachedRefreshToken;
@@ -73,14 +65,9 @@ class ApiClient {
     }
 
     try {
-      return await _secureStorage.read(key: key);
+      return await _secureStorage!.read(key: key);
     } catch (e) {
       developer.log('SECURE STORAGE READ FAILED: $e. Falling back to SharedPreferences for $key.', name: 'VaultSync', level: 900);
-      // If we are on Linux and it failed once, it's likely a persistent keyring issue (Steam Deck).
-      if (Platform.isLinux) {
-        _useSecureStorage = false;
-        developer.log('SECURE STORAGE: Disabling for the remainder of this session due to Linux keyring error.', name: 'VaultSync', level: 900);
-      }
       final prefs = await SharedPreferences.getInstance();
       return prefs.getString('fallback_$key');
     }
@@ -94,13 +81,9 @@ class ApiClient {
     }
 
     try {
-      await _secureStorage.write(key: key, value: value);
+      await _secureStorage!.write(key: key, value: value);
     } catch (e) {
       developer.log('SECURE STORAGE WRITE FAILED: $e. Falling back to SharedPreferences for $key.', name: 'VaultSync', level: 900);
-      if (Platform.isLinux) {
-        _useSecureStorage = false;
-        developer.log('SECURE STORAGE: Disabling for the remainder of this session due to Linux keyring error.', name: 'VaultSync', level: 900);
-      }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('fallback_$key', value);
     }
@@ -114,12 +97,9 @@ class ApiClient {
     }
 
     try {
-      await _secureStorage.delete(key: key);
+      await _secureStorage!.delete(key: key);
     } catch (e) {
       developer.log('SECURE STORAGE DELETE FAILED: $e. Falling back to SharedPreferences for $key.', name: 'VaultSync', level: 900);
-      if (Platform.isLinux) {
-        _useSecureStorage = false;
-      }
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('fallback_$key');
     }
