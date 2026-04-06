@@ -14,7 +14,7 @@ final connectivityProvider = StreamProvider<List<ConnectivityResult>>((ref) {
   if (Platform.isAndroid) {
     final controller = StreamController<List<ConnectivityResult>>();
     const platform = MethodChannel('com.vaultsync.app/launcher');
-    
+
     // Initial status
     platform.invokeMethod<bool>('isOnline').then((online) {
       if (!controller.isClosed) {
@@ -37,6 +37,11 @@ final connectivityProvider = StreamProvider<List<ConnectivityResult>>((ref) {
     });
 
     return controller.stream;
+  } else if (Platform.isLinux) {
+    // connectivity_plus on Linux requires NetworkManager via DBus, which is not
+    // available on all Linux environments (Steam Deck, minimal WMs, etc.).
+    // Assume always-connected and let individual requests handle network errors.
+    return Stream.value([ConnectivityResult.wifi]);
   } else {
     final connectivity = ref.watch(connectivityInstanceProvider);
     return connectivity.onConnectivityChanged;
