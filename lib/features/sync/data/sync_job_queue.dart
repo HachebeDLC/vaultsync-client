@@ -28,11 +28,13 @@ class SyncJobQueue {
     required Future<String> Function() getDeviceName,
     required void Function(SharedPreferences, String, String, String)
         recordSyncSuccess,
+    bool Function()? isCancelled,
   }) async {
     final jobs = await _db.getPendingJobs();
     final prefs = await SharedPreferences.getInstance();
 
     for (final job in jobs) {
+      if (isCancelled?.call() == true) { onProgress?.call('Sync Cancelled'); break; }
       if (job['system_id'] != systemId) continue;
       final path = job['path'] as String;
       final status = job['status'] as String;

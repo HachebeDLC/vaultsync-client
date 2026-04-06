@@ -321,6 +321,7 @@ class SyncRepository {
         await _jobQueue.process(systemId, effectivePath, onProgress,
           getDeviceName: _getDeviceName,
           recordSyncSuccess: _recordSyncSuccess,
+          isCancelled: isCancelled,
         );
         await _commitSyncJournal(prefs);
       } catch (e) {
