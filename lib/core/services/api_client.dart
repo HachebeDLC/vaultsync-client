@@ -7,9 +7,9 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:crypto/crypto.dart';
 import 'package:pointycastle/export.dart';
+import 'storage/secure_storage_wrapper.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -27,17 +27,9 @@ class ApiClient {
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
   // On Linux, libsecret (keyring/kwallet) is frequently unavailable or locked
-  // (Steam Deck game mode, minimal WMs, etc.). Never instantiate FlutterSecureStorage
+  // (Steam Deck game mode, minimal WMs, etc.). Never touch SecureStorageWrapper
   // there so the native plugin is never invoked and libsecret is never touched.
   static final bool _useSecureStorage = !Platform.isLinux;
-
-  final FlutterSecureStorage? _secureStorage = Platform.isLinux
-      ? null
-      : const FlutterSecureStorage(
-          aOptions: AndroidOptions(
-            encryptedSharedPreferences: true,
-          ),
-        );
 
   String? _cachedToken;
   String? _cachedRefreshToken;
@@ -64,13 +56,12 @@ class ApiClient {
       return prefs.getString('fallback_$key');
     }
 
-    try {
-      return await _secureStorage!.read(key: key);
-    } catch (e) {
-      developer.log('SECURE STORAGE READ FAILED: $e. Falling back to SharedPreferences for $key.', name: 'VaultSync', level: 900);
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('fallback_$key');
-    }
+    final value = await SecureStorageWrapper.read(key);
+    if (value != null) return value;
+    
+    // Fallback if secure read failed
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('fallback_$key');
   }
 
   Future<void> _secureWrite(String key, String value) async {
@@ -80,13 +71,10 @@ class ApiClient {
       return;
     }
 
-    try {
-      await _secureStorage!.write(key: key, value: value);
-    } catch (e) {
-      developer.log('SECURE STORAGE WRITE FAILED: $e. Falling back to SharedPreferences for $key.', name: 'VaultSync', level: 900);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('fallback_$key', value);
-    }
+    await SecureStorageWrapper.write(key, value);
+    // Always write to fallback as well for reliability on Linux
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('fallback_$key', value);
   }
 
   Future<void> _secureDelete(String key) async {
@@ -96,13 +84,9 @@ class ApiClient {
       return;
     }
 
-    try {
-      await _secureStorage!.delete(key: key);
-    } catch (e) {
-      developer.log('SECURE STORAGE DELETE FAILED: $e. Falling back to SharedPreferences for $key.', name: 'VaultSync', level: 900);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('fallback_$key');
-    }
+    await SecureStorageWrapper.delete(key);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('fallback_$key');
   }
 
   Future<String?> getToken() async {
