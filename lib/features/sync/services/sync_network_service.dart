@@ -11,6 +11,52 @@ class SyncNetworkService {
 
   SyncNetworkService(this._apiClient);
 
+  Future<dynamic> _executeNative(String methodName, Map<String, dynamic> args) async {
+    final isDesktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+    
+    Future<dynamic> run() async {
+      if (isDesktop) {
+        if (methodName == 'uploadFileNative') {
+          await DartNativeCrypto.uploadFileNative(args);
+          return null;
+        } else if (methodName == 'downloadFileNative') {
+          await DartNativeCrypto.downloadFileNative(args);
+          return true;
+        }
+        throw UnsupportedError('Method $methodName not supported natively.');
+      } else {
+        return await _platform.invokeMethod(methodName, args);
+      }
+    }
+
+    try {
+      return await run();
+    } catch (e) {
+      final errStr = e.toString();
+      if (errStr.contains('HTTP 401')) {
+        developer.log('SYNC NETWORK: Native 401 caught. Refreshing token and retrying...', name: 'VaultSync', level: 800);
+        final success = await _apiClient.refreshAccessToken();
+        if (success) {
+          args['token'] = await _apiClient.getToken();
+          try {
+            return await run();
+          } catch (retryError) {
+             throw _mapNativeError(retryError);
+          }
+        }
+        throw ApiException(401, "Session expired and could not be refreshed.");
+      }
+      throw _mapNativeError(e);
+    }
+  }
+
+  Exception _mapNativeError(dynamic e) {
+    final errStr = e.toString();
+    if (errStr.contains('HTTP 403')) return ApiException(403, "Forbidden during native operation");
+    if (errStr.contains('HTTP 401')) return ApiException(401, "Unauthorized during native operation");
+    return e is Exception ? e : Exception(errStr);
+  }
+
   Future<List<String>> getBlockHashes(String path, String? masterKey) async {
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
       return await DartNativeCrypto.calculateBlockHashes(path, masterKey: masterKey);
@@ -90,34 +136,9 @@ class SyncNetworkService {
       'dirtyIndices': dirtyIndices 
     };
 
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      try {
-        await DartNativeCrypto.uploadFileNative(uploadArgs);
-      } catch (e) {
-        await _handleNativeError(e);
-      }
-    } else {
-      try {
-        await _platform.invokeMethod('uploadFileNative', uploadArgs);
-      } catch (e) {
-        await _handleNativeError(e);
-      }
-    }
+    await _executeNative('uploadFileNative', uploadArgs);
 
     onRecordSuccess(systemId, relPath, hash);
-  }
-
-  Future<void> _handleNativeError(dynamic e) async {
-    final errStr = e.toString();
-    if (errStr.contains('HTTP 401')) {
-      // Proactively trigger refresh which will fire force-logout if it fails
-      await _apiClient.refreshAccessToken();
-      throw ApiException(401, "Session expired during native operation");
-    }
-    if (errStr.contains('HTTP 403')) {
-      throw ApiException(403, "Forbidden during native operation");
-    }
-    throw e;
   }
 
   Future<dynamic> downloadFile(
@@ -163,20 +184,11 @@ class SyncNetworkService {
       'fileSize': fileSize 
     };
 
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      try {
-        await DartNativeCrypto.downloadFileNative(downloadArgs);
-        return true;
-      } catch (e) {
-        await _handleNativeError(e);
-      }
-    } else {
-      try {
-        return await _platform.invokeMethod('downloadFileNative', downloadArgs);
-      } catch (e) {
-        await _handleNativeError(e);
-      }
+    final result = await _executeNative('downloadFileNative', downloadArgs);
+    if (onRecordSuccess != null && remoteHash != null) {
+        onRecordSuccess(systemId, relPath, remoteHash);
     }
+    return result;
   }
 
   Future<dynamic> restoreVersion(
@@ -201,19 +213,6 @@ class SyncNetworkService {
       'fileSize': fileSize
     };
 
-    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-      try {
-        await DartNativeCrypto.downloadFileNative(args);
-        return true;
-      } catch (e) {
-        await _handleNativeError(e);
-      }
-    } else {
-      try {
-        return await _platform.invokeMethod('downloadFileNative', args);
-      } catch (e) {
-        await _handleNativeError(e);
-      }
-    }
+    return await _executeNative('downloadFileNative', args);
   }
 }
