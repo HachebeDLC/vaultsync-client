@@ -359,13 +359,12 @@ packages:
     source: hosted
     version: "0.2.0"
   flutter_secure_storage_linux:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: flutter_secure_storage_linux
-      sha256: "2b5c76dce569ab752d55a1cee6a2242bcc11fdba927078fb88c503f150767cda"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.0.0"
+      path: "local_plugins/dummy_secure_storage_linux"
+      relative: true
+    source: path
+    version: "1.2.0"
   flutter_secure_storage_platform_interface:
     dependency: transitive
     description:
