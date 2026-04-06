@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:io';
 import 'dart:typed_data';
 import 'dart:isolate';
 import 'dart:async';
@@ -26,11 +25,6 @@ class ApiClient {
   
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
-  // On Linux, libsecret (keyring/kwallet) is frequently unavailable or locked
-  // (Steam Deck game mode, minimal WMs, etc.). Never touch SecureStorageWrapper
-  // there so the native plugin is never invoked and libsecret is never touched.
-  static final bool _useSecureStorage = !Platform.isLinux;
-
   String? _cachedToken;
   String? _cachedRefreshToken;
   Completer<bool>? _refreshCompleter;
@@ -51,39 +45,21 @@ class ApiClient {
   }
 
   Future<String?> _secureRead(String key) async {
-    if (!_useSecureStorage) {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('fallback_$key');
-    }
-
     final value = await SecureStorageWrapper.read(key);
     if (value != null) return value;
-    
-    // Fallback if secure read failed
+    // Fallback covers Linux (dummy stub returns null) and any keyring failures
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('fallback_$key');
   }
 
   Future<void> _secureWrite(String key, String value) async {
-    if (!_useSecureStorage) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('fallback_$key', value);
-      return;
-    }
-
     await SecureStorageWrapper.write(key, value);
-    // Always write to fallback as well for reliability on Linux
+    // Mirror to SharedPreferences so Linux (dummy stub) and fallback reads work
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('fallback_$key', value);
   }
 
   Future<void> _secureDelete(String key) async {
-    if (!_useSecureStorage) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('fallback_$key');
-      return;
-    }
-
     await SecureStorageWrapper.delete(key);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('fallback_$key');

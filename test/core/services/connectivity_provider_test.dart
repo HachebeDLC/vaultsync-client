@@ -26,6 +26,10 @@ void main() {
 
   group('ConnectivityProvider Non-Android', () {
     test('emits connectivity results', () async {
+      // On Linux, connectivity is hardcoded to always-connected (no NetworkManager).
+      // This test covers macOS/Windows where the real stream is used.
+      if (Platform.isLinux) return;
+
       final container = ProviderContainer(
         overrides: [
           connectivityInstanceProvider.overrideWithValue(mockConnectivity),
@@ -33,19 +37,21 @@ void main() {
       );
 
       final sub = container.listen(connectivityProvider, (_, __) {});
-      
+
       controller.add([ConnectivityResult.wifi]);
       await Future.delayed(Duration.zero);
       expect(container.read(connectivityProvider).value, contains(ConnectivityResult.wifi));
-      
+
       controller.add([ConnectivityResult.none]);
       await Future.delayed(Duration.zero);
-      expect(container.read(container.read(connectivityProvider).value == null ? connectivityProvider : connectivityProvider).value, contains(ConnectivityResult.none));
-      
+      expect(container.read(connectivityProvider).value, contains(ConnectivityResult.none));
+
       sub.close();
     });
 
     test('isOnlineProvider reflects status', () async {
+      if (Platform.isLinux) return;
+
       final container = ProviderContainer(
         overrides: [
           connectivityInstanceProvider.overrideWithValue(mockConnectivity),
@@ -57,9 +63,18 @@ void main() {
       expect(container.read(isOnlineProvider), isTrue);
 
       controller.add([ConnectivityResult.none]);
-      // Wait for provider update
       await Future.delayed(Duration.zero);
       expect(container.read(isOnlineProvider), isFalse);
+    });
+  });
+
+  group('ConnectivityProvider Linux', () {
+    test('always reports online (no NetworkManager required)', () async {
+      if (!Platform.isLinux) return;
+
+      final container = ProviderContainer();
+      await container.read(connectivityProvider.future);
+      expect(container.read(isOnlineProvider), isTrue);
     });
   });
 
