@@ -278,6 +278,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             "scanRecursive" -> handleScanRecursive(call, result)
             "calculateHash" -> handleCalculateHash(call, result)
             "calculateBlockHashes" -> handleCalculateBlockHashes(call, result)
+            "calculateBlockHashesAndHash" -> handleCalculateBlockHashesAndHash(call, result)
             "uploadFileNative" -> uploadManager.handleUploadFile(call, result)
             "downloadFileNative" -> downloadManager.handleDownloadFile(call, result)
             "setFileTimestamp" -> handleSetFileTimestamp(call, result)
@@ -567,6 +568,81 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 mainHandler.post { result.success(blockHashes.toString()) }
             } catch (e: Exception) {
                 mainHandler.post { result.error("BLOCK_HASH_ERROR", e.message, null) }
+            }
+        }
+    }
+
+    private fun handleCalculateBlockHashesAndHash(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path") ?: return result.error("ARG_MISSING", "path missing", null)
+        val masterKey = call.argument<String>("masterKey")
+        val ctx = context ?: return result.error("NO_CONTEXT", "Context is null", null)
+        executor.execute {
+            try {
+                var fileSize = 0L
+                val input = when {
+                    path.startsWith("shizuku://") -> {
+                        getShizukuServiceSync().let { svc ->
+                            fileSize = svc.getFileSize(getCleanPath(path))
+                            svc.openFile(getCleanPath(path), "r")?.let { java.io.FileInputStream(it.fileDescriptor) }
+                        }
+                    }
+                    path.startsWith("content://") -> {
+                        val uri = Uri.parse(path)
+                        DocumentFile.fromSingleUri(ctx, uri)?.let { df ->
+                            fileSize = df.length()
+                        }
+                        ctx.contentResolver.openInputStream(uri)
+                    }
+                    else -> {
+                        val f = java.io.File(path)
+                        fileSize = f.length()
+                        f.inputStream()
+                    }
+                }
+
+                val secretKey = masterKey?.let {
+                    val keyBytes = android.util.Base64.decode(it, android.util.Base64.URL_SAFE).sliceArray(0 until 32)
+                    javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
+                }
+
+                val blockSize = CryptoEngine.getBlockSize(fileSize)
+                val encryptedBlockSize = CryptoEngine.getEncryptedBlockSize(fileSize)
+
+                val blockHashes = JSONArray()
+                val buffer = ByteArray(blockSize)
+                val encryptedBuffer = ByteArray(encryptedBlockSize)
+                // Running digest for full-file double-SHA-256
+                val fileDigest = java.security.MessageDigest.getInstance("SHA-256")
+
+                input?.use { stream ->
+                    while (true) {
+                        val read = stream.read(buffer)
+                        if (read == -1) break
+
+                        // Feed raw bytes into the file-level digest
+                        fileDigest.update(buffer, 0, read)
+
+                        // Compute encrypted block hash
+                        if (secretKey != null) {
+                            val encryptedLength = cryptoEngine.encryptBlock(buffer, read, secretKey, encryptedBuffer)
+                            blockHashes.put(cryptoEngine.calculateHash(encryptedBuffer, encryptedLength))
+                        } else {
+                            blockHashes.put(cryptoEngine.calculateHash(buffer, read))
+                        }
+                    }
+                }
+
+                // Double-hash: SHA-256(SHA-256(file_bytes)) — matches handleCalculateHash behavior
+                val firstDigest = fileDigest.digest()
+                val fileHash = cryptoEngine.calculateHash(firstDigest, firstDigest.size)
+
+                val resultObj = JSONObject().apply {
+                    put("blockHashes", blockHashes)
+                    put("fileHash", fileHash)
+                }
+                mainHandler.post { result.success(resultObj.toString()) }
+            } catch (e: Exception) {
+                mainHandler.post { result.error("COMBINED_HASH_ERROR", e.message, null) }
             }
         }
     }

@@ -9,13 +9,20 @@ class FileHashService {
 
   FileHashService(this._fileCache);
 
-  Future<String> getLocalHash(String uri, int size, int lastModified) async {
+  Future<String?> getCachedHash(String uri, int size, int lastModified) async {
+    return _fileCache.getCachedHash(uri, size, lastModified);
+  }
+
+  Future<String> getLocalHash(String uri, int size, int lastModified, {String? precomputedHash}) async {
     String? hash = await _fileCache.getCachedHash(uri, size, lastModified);
     if (hash == null) {
-      if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-        hash = await DartNativeCrypto.calculateHash(uri);
-      } else {
-        hash = await _platform.invokeMethod<String>('calculateHash', {'path': uri});
+      hash = precomputedHash;
+      if (hash == null) {
+        if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+          hash = await DartNativeCrypto.calculateHash(uri);
+        } else {
+          hash = await _platform.invokeMethod<String>('calculateHash', {'path': uri});
+        }
       }
 
       if (hash != null) {

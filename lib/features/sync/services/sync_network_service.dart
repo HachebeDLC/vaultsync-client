@@ -20,6 +20,20 @@ class SyncNetworkService {
     }
   }
 
+  /// Computes block hashes and the full-file hash in a single file read.
+  Future<Map<String, dynamic>> getBlockHashesAndFileHash(String path, String? masterKey) async {
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      return await DartNativeCrypto.calculateBlockHashesAndHash(path, masterKey: masterKey);
+    } else {
+      final String jsonResult = await _platform.invokeMethod('calculateBlockHashesAndHash', {'path': path, 'masterKey': masterKey});
+      final decoded = json.decode(jsonResult);
+      return {
+        'blockHashes': List<String>.from(decoded['blockHashes']),
+        'fileHash': decoded['fileHash'] as String,
+      };
+    }
+  }
+
   Future<void> uploadFile(
     String path, 
     String remotePath, {

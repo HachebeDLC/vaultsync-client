@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
-import 'package:pointycastle/export.dart';
+import 'package:pointycastle/export.dart' hide Digest;
 
 /// High-performance cryptographic engine providing hardware-accelerated 
 /// AES-256-CBC encryption and delta-sync block hashing in Dart.
@@ -95,6 +95,66 @@ class DartNativeCrypto {
     }
     await raf.close();
     return hashes;
+  }
+
+  /// Computes both block hashes and the full-file double-SHA-256 in a single pass.
+  /// Eliminates the second file read that [calculateHash] would require separately.
+  static Future<Map<String, dynamic>> calculateBlockHashesAndHash(String path, {String? masterKey}) async {
+    final file = File(path);
+    final raf = await file.open(mode: FileMode.read);
+    final length = await raf.length();
+    final blockSize = getBlockSize(length);
+    final hashes = <String>[];
+
+    Uint8List? keyBytes;
+    if (masterKey != null) {
+      final decoded = base64Url.decode(masterKey);
+      keyBytes = Uint8List.fromList(decoded.sublist(0, 32));
+    }
+
+    // Running digest for the full-file hash (first pass of double-SHA-256)
+    Digest? firstHashResult;
+    final digestSink = ChunkedConversionSink<Digest>.withCallback(
+      (chunks) => firstHashResult = chunks.single,
+    );
+    final fileHashInput = sha256.startChunkedConversion(digestSink);
+
+    int offset = 0;
+    while (offset < length) {
+      await raf.setPosition(offset);
+      final buffer = await raf.read(blockSize);
+      if (buffer.isEmpty) break;
+
+      // Feed raw bytes into the running file digest
+      fileHashInput.add(buffer);
+
+      // Compute block hash (encrypt + SHA-256)
+      if (keyBytes != null) {
+        final iv = _generateSecureIV();
+        final cipher = PaddedBlockCipher('AES/CBC/PKCS7')
+          ..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
+        final encryptedBytes = cipher.process(Uint8List.fromList(buffer));
+        final outBuffer = BytesBuilder();
+        outBuffer.add(_magicBytes);
+        outBuffer.add(iv);
+        outBuffer.add(encryptedBytes);
+        hashes.add(sha256.convert(outBuffer.toBytes()).toString());
+      } else {
+        hashes.add(sha256.convert(buffer).toString());
+      }
+
+      offset += buffer.length;
+    }
+    await raf.close();
+
+    // Double-hash: SHA-256(SHA-256(file_bytes)) — matches Kotlin behavior
+    fileHashInput.close();
+    final doubleHash = sha256.convert(firstHashResult!.bytes);
+
+    return {
+      'blockHashes': hashes,
+      'fileHash': doubleHash.toString(),
+    };
   }
 
   /// Orchestrates a high-speed multi-threaded block upload of a file to the server.

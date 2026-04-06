@@ -9,6 +9,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.Callable
+import kotlin.math.min
 
 class FileScanner(private val context: Context) {
     companion object {
@@ -314,6 +317,8 @@ class FileScanner(private val context: Context) {
 
         val treeUri = getTreeUri(uri)
         val startDocId = getDocIdSafely(uri)
+        // Collect (resultIndex, docUri) pairs for deferred parallel fstat
+        val pendingFstats = if (needsAccurateMtime) mutableListOf<Pair<Int, Uri>>() else null
 
         fun walkSaf(currentDocId: String, currentRelPath: String, depth: Int) {
             if (depth > MAX_SCAN_DEPTH) return
@@ -378,18 +383,8 @@ class FileScanner(private val context: Context) {
                                 fLast = df?.lastModified() ?: 0
                             }
 
-                            // SAF cursor LAST_MODIFIED is unreliable for Android/data/ files —
-                            // MediaStore can't index app-private directories. Use Os.fstat() on
-                            // the file descriptor to get the actual kernel mtime instead.
-                            // Skipped for non-Android/data paths where the cursor is trustworthy.
-                            if (needsAccurateMtime) {
-                                try {
-                                    context.contentResolver.openFileDescriptor(docUri, "r")?.use { pfd ->
-                                        val stat = Os.fstat(pfd.fileDescriptor)
-                                        if (stat.st_mtime > 0L) fLast = stat.st_mtime * 1000L
-                                    }
-                                } catch (_: Exception) { /* fall back to cursor value */ }
-                            }
+                            // Record index for deferred parallel fstat (if needed)
+                            pendingFstats?.add(Pair(results.length(), docUri))
 
                             results.put(JSONObject().apply {
                                 put("name", name)
@@ -406,6 +401,29 @@ class FileScanner(private val context: Context) {
             }
         }
         walkSaf(startDocId, "", 0)
+
+        // Batch-fstat in parallel for Android/data/ files where SAF cursor
+        // LAST_MODIFIED is unreliable. Uses Os.fstat() on file descriptors
+        // to get kernel mtime. Parallelized to reduce IPC wall-clock time.
+        if (pendingFstats != null && pendingFstats.isNotEmpty()) {
+            val pool = Executors.newFixedThreadPool(min(pendingFstats.size, 8))
+            val futures = pendingFstats.map { (idx, docUri) ->
+                pool.submit(Callable<Pair<Int, Long>?> {
+                    try {
+                        context.contentResolver.openFileDescriptor(docUri, "r")?.use { pfd ->
+                            val stat = Os.fstat(pfd.fileDescriptor)
+                            if (stat.st_mtime > 0L) Pair(idx, stat.st_mtime * 1000L) else null
+                        }
+                    } catch (_: Exception) { null }
+                })
+            }
+            for (future in futures) {
+                val pair = future.get() ?: continue
+                results.getJSONObject(pair.first).put("lastModified", pair.second)
+            }
+            pool.shutdown()
+        }
+
         return results
     }
 

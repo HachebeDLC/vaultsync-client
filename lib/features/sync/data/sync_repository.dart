@@ -262,8 +262,9 @@ class SyncRepository {
             } else {
               onProgress?.call('Hashing $relPath...');
               final masterKey = await _getMasterKey();
-              final blockHashes = await _networkService.getBlockHashes(localInfo['uri'], masterKey);
-              final fullHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs);
+              final combined = await _networkService.getBlockHashesAndFileHash(localInfo['uri'], masterKey);
+              final blockHashes = (combined['blockHashes'] as List).cast<String>();
+              final fullHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs, precomputedHash: combined['fileHash'] as String);
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, fullHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(blockHashes));
             }
           } else if (localInfo == null && remoteInfo != null) {
@@ -284,8 +285,19 @@ class SyncRepository {
             }
             onProgress?.call('Checking $relPath blocks...');
             final masterKey = await _getMasterKey();
-            final currentBlockHashes = await _networkService.getBlockHashes(localInfo['uri'], masterKey);
-            final String localHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs);
+            final List<String> currentBlockHashes;
+            final String localHash;
+            // Use cached hash if available (one read for block hashes only);
+            // otherwise single-pass combined method (one read instead of two).
+            final cachedHash = await _hashService.getCachedHash(localInfo['uri'], localSize, localTs);
+            if (cachedHash != null) {
+              currentBlockHashes = await _networkService.getBlockHashes(localInfo['uri'], masterKey);
+              localHash = cachedHash;
+            } else {
+              final combined = await _networkService.getBlockHashesAndFileHash(localInfo['uri'], masterKey);
+              currentBlockHashes = (combined['blockHashes'] as List).cast<String>();
+              localHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs, precomputedHash: combined['fileHash'] as String);
+            }
             if (localHash == remoteHash) {
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'synced', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
               _recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
