@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
@@ -6,12 +7,19 @@ class NotificationService {
 
   Future<void> init() async {
     if (_initialized) return;
+    // flutter_local_notifications_linux crashes when initialized without
+    // LinuxInitializationSettings. Notifications are not used on Linux/desktop.
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      _initialized = true;
+      return;
+    }
     const android = AndroidInitializationSettings('@mipmap/launcher_icon');
     await _notifications.initialize(const InitializationSettings(android: android));
     _initialized = true;
   }
 
   Future<void> showSyncStatus(String title, String body) async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
     await init();
     const android = AndroidNotificationDetails(
       'sync_status', 'Sync Status',
@@ -22,6 +30,7 @@ class NotificationService {
   }
 
   Future<void> clearSyncStatus() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
     await _notifications.cancel(999);
   }
 }
