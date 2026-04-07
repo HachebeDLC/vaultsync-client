@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/sync_repository.dart';
 import 'package:intl/intl.dart';
@@ -20,7 +22,10 @@ class VersionHistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _VersionHistoryScreenState extends ConsumerState<VersionHistoryScreen> {
+  static const _platform = MethodChannel('com.vaultsync.app/launcher');
+
   List<Map<String, dynamic>> _versions = [];
+  List<Map<String, dynamic>> _localBackups = [];
   bool _isLoading = true;
 
   @override
@@ -32,9 +37,11 @@ class _VersionHistoryScreenState extends ConsumerState<VersionHistoryScreen> {
   Future<void> _loadVersions() async {
     setState(() => _isLoading = true);
     try {
-      final versions = await ref.read(syncRepositoryProvider).getFileVersions(widget.remotePath);
+      final serverVersions = await ref.read(syncRepositoryProvider).getFileVersions(widget.remotePath);
+      final localBackups = await _loadLocalBackups();
       setState(() {
-        _versions = versions;
+        _versions = serverVersions;
+        _localBackups = localBackups;
         _isLoading = false;
       });
     } catch (e) {
@@ -42,6 +49,54 @@ class _VersionHistoryScreenState extends ConsumerState<VersionHistoryScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadLocalBackups() async {
+    if (!Platform.isAndroid) return [];
+    try {
+      final result = await _platform.invokeMethod('listLocalBackups', {'relPath': widget.relPath});
+      return (result as List).map((e) => Map<String, dynamic>.from(e)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _restoreLocalBackup(String backupId, int displayNum) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Restore Local Backup'),
+        content: Text('Restore local backup #$displayNum? This will overwrite the current local save.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+            child: const Text('RESTORE'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final destPath = '${ widget.localBasePath}/${widget.relPath}';
+      final ok = await _platform.invokeMethod<bool>('restoreLocalBackup', {
+        'backupId': backupId,
+        'destPath': destPath,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ok == true ? '✅ Local backup restored!' : '❌ Restore failed')),
+        );
+        if (ok == true) Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -107,54 +162,96 @@ class _VersionHistoryScreenState extends ConsumerState<VersionHistoryScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _versions.isEmpty
+          : (_versions.isEmpty && _localBackups.isEmpty)
               ? _buildEmptyState()
-              : Column(
+              : ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text('Select a version to restore your save to a previous point in time.', 
-                        style: TextStyle(fontSize: 13, color: Colors.grey), textAlign: TextAlign.center),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _versions.length,
-                        itemBuilder: (context, index) {
-                          final v = _versions[index];
-                          final versionId = v['version_id'];
-                          final device = v['device_name'] ?? 'Unknown';
-                          final date = DateTime.fromMillisecondsSinceEpoch(v['updated_at']);
-                          final size = (v['size'] / 1024).toStringAsFixed(1);
-                          final displayNum = _versions.length - index;
-
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              leading: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), shape: BoxShape.circle),
-                                child: Icon(_getDeviceIcon(device), color: Colors.blue),
-                              ),
-                              title: Text(DateFormat('MMM d, yyyy · HH:mm').format(date.toLocal()), 
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Saved from $device', style: const TextStyle(fontSize: 12)),
-                                  Text('$size KB', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                                ],
-                              ),
-                              trailing: OutlinedButton(
-                                onPressed: () => _restore(versionId, displayNum, v['size']),
-                                child: const Text('RESTORE'),
-                              ),
-                            ),
-                          );
-                        },
+                    if (_localBackups.isNotEmpty) ...[
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(4, 16, 4, 8),
+                        child: Text('ON-DEVICE BACKUPS',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange)),
                       ),
-                    ),
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text('Snapshots taken on this device just before a download overwrote your local save.',
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      ),
+                      ..._localBackups.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final b = entry.value;
+                        final backupId = b['backup_id'] as String;
+                        final date = DateTime.fromMillisecondsSinceEpoch((b['updated_at'] as num).toInt());
+                        final size = ((b['size'] as num) / 1024).toStringAsFixed(1);
+                        final displayNum = _localBackups.length - index;
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          color: Colors.orange.withValues(alpha: 0.05),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(color: Colors.orange.withValues(alpha: 0.3)),
+                          ),
+                          child: ListTile(
+                            leading: const Icon(Icons.phone_android, color: Colors.orange),
+                            title: Text(DateFormat('MMM d, yyyy · HH:mm').format(date.toLocal()),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            subtitle: Text('$size KB · local snapshot', style: const TextStyle(fontSize: 12)),
+                            trailing: OutlinedButton(
+                              onPressed: () => _restoreLocalBackup(backupId, displayNum),
+                              style: OutlinedButton.styleFrom(foregroundColor: Colors.orange),
+                              child: const Text('RESTORE'),
+                            ),
+                          ),
+                        );
+                      }),
+                      const Divider(height: 32),
+                    ],
+                    if (_versions.isNotEmpty) ...[
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(4, 0, 4, 8),
+                        child: Text('SERVER VERSIONS',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue)),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text('Snapshots taken on the server before each upload overwrote the previous version.',
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      ),
+                      ..._versions.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final v = entry.value;
+                        final versionId = v['version_id'];
+                        final device = v['device_name'] ?? 'Unknown';
+                        final date = DateTime.fromMillisecondsSinceEpoch((v['updated_at'] as num).toInt());
+                        final size = ((v['size'] as num) / 1024).toStringAsFixed(1);
+                        final displayNum = _versions.length - index;
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.1), shape: BoxShape.circle),
+                              child: Icon(_getDeviceIcon(device), color: Colors.blue),
+                            ),
+                            title: Text(DateFormat('MMM d, yyyy · HH:mm').format(date.toLocal()),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Saved from $device', style: const TextStyle(fontSize: 12)),
+                                Text('$size KB', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                              ],
+                            ),
+                            trailing: OutlinedButton(
+                              onPressed: () => _restore(versionId, displayNum, v['size'] as int),
+                              child: const Text('RESTORE'),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
                   ],
                 ),
     );

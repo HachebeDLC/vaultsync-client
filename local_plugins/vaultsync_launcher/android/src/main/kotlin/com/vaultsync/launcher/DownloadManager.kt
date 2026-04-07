@@ -8,6 +8,7 @@ import io.flutter.plugin.common.MethodChannel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.nio.channels.FileChannel
@@ -25,6 +26,61 @@ class DownloadManager(
     private val getShizukuServiceSync: () -> IShizukuService,
     private val setFileTimestampInternal: (String, Long) -> Unit
 ) {
+    // -------------------------------------------------------------------
+    // Local pre-download backup (mirrors the server's Syncthing-style
+    // snapshot so the user can recover a save overwritten by a download).
+    // Backups live in context.filesDir/local_backups/ — app-internal,
+    // always writable regardless of SAF or Shizuku permissions.
+    // -------------------------------------------------------------------
+
+    private val backupRoot: File get() = File(context.filesDir, "local_backups")
+    private val maxLocalBackups = 3
+
+    /** Copy [source] into the local backup store keyed by [relPath]. */
+    private fun backupToLocalStore(source: InputStream, relPath: String, size: Long) {
+        if (size <= 0L) return
+        try {
+            backupRoot.mkdirs()
+            val safeName = relPath.replace("/", "_").replace("\\", "_")
+            val timestamp = System.currentTimeMillis()
+            val dest = File(backupRoot, "${safeName}~${timestamp}")
+            dest.outputStream().use { out -> source.copyTo(out) }
+            rotateLocalBackups(safeName)
+        } catch (e: Exception) {
+            android.util.Log.w("VaultSync", "Local backup failed for $relPath: ${e.message}")
+        }
+    }
+
+    private fun rotateLocalBackups(safeName: String) {
+        val entries = backupRoot.listFiles { f -> f.name.startsWith("${safeName}~") }
+            ?.sortedBy { it.lastModified() } ?: return
+        entries.dropLast(maxLocalBackups).forEach { it.delete() }
+    }
+
+    /** Called from the plugin to list local backups for a given relPath. */
+    fun listLocalBackups(relPath: String): List<Map<String, Any>> {
+        val safeName = relPath.replace("/", "_").replace("\\", "_")
+        return (backupRoot.listFiles { f -> f.name.startsWith("${safeName}~") } ?: emptyArray())
+            .sortedByDescending { it.lastModified() }
+            .map { f ->
+                val ts = f.name.substringAfterLast("~").toLongOrNull() ?: f.lastModified()
+                mapOf("backup_id" to f.name, "updated_at" to ts, "size" to f.length())
+            }
+    }
+
+    /** Restore a local backup by copying it back to [destFile]. */
+    fun restoreLocalBackup(backupId: String, destFile: File): Boolean {
+        return try {
+            val src = File(backupRoot, backupId)
+            if (!src.exists()) return false
+            src.copyTo(destFile, overwrite = true)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("VaultSync", "Local restore failed: ${e.message}")
+            false
+        }
+    }
+
     fun handleDownloadFile(call: MethodCall, result: MethodChannel.Result) {
         val url = call.argument<String>("url") ?: return result.error("ARG_MISSING", "url is missing", null)
         val token = call.argument<String>("token")
@@ -61,7 +117,19 @@ class DownloadManager(
                             val baseDir = getCleanPath(uriStr)
                             val finalPath = File(baseDir, localFilename).absolutePath
                             val shizukuService = getShizukuServiceSync()
-                            
+
+                            // Snapshot existing file before overwrite
+                            if (patchIndices == null) {
+                                val existingSize = try { shizukuService.getFileSize(finalPath) } catch (_: Exception) { 0L }
+                                if (existingSize > 0L) {
+                                    shizukuService.openFile(finalPath, "r")?.use { pfd ->
+                                        FileInputStream(pfd.fileDescriptor).use { fis ->
+                                            backupToLocalStore(fis, localFilename, existingSize)
+                                        }
+                                    }
+                                }
+                            }
+
                             val pfd = shizukuService.openFile(finalPath, "rw")
                             if (pfd != null) {
                                 pfd.use { descriptor ->
@@ -78,16 +146,23 @@ class DownloadManager(
                         uriStr.startsWith("content://") -> {
                             val treeUri = Uri.parse(uriStr)
                             val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: throw Exception("Invalid tree URI")
-                            
+
                             val pathParts = localFilename.split("/")
                             var currentDir = rootDoc
                             for (i in 0 until pathParts.size - 1) {
                                 currentDir = fileScanner.getOrCreateDirectory(currentDir, pathParts[i])
                             }
-                            
+
                             val finalName = pathParts.last()
                             val targetFile = fileScanner.getOrCreateFile(currentDir, finalName, "application/octet-stream")
-                            
+
+                            // Snapshot existing file before overwrite
+                            if (patchIndices == null && targetFile.length() > 0L) {
+                                context.contentResolver.openInputStream(targetFile.uri)?.use { ins ->
+                                    backupToLocalStore(ins, localFilename, targetFile.length())
+                                }
+                            }
+
                             val pfd = context.contentResolver.openFileDescriptor(targetFile.uri, "rw")
                             if (pfd != null) {
                                 pfd.use { descriptor ->
@@ -104,11 +179,18 @@ class DownloadManager(
                         else -> {
                             val finalFile = File(File(uriStr), localFilename)
                             finalFile.parentFile?.mkdirs()
-                            
+
                             if (finalFile.exists() && finalFile.isDirectory) {
                                 finalFile.deleteRecursively()
                             }
-                            
+
+                            // Snapshot existing file before overwrite
+                            if (patchIndices == null && finalFile.exists() && finalFile.length() > 0L) {
+                                FileInputStream(finalFile).use { fis ->
+                                    backupToLocalStore(fis, localFilename, finalFile.length())
+                                }
+                            }
+
                             java.io.RandomAccessFile(finalFile, "rw").use { raf ->
                                 if (patchIndices == null) raf.setLength(0)
                                 processDownloadStream(connection.inputStream, raf.channel, secretKey, patchIndices, fileSize)

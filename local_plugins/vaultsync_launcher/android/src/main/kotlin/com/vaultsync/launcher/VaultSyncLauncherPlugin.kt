@@ -281,6 +281,16 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             "calculateBlockHashesAndHash" -> handleCalculateBlockHashesAndHash(call, result)
             "uploadFileNative" -> uploadManager.handleUploadFile(call, result)
             "downloadFileNative" -> downloadManager.handleDownloadFile(call, result)
+            "listLocalBackups" -> {
+                val relPath = call.argument<String>("relPath") ?: return result.error("ARG_MISSING", "relPath missing", null)
+                result.success(downloadManager.listLocalBackups(relPath))
+            }
+            "restoreLocalBackup" -> {
+                val backupId = call.argument<String>("backupId") ?: return result.error("ARG_MISSING", "backupId missing", null)
+                val destPath = call.argument<String>("destPath") ?: return result.error("ARG_MISSING", "destPath missing", null)
+                val ok = downloadManager.restoreLocalBackup(backupId, java.io.File(destPath))
+                result.success(ok)
+            }
             "setFileTimestamp" -> handleSetFileTimestamp(call, result)
             "getFileInfo" -> handleGetFileInfo(call, result)
             "clearCache" -> {
