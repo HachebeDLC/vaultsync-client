@@ -115,13 +115,28 @@ jobs:
         run: |
           zip -r VaultSync-Linux.zip build/linux/x64/release/bundle
 
+      - name: Cache Flatpak runtime
+        if: matrix.target == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/flatpak
+          key: flatpak-runtime-24.08-${{ runner.arch }}
+
+      - name: Cache flatpak-builder
+        if: matrix.target == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/flatpak-builder
+          key: flatpak-builder-${{ hashFiles('com.vaultsync.app.yml') }}-${{ runner.arch }}
+          restore-keys: flatpak-builder-
+
       - name: Install Flatpak tools
         if: matrix.target == 'Linux'
         run: |
           sudo apt-get install -y flatpak flatpak-builder
-          sudo flatpak remote-add --if-not-exists flathub \
+          flatpak remote-add --user --if-not-exists flathub \
             https://flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install -y --noninteractive flathub \
+          flatpak install --user -y --noninteractive flathub \
             org.freedesktop.Platform//24.08 \
             org.freedesktop.Sdk//24.08
 
