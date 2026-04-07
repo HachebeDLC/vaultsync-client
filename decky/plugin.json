@@ -1,0 +1,13 @@
+{
+  "name": "VaultSync",
+  "author": "Hachebe",
+  "flags": [],
+  "api_version": 1,
+  "description": "High-performance emulator save synchronization",
+  "version": "0.1.0",
+  "publish": {
+    "tags": ["Utility", "Emulator", "Sync"],
+    "description": "Native Steam Deck integration for VaultSync. Manage and trigger emulator save synchronizations directly from Game Mode.",
+    "image": "https://raw.githubusercontent.com/HachebeDLC/vaultsync-client/main/vaultsync_app/assets/vaultsync_icon.png"
+  }
+}

@@ -49,6 +49,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libsecret-1-dev libayatana-appindicator3-dev clang cmake ninja-build pkg-config libgtk-3-dev patchelf libsqlite3-dev
 
+      - name: Set up Node + pnpm (Linux — Decky plugin)
+        if: matrix.target == 'Linux'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm (Linux — Decky plugin)
+        if: matrix.target == 'Linux'
+        run: npm install -g pnpm
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -71,19 +81,36 @@ jobs:
           cd build\windows\x64\runner\Release
           7z a ..\..\..\..\..\VaultSync-Windows.zip *
 
+      - name: Build Decky plugin (Linux)
+        if: matrix.target == 'Linux'
+        run: |
+          cd decky
+          pnpm install --frozen-lockfile
+          pnpm build
+
       - name: Zip Artifacts (Linux)
         if: matrix.target == 'Linux'
         run: |
-          cd build/linux/x64/release/bundle
+          BUNDLE=build/linux/x64/release/bundle
+
           # Bundle dynamically linked libraries for portability
-          cp /usr/lib/x86_64-linux-gnu/libayatana-appindicator3.so.1 lib/ || true
-          cp /usr/lib/x86_64-linux-gnu/libayatana-indicator3.so.7 lib/ || true
-          cp /usr/lib/x86_64-linux-gnu/libayatana-ido3-0.4.so.0 lib/ || true
-          # Patch all shared libraries to look in $ORIGIN (their own directory) for dependencies
-          for f in lib/*.so*; do
+          cp /usr/lib/x86_64-linux-gnu/libayatana-appindicator3.so.1 $BUNDLE/lib/ || true
+          cp /usr/lib/x86_64-linux-gnu/libayatana-indicator3.so.7 $BUNDLE/lib/ || true
+          cp /usr/lib/x86_64-linux-gnu/libayatana-ido3-0.4.so.0 $BUNDLE/lib/ || true
+          # Patch all shared libraries to look in $ORIGIN for dependencies
+          for f in $BUNDLE/lib/*.so*; do
             patchelf --set-rpath '$ORIGIN' "$f" || true
           done
-          zip -r ../../../../../VaultSync-Linux.zip *
+
+          # Bundle Decky plugin
+          mkdir -p $BUNDLE/decky_plugin/dist $BUNDLE/decky_plugin/assets
+          cp decky/dist/index.js  $BUNDLE/decky_plugin/dist/
+          cp decky/plugin.json     $BUNDLE/decky_plugin/
+          cp decky/main.py         $BUNDLE/decky_plugin/
+          cp decky/package.json    $BUNDLE/decky_plugin/
+          cp -r decky/assets/.     $BUNDLE/decky_plugin/assets/
+
+          zip -r VaultSync-Linux.zip $BUNDLE
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
