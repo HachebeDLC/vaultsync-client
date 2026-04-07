@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:workmanager/workmanager.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/services/api_client_provider.dart';
+import '../../../core/services/decky_service_installer.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../../sync/services/system_path_service.dart';
 import '../../sync/services/background_sync_service.dart';
@@ -241,6 +242,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
             onTap: () => context.push('/diagnostics'),
           ),
 
+          if (Platform.isLinux) ..._buildDeckyBridgeSection(),
+
           _buildSection('Appearance'),
           ListTile(
             title: const Text('Theme Mode'),
@@ -264,6 +267,103 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
         ],
       ),
     );
+  }
+
+  List<Widget> _buildDeckyBridgeSection() {
+    final installerAsync = ref.watch(deckyServiceInstallerProvider);
+    final status = installerAsync.valueOrNull ?? DeckyBridgeStatus.unknown;
+
+    final (statusText, statusColor) = switch (status) {
+      DeckyBridgeStatus.running => ('Running', Colors.green),
+      DeckyBridgeStatus.stopped => ('Stopped', Colors.orange),
+      DeckyBridgeStatus.installing => ('Installing...', Colors.blue),
+      DeckyBridgeStatus.notInstalled => ('Not installed', Colors.grey),
+      DeckyBridgeStatus.unknown => ('Checking...', Colors.grey),
+    };
+
+    return [
+      _buildSection('Decky Plugin Bridge'),
+      ListTile(
+        leading: Icon(Icons.gamepad_outlined, color: statusColor),
+        title: const Text('Bridge Service'),
+        subtitle: Text(
+          'Serves localhost:5437 for the Decky plugin in Game Mode\nStatus: $statusText',
+        ),
+        trailing: status == DeckyBridgeStatus.installing
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(Icons.circle, size: 12, color: statusColor),
+      ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: [
+            if (status == DeckyBridgeStatus.notInstalled)
+              Expanded(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.download_outlined),
+                  label: const Text('Install & Enable'),
+                  onPressed: () async {
+                    final error = await ref
+                        .read(deckyServiceInstallerProvider.notifier)
+                        .install();
+                    if (error != null && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(error),
+                          backgroundColor: Colors.red,
+                          duration: const Duration(seconds: 6),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+            if (status == DeckyBridgeStatus.stopped) ...[
+              Expanded(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Start'),
+                  onPressed: () =>
+                      ref.read(deckyServiceInstallerProvider.notifier).start(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () async {
+                  final err = await ref
+                      .read(deckyServiceInstallerProvider.notifier)
+                      .uninstall();
+                  if (err != null && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(err)));
+                  }
+                },
+                child: const Text('Uninstall'),
+              ),
+            ],
+            if (status == DeckyBridgeStatus.running) ...[
+              OutlinedButton.icon(
+                icon: const Icon(Icons.stop),
+                label: const Text('Stop'),
+                onPressed: () =>
+                    ref.read(deckyServiceInstallerProvider.notifier).stop(),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () =>
+                    ref.read(deckyServiceInstallerProvider.notifier).refresh(),
+                child: const Icon(Icons.refresh),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 8),
+    ];
   }
 
   Widget _buildSection(String title) {

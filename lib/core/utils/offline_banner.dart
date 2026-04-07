@@ -7,9 +7,9 @@ class OfflineBanner extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isOnline = ref.watch(isOnlineProvider);
+    final showBanner = ref.watch(showOfflineBannerProvider);
     
-    if (isOnline) {
+    if (!showBanner) {
       return const SizedBox.shrink();
     }
 
@@ -33,7 +33,7 @@ class OfflineBanner extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () {
-                  // Optional: trigger a manual check or just hide
+                  ref.read(isBannerDismissedProvider.notifier).state = true;
                 },
                 child: const Text('DISMISS', style: TextStyle(color: Colors.white, fontSize: 12)),
               ),

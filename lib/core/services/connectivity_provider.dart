@@ -56,3 +56,21 @@ final isOnlineProvider = Provider<bool>((ref) {
   // Return true if any of the results are not 'none'
   return connectivity.any((result) => result != ConnectivityResult.none);
 });
+
+/// Provider to track if the user has manually dismissed the offline banner.
+/// Resets when the device becomes online.
+final isBannerDismissedProvider = StateProvider<bool>((ref) {
+  ref.listen<bool>(isOnlineProvider, (previous, next) {
+    if (next == true) {
+      ref.controller.state = false;
+    }
+  });
+  return false;
+});
+
+/// Combined provider to determine if the offline banner should be visible.
+final showOfflineBannerProvider = Provider<bool>((ref) {
+  final isOnline = ref.watch(isOnlineProvider);
+  final isDismissed = ref.watch(isBannerDismissedProvider);
+  return !isOnline && !isDismissed;
+});
