@@ -43,4 +43,25 @@ void main() {
 
     expect(find.text('Device is offline. Changes will be queued.'), findsNothing);
   });
+
+  testWidgets('OfflineBanner should hide when DISMISS is pressed', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          isOnlineProvider.overrideWith((ref) => false),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: OfflineBanner(),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('DISMISS'), findsOneWidget);
+    await tester.tap(find.text('DISMISS'));
+    await tester.pump();
+
+    expect(find.text('Device is offline. Changes will be queued.'), findsNothing);
+  });
 }
