@@ -207,6 +207,9 @@ class SyncRepository {
     await _syncLock.protect(() async {
       final prefs = await SharedPreferences.getInstance();
       final effectivePath = await _pathService.getEffectivePath(systemId);
+      // Always evict the scan cache before syncing so we see saves that
+      // happened after the last diffSystem/dashboard refresh (30s TTL window).
+      _scanCache.remove('${systemId}_$effectivePath');
       final String cloudPrefix = (systemId.toLowerCase() == 'eden') ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId);
       final bool isOnline = ignoreConnectivity || (_ref?.read(isOnlineProvider) ?? true);
 
