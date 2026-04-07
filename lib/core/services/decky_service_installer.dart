@@ -45,6 +45,9 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
         : DeckyBridgeStatus.stopped;
   }
 
+  String get _venvDir => '$_home/.local/share/vaultsync/venv';
+  String get _venvPython => '$_venvDir/bin/python3';
+
   Future<String?> install() async {
     state = const AsyncData(DeckyBridgeStatus.installing);
     try {
@@ -60,10 +63,19 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
         return 'Bridge script not found at $_bridgeScript';
       }
 
-      // 3. Install Python dependencies
+      // 3. Create venv (avoids pip3-not-found and externally-managed-env errors
+      //    on Steam Deck / Arch and modern Debian/Ubuntu systems)
+      final venvResult = await Process.run(python3, ['-m', 'venv', _venvDir]);
+      if (venvResult.exitCode != 0) {
+        developer.log('DECKY: venv creation failed:\n${venvResult.stderr}',
+            name: 'VaultSync', level: 900);
+        return 'Failed to create Python venv: ${venvResult.stderr.toString().trim().split('\n').last}';
+      }
+
+      // 4. Install dependencies into the venv
       final deps = ['aiohttp', 'requests', 'cryptography'];
       final pipResult = await Process.run(
-        python3, ['-m', 'pip', 'install', '--quiet', ...deps],
+        _venvPython, ['-m', 'pip', 'install', '--quiet', ...deps],
       );
       if (pipResult.exitCode != 0) {
         developer.log(
@@ -73,12 +85,12 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
         return 'pip install failed: ${pipResult.stderr.toString().trim().split('\n').last}';
       }
 
-      // 4. Write systemd unit
+      // 5. Write systemd unit
       final serviceDir = Directory('$_home/.config/systemd/user');
       await serviceDir.create(recursive: true);
-      await File(_serviceFilePath).writeAsString(_buildServiceUnit(python3));
+      await File(_serviceFilePath).writeAsString(_buildServiceUnit(_venvPython));
 
-      // 5. Enable and start
+      // 6. Enable and start
       await Process.run('systemctl', ['--user', 'daemon-reload']);
       await Process.run(
           'systemctl', ['--user', 'enable', '--now', _serviceName]);

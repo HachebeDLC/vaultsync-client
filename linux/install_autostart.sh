@@ -22,13 +22,17 @@ if ! command -v python3 &>/dev/null; then
     exit 1
 fi
 
-for pkg in aiohttp requests cryptography; do
-    if ! python3 -c "import $pkg" &>/dev/null; then
-        echo "Installing Python dependency: $pkg"
-        pip3 install --user "$pkg" || { echo "Failed to install $pkg"; exit 1; }
-    fi
-done
+# Use a dedicated venv — avoids pip3/pip not-found and "externally managed
+# environment" errors on Steam Deck (Arch) and modern Debian/Ubuntu systems.
+VENV_DIR="$HOME/.local/share/vaultsync/venv"
+echo "Setting up Python venv at $VENV_DIR..."
+python3 -m venv "$VENV_DIR" || { echo "Error: failed to create venv (try: python3 -m ensurepip)"; exit 1; }
 
+echo "Installing Python dependencies..."
+"$VENV_DIR/bin/pip" install --quiet aiohttp requests cryptography \
+    || { echo "Error: pip install failed"; exit 1; }
+
+PYTHON_BIN="$VENV_DIR/bin/python3"
 chmod +x "$BRIDGE_SCRIPT"
 
 # -----------------------------------------------------------------------
@@ -44,7 +48,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$BRIDGE_SCRIPT
+ExecStart=$PYTHON_BIN $BRIDGE_SCRIPT
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
