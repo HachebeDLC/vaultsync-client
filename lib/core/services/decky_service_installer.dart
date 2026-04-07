@@ -16,6 +16,15 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
   String get _home => Platform.environment['HOME'] ?? '/home/deck';
   String get _serviceFilePath => '$_home/$_serviceFile';
 
+  // When the app is running inside a Flatpak sandbox, systemctl and python3
+  // must be invoked on the host via flatpak-spawn --host.
+  bool get _isInsideFlatpak => File('/.flatpak-info').existsSync();
+
+  Future<ProcessResult> _run(String exe, List<String> args) =>
+      _isInsideFlatpak
+          ? Process.run('flatpak-spawn', ['--host', exe, ...args])
+          : Process.run(exe, args);
+
   String get _bridgeScript {
     // In production the script is next to the binary; in debug mode fall back
     // to the linux/ source directory.
@@ -37,7 +46,7 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
     if (!File(_serviceFilePath).existsSync()) {
       return DeckyBridgeStatus.notInstalled;
     }
-    final result = await Process.run(
+    final result = await _run(
       'systemctl', ['--user', 'is-active', _serviceName],
     );
     return result.stdout.toString().trim() == 'active'
@@ -52,7 +61,7 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
     state = const AsyncData(DeckyBridgeStatus.installing);
     try {
       // 1. Verify python3
-      final py = await Process.run('which', ['python3']);
+      final py = await _run('which', ['python3']);
       if (py.exitCode != 0) {
         return 'python3 not found. Install it via your package manager.';
       }
@@ -65,7 +74,7 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
 
       // 3. Create venv (avoids pip3-not-found and externally-managed-env errors
       //    on Steam Deck / Arch and modern Debian/Ubuntu systems)
-      final venvResult = await Process.run(python3, ['-m', 'venv', _venvDir]);
+      final venvResult = await _run(python3, ['-m', 'venv', _venvDir]);
       if (venvResult.exitCode != 0) {
         developer.log('DECKY: venv creation failed:\n${venvResult.stderr}',
             name: 'VaultSync', level: 900);
@@ -74,7 +83,7 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
 
       // 4. Install dependencies into the venv
       final deps = ['aiohttp', 'requests', 'cryptography'];
-      final pipResult = await Process.run(
+      final pipResult = await _run(
         _venvPython, ['-m', 'pip', 'install', '--quiet', ...deps],
       );
       if (pipResult.exitCode != 0) {
@@ -91,9 +100,8 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
       await File(_serviceFilePath).writeAsString(_buildServiceUnit(_venvPython));
 
       // 6. Enable and start
-      await Process.run('systemctl', ['--user', 'daemon-reload']);
-      await Process.run(
-          'systemctl', ['--user', 'enable', '--now', _serviceName]);
+      await _run('systemctl', ['--user', 'daemon-reload']);
+      await _run('systemctl', ['--user', 'enable', '--now', _serviceName]);
 
       await Future.delayed(const Duration(seconds: 2));
       state = AsyncData(await _checkStatus());
@@ -108,22 +116,22 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
   }
 
   Future<void> start() async {
-    await Process.run('systemctl', ['--user', 'start', _serviceName]);
+    await _run('systemctl', ['--user', 'start', _serviceName]);
     await Future.delayed(const Duration(seconds: 1));
     state = AsyncData(await _checkStatus());
   }
 
   Future<void> stop() async {
-    await Process.run('systemctl', ['--user', 'stop', _serviceName]);
+    await _run('systemctl', ['--user', 'stop', _serviceName]);
     state = AsyncData(await _checkStatus());
   }
 
   Future<String?> uninstall() async {
-    await Process.run('systemctl', ['--user', 'disable', '--now', _serviceName]);
+    await _run('systemctl', ['--user', 'disable', '--now', _serviceName]);
     try {
       await File(_serviceFilePath).delete();
     } catch (_) {}
-    await Process.run('systemctl', ['--user', 'daemon-reload']);
+    await _run('systemctl', ['--user', 'daemon-reload']);
     state = const AsyncData(DeckyBridgeStatus.notInstalled);
     return null;
   }

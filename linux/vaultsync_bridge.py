@@ -29,7 +29,10 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 # ---------------------------------------------------------------------------
 
 BRIDGE_PORT = 5437
-PREFS_PATH = Path.home() / ".local/share/com.vaultsync.app/shared_preferences.json"
+# Flutter inside a Flatpak sandbox writes prefs to ~/.var/app/<id>/data/...
+# The bridge runs outside the sandbox, so check both locations.
+_FLATPAK_PREFS = Path.home() / ".var/app/com.vaultsync.app/data/com.vaultsync.app/shared_preferences.json"
+_DIRECT_PREFS  = Path.home() / ".local/share/com.vaultsync.app/shared_preferences.json"
 
 MAGIC = b"NEOSYNC"
 IV_SIZE = 16
@@ -54,9 +57,13 @@ log = logging.getLogger("bridge")
 # SharedPreferences reader
 # ---------------------------------------------------------------------------
 
+def _prefs_path() -> Path:
+    return _FLATPAK_PREFS if _FLATPAK_PREFS.exists() else _DIRECT_PREFS
+
+
 def read_prefs() -> Dict:
     try:
-        with open(PREFS_PATH) as f:
+        with open(_prefs_path()) as f:
             return json.load(f)
     except FileNotFoundError:
         return {}

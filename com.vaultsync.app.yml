@@ -1,0 +1,72 @@
+app-id: com.vaultsync.app
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: VaultSync
+
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # Emulator saves can live anywhere under home — required for EmuDeck,
+  # RetroArch, standalone emulators, etc.
+  - --filesystem=home
+  # Tray icon support (KDE/Plasma StatusNotifier + legacy AppIndicator)
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=com.canonical.AppMenu.Registrar
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  - name: vaultsync
+    buildsystem: simple
+
+    sources:
+      # Pre-built Flutter bundle (built before flatpak-builder runs in CI)
+      - type: dir
+        path: build/linux/x64/release/bundle
+
+      - type: file
+        path: linux/vaultsync_bridge.py
+
+      - type: file
+        path: linux/install_autostart.sh
+
+      - type: file
+        path: linux/install_shortcut.sh
+
+      # Pre-built Decky plugin (pnpm build runs before flatpak-builder)
+      - type: dir
+        path: decky
+        dest: decky_src
+
+    build-commands:
+      # Install Flutter bundle maintaining $ORIGIN/lib rpath — binary finds
+      # its libs at /app/lib/vaultsync/lib/ without any patchelf fixup.
+      - mkdir -p /app/bin /app/lib/vaultsync
+      - cp -r VaultSync lib data /app/lib/vaultsync/
+
+      # Bridge daemon and installer scripts land next to the binary so that
+      # Platform.resolvedExecutable-based path resolution finds them at
+      # runtime ($exeDir/vaultsync_bridge.py).
+      - install -Dm755 vaultsync_bridge.py   /app/lib/vaultsync/vaultsync_bridge.py
+      - install -Dm755 install_autostart.sh  /app/lib/vaultsync/install_autostart.sh
+      - install -Dm755 install_shortcut.sh   /app/lib/vaultsync/install_shortcut.sh
+
+      # Decky plugin
+      - mkdir -p /app/lib/vaultsync/decky_plugin/dist /app/lib/vaultsync/decky_plugin/assets
+      - cp decky_src/dist/index.js   /app/lib/vaultsync/decky_plugin/dist/
+      - cp decky_src/plugin.json     /app/lib/vaultsync/decky_plugin/
+      - cp decky_src/main.py         /app/lib/vaultsync/decky_plugin/
+      - cp decky_src/package.json    /app/lib/vaultsync/decky_plugin/
+      - cp -r decky_src/assets/.     /app/lib/vaultsync/decky_plugin/assets/
+
+      # Thin wrapper so Flatpak finds the command at /app/bin/VaultSync.
+      # The real binary stays at /app/lib/vaultsync/ so Flutter can locate
+      # its data/ directory via $ORIGIN.
+      - |
+        install -Dm755 /dev/stdin /app/bin/VaultSync << 'EOF'
+        #!/bin/sh
+        exec /app/lib/vaultsync/VaultSync "$@"
+        EOF

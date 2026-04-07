@@ -88,21 +88,21 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
-      - name: Zip Artifacts (Linux)
+      - name: Prepare Linux bundle
         if: matrix.target == 'Linux'
         run: |
           BUNDLE=build/linux/x64/release/bundle
 
-          # Bundle dynamically linked libraries for portability
+          # Ayatana tray-icon libs (not pulled in by ldd, loaded at runtime)
           cp /usr/lib/x86_64-linux-gnu/libayatana-appindicator3.so.1 $BUNDLE/lib/ || true
           cp /usr/lib/x86_64-linux-gnu/libayatana-indicator3.so.7 $BUNDLE/lib/ || true
           cp /usr/lib/x86_64-linux-gnu/libayatana-ido3-0.4.so.0 $BUNDLE/lib/ || true
-          # Patch all shared libraries to look in $ORIGIN for dependencies
+          # Patch bundled libs to resolve each other via $ORIGIN
           for f in $BUNDLE/lib/*.so*; do
             patchelf --set-rpath '$ORIGIN' "$f" || true
           done
 
-          # Bundle Decky plugin
+          # Decky plugin
           mkdir -p $BUNDLE/decky_plugin/dist $BUNDLE/decky_plugin/assets
           cp decky/dist/index.js  $BUNDLE/decky_plugin/dist/
           cp decky/plugin.json     $BUNDLE/decky_plugin/
@@ -110,7 +110,31 @@ jobs:
           cp decky/package.json    $BUNDLE/decky_plugin/
           cp -r decky/assets/.     $BUNDLE/decky_plugin/assets/
 
-          zip -r VaultSync-Linux.zip $BUNDLE
+      - name: Zip Linux bundle (tar.gz)
+        if: matrix.target == 'Linux'
+        run: |
+          zip -r VaultSync-Linux.zip build/linux/x64/release/bundle
+
+      - name: Install Flatpak tools
+        if: matrix.target == 'Linux'
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo flatpak remote-add --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+          sudo flatpak install -y --noninteractive flathub \
+            org.freedesktop.Platform//24.08 \
+            org.freedesktop.Sdk//24.08
+
+      - name: Build Flatpak
+        if: matrix.target == 'Linux'
+        run: |
+          flatpak-builder \
+            --repo=flatpak-repo \
+            --force-clean \
+            --disable-rofiles-fuse \
+            flatpak-build \
+            com.vaultsync.app.yml
+          flatpak build-bundle flatpak-repo VaultSync.flatpak com.vaultsync.app
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -119,6 +143,7 @@ jobs:
             build/app/outputs/flutter-apk/app-release.apk
             VaultSync-Windows.zip
             VaultSync-Linux.zip
+            VaultSync.flatpak
           body: "VaultSync Release ${{ github.ref_name }} (Cross-Platform)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
