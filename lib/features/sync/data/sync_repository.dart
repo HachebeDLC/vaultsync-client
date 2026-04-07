@@ -389,6 +389,37 @@ class SyncRepository {
     final effectivePath = await _pathService.getEffectivePath(systemId);
     final destUri = p.join(effectivePath, destRelPath);
 
+    // Timestamp guard: don't overwrite a locally newer save.
+    // On desktop, stat the file directly. On Android (SAF), check the last
+    // scan list first, then fall back to the DB cached timestamp.
+    int localTs = 0;
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      final localFile = File(destUri);
+      if (await localFile.exists()) {
+        localTs = (await localFile.lastModified()).millisecondsSinceEpoch;
+      }
+    } else {
+      // Check the most recent scan results before hitting the DB.
+      final scanEntry = _lastScanList.cast<Map<String, dynamic>?>().firstWhere(
+        (e) => e != null && (e['uri'] == destUri || e['path'] == destRelPath),
+        orElse: () => null,
+      );
+      if (scanEntry != null) {
+        localTs = (scanEntry['lastModified'] as num?)?.toInt() ?? 0;
+      } else {
+        final cached = await _syncStateDb.getState(destUri);
+        localTs = (cached?['last_modified'] as num?)?.toInt() ?? 0;
+      }
+    }
+
+    if (localTs > updatedAt) {
+      developer.log(
+        'SSE: Skipping download for $path — local ($localTs) is newer than remote ($updatedAt)',
+        name: 'VaultSync', level: 800,
+      );
+      return;
+    }
+
     await _syncStateDb.upsertState(
       destUri, size, updatedAt, remoteHash, 'pending_download',
       systemId: systemId, remotePath: path, relPath: destRelPath,
