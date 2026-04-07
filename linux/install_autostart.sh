@@ -88,6 +88,25 @@ EOF
 
 chmod +x "$AUTOSTART_FILE"
 
+# -----------------------------------------------------------------------
+# 3. Decky Loader plugin (optional — only if Decky is installed)
+# -----------------------------------------------------------------------
+DECKY_PLUGINS_DIR="$HOME/homebrew/plugins"
+PLUGIN_SRC="$DIR/decky_plugin"
+PLUGIN_DEST="$DECKY_PLUGINS_DIR/VaultSync"
+
+if [ -d "$DECKY_PLUGINS_DIR" ] && [ -d "$PLUGIN_SRC" ]; then
+    echo "Installing Decky plugin to $PLUGIN_DEST..."
+    rm -rf "$PLUGIN_DEST"
+    cp -r "$PLUGIN_SRC" "$PLUGIN_DEST"
+    echo "Decky plugin installed. Restart Decky Loader to activate it."
+elif [ ! -d "$DECKY_PLUGINS_DIR" ]; then
+    echo "Decky Loader not found — skipping plugin install."
+    echo "  To install later: copy $PLUGIN_SRC to ~/homebrew/plugins/VaultSync/"
+elif [ ! -d "$PLUGIN_SRC" ]; then
+    echo "Warning: decky_plugin directory not found in bundle — skipping."
+fi
+
 echo ""
 echo "Setup complete."
 echo "  Bridge service: systemctl --user status vaultsync-bridge"
