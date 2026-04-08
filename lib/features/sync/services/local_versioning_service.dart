@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -133,6 +134,37 @@ class LocalVersioningService {
       return await _launcher.reconstructFromDeltas(layoutHashes, liveFilePath, restorePath, versionStorePath);
     } catch (e) {
       print('Error reconstructing version: $e');
+      return false;
+    }
+  }
+
+  Future<bool> safeRestore(String systemId, String versionId, String liveFilePath, String effectivePath) async {
+    try {
+      final safeRestoreDir = p.join(effectivePath, 'SafeRestore');
+      final fileName = p.basename(liveFilePath);
+      final safeRestorePath = p.join(safeRestoreDir, fileName);
+
+      // Create dirs (if needed via Platform channel or Dart)
+      Directory(safeRestoreDir).createSync(recursive: true);
+
+      final success = await reconstructVersion(versionId, liveFilePath, safeRestorePath);
+      if (!success) return false;
+
+      final undoDir = p.join(effectivePath, '.undo');
+      Directory(undoDir).createSync(recursive: true);
+      
+      final undoPath = p.join(undoDir, fileName);
+      final liveFile = File(liveFilePath);
+      if (liveFile.existsSync()) {
+        liveFile.renameSync(undoPath);
+      }
+
+      // Move safe restore to live path
+      File(safeRestorePath).renameSync(liveFilePath);
+
+      return true;
+    } catch (e) {
+      print('Error in safe restore: $e');
       return false;
     }
   }

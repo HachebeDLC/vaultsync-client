@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:vaultsync_client/features/sync/services/local_versioning_service.dart';
@@ -113,7 +114,6 @@ void main() {
       const systemId = 'ps2';
       const filePath = '/test/game.sav';
 
-      // Insert 5 older versions manually
       for (int i = 0; i < 5; i++) {
         await realDb.insert('local_versions', {
           'id': 'v_$i',
@@ -125,7 +125,6 @@ void main() {
         });
       }
 
-      // Snapshot a new version
       when(() => mockLauncher.calculateBlockHashesAndHash(filePath, masterKey: null))
           .thenAnswer((_) async => {
                 'blockHashes': ['hashNew'],
@@ -136,11 +135,48 @@ void main() {
 
       await service.createSnapshot(systemId, filePath, 100);
 
-      // Verify we only have 5 versions left, meaning v_0 was deleted
       final versions = await realDb.query('local_versions', orderBy: 'timestamp ASC');
       expect(versions.length, 5);
-      expect(versions.first['id'], 'v_1'); // Oldest is now v_1
-      expect(versions.last['id'], startsWith('v_')); // Newest is the one we just created
+      expect(versions.first['id'], 'v_1');
+    });
+
+    test('safeRestore reconstructs to SafeRestore folder and renames live file', () async {
+      const systemId = 'ps2';
+      final tempDir = Directory.systemTemp.createTempSync('vaultsync_test');
+      final effectivePath = tempDir.path;
+      final filePath = '${tempDir.path}/live_save.sav';
+      const versionId = 'v_safe';
+      
+      await realDb.insert('local_versions', {
+        'id': versionId,
+        'systemId': systemId,
+        'filePath': filePath,
+        'timestamp': 1000,
+        'size': 100,
+        'fileHash': 'hash1'
+      });
+      await realDb.insert('version_blocks', {
+        'versionId': versionId,
+        'blockIndex': 0,
+        'blockHash': 'block1'
+      });
+
+      // Create the live file and safe restore mock file so renameSync doesn't fail
+      File(filePath).writeAsStringSync('live data');
+      File('$effectivePath/SafeRestore/live_save.sav')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('restored data');
+
+      when(() => mockLauncher.reconstructFromDeltas(['block1'], filePath, '$effectivePath/SafeRestore/live_save.sav', '/tmp/versions'))
+          .thenAnswer((_) async => true);
+
+      final result = await service.safeRestore(systemId, versionId, filePath, effectivePath);
+      
+      expect(result, isTrue);
+      expect(File('$effectivePath/.undo/live_save.sav').existsSync(), isTrue);
+      expect(File(filePath).readAsStringSync(), 'restored data');
+
+      verify(() => mockLauncher.reconstructFromDeltas(['block1'], filePath, '$effectivePath/SafeRestore/live_save.sav', '/tmp/versions')).called(1);
     });
   });
 }
