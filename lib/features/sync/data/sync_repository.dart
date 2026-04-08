@@ -28,6 +28,7 @@ import '../services/file_hash_service.dart';
 import '../services/conflict_resolver.dart';
 import '../services/notification_service.dart';
 import '../services/power_manager_service.dart';
+import '../services/local_versioning_service.dart';
 
 final syncPathResolverProvider = Provider<SyncPathResolver>((ref) => SyncPathResolver());
 final syncStateDatabaseProvider = Provider<SyncStateDatabase>((ref) => SyncStateDatabase());
@@ -217,23 +218,32 @@ class SyncRepository {
         developer.log('⚠️ SYNC: Failed to ensure base path exists', name: 'VaultSync', level: 900, error: e);
       }
 
+      final localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
+      final localFiles = _conflictResolver.processLocalFiles(systemId, localList);
+
       if (!isOnline) {
         developer.log('SYNC: Offline mode. Queuing local changes for $systemId', name: 'VaultSync', level: 800);
-        final localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
-        final localFiles = _conflictResolver.processLocalFiles(systemId, localList);
-        for (final entry in localFiles.entries) {
-          final relPath = entry.key;
-          final localInfo = entry.value;
-          final int localTs = (localInfo['lastModified'] as num).toInt();
-          final int localSize = (localInfo['size'] as num).toInt();
-          final cached = await _syncStateDb.getState(localInfo['uri']);
-          if (cached == null || cached['size'] != localSize || cached['last_modified'] != localTs) {
-            await _syncStateDb.upsertState(
-              localInfo['uri'], localSize, localTs, cached?['hash'] ?? '',
-              'pending_offline_upload',
-              systemId: systemId, remotePath: '$cloudPrefix/$relPath', relPath: relPath,
-            );
+        try {
+          final masterKey = await _getMasterKey();
+          for (final entry in localFiles.entries) {
+            final relPath = entry.key;
+            final localInfo = entry.value;
+            final int localTs = (localInfo['lastModified'] as num).toInt();
+            final int localSize = (localInfo['size'] as num).toInt();
+            final cached = await _syncStateDb.getState(localInfo['uri']);
+            if (cached == null || cached['size'] != localSize || cached['last_modified'] != localTs) {
+              onProgress?.call('Snapshotting $relPath...');
+              await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey);
+
+              await _syncStateDb.upsertState(
+                localInfo['uri'], localSize, localTs, cached?['hash'] ?? '',
+                'pending_offline_upload',
+                systemId: systemId, remotePath: '$cloudPrefix/$relPath', relPath: relPath,
+              );
+            }
           }
+        } catch (e) {
+          developer.log('⚠️ SYNC: Failed to queue offline changes', name: 'VaultSync', level: 900, error: e);
         }
         return;
       }
@@ -241,9 +251,9 @@ class SyncRepository {
       try {
         final fileList = await _diffService.fetchAllRemoteFiles(cloudPrefix);
         final remoteFiles = {for (var f in fileList) f['path']: f};
-        final localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
-        final localFiles = _conflictResolver.processLocalFiles(systemId, localList);
         final cloudRelPaths = <String>{
+
+
           ...localFiles.keys,
           ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)),
         };
@@ -268,6 +278,10 @@ class SyncRepository {
               final combined = await _networkService.getBlockHashesAndFileHash(localInfo['uri'], masterKey);
               final blockHashes = (combined['blockHashes'] as List).cast<String>();
               final fullHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs, precomputedHash: combined['fileHash'] as String);
+              
+              onProgress?.call('Snapshotting $relPath...');
+              await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey);
+
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, fullHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(blockHashes));
             }
           } else if (localInfo == null && remoteInfo != null) {
@@ -306,6 +320,9 @@ class SyncRepository {
               _recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
               continue;
             }
+            onProgress?.call('Snapshotting $relPath...');
+            await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey);
+
             if (localTs > (remoteInfo['updated_at'] as num)) {
               onProgress?.call('Queueing $relPath for patching (Local Newer)...');
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
@@ -328,8 +345,7 @@ class SyncRepository {
         );
         await _commitSyncJournal(prefs);
       } catch (e, stack) {
-        // ignore: avoid_print
-        print('[VaultSync] SYNC ERROR ($systemId): $e\n$stack');
+        developer.log('SYNC ERROR ($systemId): $e\n$stack', name: 'VaultSync', level: 1000);
         _ref?.read(notificationLogProvider.notifier).addError(e, systemId: systemId);
         onError?.call(e.toString());
         rethrow;

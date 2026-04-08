@@ -74,6 +74,7 @@ void main() {
     test('syncSystem should call onError when remote file fetch fails', () async {
       when(() => mockPathService.getEffectivePath(any())).thenAnswer((_) async => '/test/path');
       when(() => mockPathService.mkdirs(any())).thenAnswer((_) async => true);
+      when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({});
       when(() => mockDiffService.fetchAllRemoteFiles(any()))
           .thenThrow(Exception('Network error'));
 
@@ -84,7 +85,9 @@ void main() {
           '/storage/emulated/0/PS2',
           onError: (e) => lastError = e,
         );
-      } catch (_) {}
+      } catch (e) {
+        print('Caught error: $e');
+      }
 
       expect(lastError, contains('Network error'));
     });
