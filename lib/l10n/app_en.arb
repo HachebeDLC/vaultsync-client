@@ -1,0 +1,228 @@
+{
+  "appTitle": "VaultSync",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+  "syncEngineDescription": "Hardware-Accelerated Sync Engine",
+  "@syncEngineDescription": {
+    "description": "Description of the sync engine"
+  },
+  "settingsTitle": "Settings",
+  "@settingsTitle": {
+    "description": "Title of the settings screen"
+  },
+  "sectionServerAccount": "Server & Account",
+  "serverUrlTitle": "Server URL",
+  "notSet": "Not set",
+  "accountTitle": "Account",
+  "notLoggedIn": "Not logged in",
+  "logoutButton": "LOGOUT",
+  "sectionAutomation": "Automation (Beta)",
+  "syncOnExitTitle": "Sync on Game Exit",
+  "syncOnExitSubtitle": "Upload saves automatically when you finish playing",
+  "usageAccessRequired": "Usage Access is required to detect when emulators close.",
+  "grantPermissionButton": "GRANT PERMISSION",
+  "periodicSyncTitle": "Periodic Background Sync",
+  "periodicSyncSubtitle": "Perform a catch-up sync every 6 hours",
+  "viewSyncHistoryTitle": "View Sync History",
+  "viewSyncHistorySubtitle": "Review logs of background sync events",
+  "conflictStrategyTitle": "Conflict Strategy",
+  "conflictStrategySubtitle": "Choose how to resolve save discrepancies",
+  "strategyAsk": "Ask Every Time",
+  "strategyNewest": "Always Newest",
+  "strategyLocal": "Prefer Local",
+  "strategyCloud": "Prefer Cloud",
+  "sectionHardwareBridge": "Hardware Bridge",
+  "useShizukuTitle": "Use Shizuku Bridge",
+  "useShizukuSubtitle": "High-speed access for Android 14+ /data folders",
+  "runDiagnosticsTitle": "Run System Diagnostics",
+  "runDiagnosticsSubtitle": "Test hardware speed and SAF/Shizuku health",
+  "sectionAppearance": "Appearance",
+  "themeModeTitle": "Theme Mode",
+  "themeSystem": "System",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "sectionLanguage": "Language",
+  "languageTitle": "App Language",
+  "sectionDeckyBridge": "Decky Plugin Bridge",
+  "bridgeServiceTitle": "Bridge Service",
+  "bridgeServiceSubtitle": "Serves localhost:5437 for the Decky plugin in Game Mode\nStatus: {status}",
+  "@bridgeServiceSubtitle": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "statusRunning": "Running",
+  "statusStopped": "Stopped",
+  "statusInstalling": "Installing...",
+  "statusNotInstalled": "Not installed",
+  "statusChecking": "Checking...",
+  "installEnableButton": "Install & Enable",
+  "startButton": "Start",
+  "uninstallButton": "Uninstall",
+  "stopButton": "Stop",
+  "openingShizuku": "Opening Shizuku... Start the service and come back.",
+  "shizukuAuthorized": "Shizuku authorized!",
+  "actionLogin": "LOGIN",
+  "actionFix": "FIX",
+  "actionSettings": "SETTINGS",
+  "actionRetry": "RETRY",
+  "actionDismiss": "DISMISS",
+  "actionSetup": "SETUP",
+  "actionOpenApp": "OPEN APP",
+  "actionFixNow": "FIX NOW",
+  "bridgeSetupTitle": "Recommended: Setup Bridge",
+  "bridgeSetupSubtitle": "Shizuku is required for full speed on Android {version}",
+  "@bridgeSetupSubtitle": {
+    "placeholders": {
+      "version": {
+        "type": "int"
+      }
+    }
+  },
+  "shizukuNotRunningTitle": "Shizuku is not running",
+  "shizukuNotRunningSubtitle": "restricted folder access is disabled",
+  "shizukuPermissionTitle": "Shizuku Permission Required",
+  "shizukuPermissionSubtitle": "authorize VaultSync to continue",
+  "scanLibraryTooltip": "Scan Library",
+  "notificationsTooltip": "Notifications",
+  "settingsTooltip": "Settings",
+  "noSystemsConfigured": "No systems configured yet.",
+  "scanLibraryButton": "Scan Library",
+  "syncing": "Syncing...",
+  "systemReady": "System Ready",
+  "stopSyncButton": "STOP SYNC",
+  "waitingForChanges": "Waiting for changes",
+  "syncAllButton": "Sync All",
+  "diagnosticsTitle": "System Diagnostics",
+  "runningStressTests": "Running Stress Tests...",
+  "startDeltaSyncTest": "Start Delta Sync Test",
+  "refreshFailed": "Refresh failed: {error}",
+  "@refreshFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "statusSynced": "Synced",
+  "statusModified": "Modified",
+  "statusLocalOnly": "Local Only",
+  "statusRemoteOnly": "Remote Only",
+  "clickToViewHistory": "Click to view version history",
+  "stateTag": "STATE",
+  "versionHistoryTooltip": "Version History",
+  "systemManagementTitle": "{systemId} Management",
+  "@systemManagementTitle": {
+    "placeholders": {
+      "systemId": {
+        "type": "String"
+      }
+    }
+  },
+  "syncNowButton": "SYNC NOW",
+  "syncThisSystemTooltip": "Sync This System",
+  "systemNotConfigured": "System not configured.",
+  "noFilesFound": "No files found.",
+  "registrationFailed": "Registration failed",
+  "loginFailed": "Login failed",
+  "createAccountTitle": "Create Account",
+  "loginTitle": "Login",
+  "serverSettingsTooltip": "Server Settings",
+  "usernameLabel": "Username",
+  "emailLabel": "Email",
+  "passwordLabel": "Password",
+  "createAccountButton": "CREATE ACCOUNT",
+  "loginButton": "LOGIN",
+  "forgotPasswordButton": "Forgot Password?",
+  "alreadyHaveAccount": "Already have an account? Sign In",
+  "dontHaveAccount": "Don't have an account? Register Now",
+  "diagnosticReportTitle": "Diagnostic Report",
+  "diagnosticReportDescription": "The following report will be submitted to GitHub. Sensitive information like emails and full paths have been redacted.",
+  "reportCopied": "Report copied to clipboard",
+  "copyButton": "COPY",
+  "reportToGithubButton": "REPORT TO GITHUB",
+  "sessionEventsTitle": "Session Events",
+  "reportButton": "Report",
+  "clearButton": "Clear",
+  "noEventsInSession": "No events in this session",
+  "actionFixBridge": "FIX BRIDGE",
+  "syncHistoryTitle": "Sync History",
+  "clearHistoryTooltip": "Clear History",
+  "noSyncHistoryFound": "No sync history found.",
+  "recoverVaultTitle": "Recover Vault",
+  "enterEmailToRecover": "Enter your email to retrieve your recovery questions.",
+  "fetchRecoveryInfoButton": "FETCH RECOVERY INFO",
+  "answerSecurityQuestions": "Please answer your security questions to restore your master key.",
+  "masterKeyRestored": "Master key restored! You can now log in.",
+  "recoveryFailed": "Recovery failed: {error}",
+  "@recoveryFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "restoreMasterKeyButton": "RESTORE MASTER KEY",
+  "recoverySetupTitle": "Recovery Setup",
+  "recoverySetupSaved": "Recovery setup saved successfully!",
+  "errorSavingRecovery": "Error saving recovery: {error}",
+  "@errorSavingRecovery": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "saveRecoverySetupButton": "SAVE RECOVERY SETUP",
+  "librarySetupTitle": "Library Setup",
+  "noSystemsFound": "No systems found in that folder.",
+  "errorGeneric": "Error: {error}",
+  "@errorGeneric": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "noInstalledEmulatorsFound": "No installed emulators found for {systemName}.",
+  "@noInstalledEmulatorsFound": {
+    "placeholders": {
+      "systemName": {
+        "type": "String"
+      }
+    }
+  },
+  "selectEmulatorFor": "Select Emulator for {systemName}",
+  "@selectEmulatorFor": {
+    "placeholders": {
+      "systemName": {
+        "type": "String"
+      }
+    }
+  },
+  "configureSavePathTitle": "Configure Save Path",
+  "emulatorLabel": "Emulator: {emulatorName}",
+  "@emulatorLabel": {
+    "placeholders": {
+      "emulatorName": {
+        "type": "String"
+      }
+    }
+  },
+  "saveFolderLabel": "Save Folder:",
+  "cancelButton": "Cancel",
+  "saveButton": "Save",
+  "finishSetupButton": "FINISH SETUP",
+  "selectRomsRoot": "SELECT ROMS ROOT",
+  "baseFolderDescription": "Base folder containing your game subfolders (e.g. Roms/ps2, Roms/snes).",
+  "pathLabel": "Path",
+  "scanLibraryAction": "SCAN LIBRARY",
+  "noSystemsDetected": "No systems detected yet.\nSelect your ROMs root and click \"Scan\".",
+  "detectedSystems": "DETECTED SYSTEMS",
+  "noInstalledEmulatorsForDetected": "No installed emulators found for the detected systems.",
+  "configuredStatus": "Configured",
+  "needsSetupStatus": "Needs Setup"
+}

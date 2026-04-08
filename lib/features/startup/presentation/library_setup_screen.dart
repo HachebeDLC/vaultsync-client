@@ -45,6 +45,8 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
       setState(() {
         _pathController.text = savedPath;
       });
+    } else if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      _pathController.text = '';
     } else {
       _pathController.text = '/storage/emulated/0/Roms';
     }

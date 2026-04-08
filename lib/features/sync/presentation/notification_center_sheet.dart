@@ -8,6 +8,7 @@ import '../domain/notification_provider.dart';
 import '../../../core/errors/error_mapper.dart';
 import '../services/shizuku_service.dart';
 import '../services/diagnostic_report_service.dart';
+import '../../../l10n/generated/app_localizations.dart';
 
 class NotificationCenterSheet extends ConsumerWidget {
   const NotificationCenterSheet({super.key});
@@ -15,13 +16,16 @@ class NotificationCenterSheet extends ConsumerWidget {
   void _showReportPreview(BuildContext context, WidgetRef ref) async {
     final service = ref.read(diagnosticReportServiceProvider);
     final report = await service.generateMarkdownReport();
+    final l10n = AppLocalizations.of(context)!;
 
     if (!context.mounted) return;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Diagnostic Report'),
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return AlertDialog(
+        title: Text(l10n.diagnosticReportTitle),
         content: SizedBox(
           width: double.maxFinite,
           child: SingleChildScrollView(
@@ -29,21 +33,25 @@ class NotificationCenterSheet extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'The following report will be submitted to GitHub. Sensitive information like emails and full paths have been redacted.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                Text(
+                  l10n.diagnosticReportDescription,
+                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
+                    border: Border.all(color: colorScheme.outlineVariant),
                   ),
                   child: Text(
                     report,
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: colorScheme.onSurface,
+                    ),
                   ),
                 ),
               ],
@@ -54,19 +62,20 @@ class NotificationCenterSheet extends ConsumerWidget {
           TextButton(
             onPressed: () {
               Clipboard.setData(ClipboardData(text: report));
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report copied to clipboard')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.reportCopied)));
             },
-            child: const Text('COPY'),
+            child: Text(l10n.copyButton),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               service.reportToGitHub();
             },
-            child: const Text('REPORT TO GITHUB'),
+            child: Text(l10n.reportToGithubButton),
           ),
         ],
-      ),
+      );
+      },
     );
   }
 
@@ -74,6 +83,7 @@ class NotificationCenterSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifications = ref.watch(notificationLogProvider);
     final notifier = ref.read(notificationLogProvider.notifier);
+    final l10n = AppLocalizations.of(context)!;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
@@ -83,66 +93,66 @@ class NotificationCenterSheet extends ConsumerWidget {
       ),
       child: Column(
         children: [
-          _buildHeader(context, ref, notifier, notifications.isEmpty),
+          _buildHeader(context, ref, notifier, notifications.isEmpty, l10n),
           const Divider(height: 1),
           Expanded(
             child: notifications.isEmpty
-                ? _buildEmptyState()
-                : _buildList(context, ref, notifications, notifier),
+                ? _buildEmptyState(l10n)
+                : _buildList(context, ref, notifications, notifier, l10n),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context, WidgetRef ref, NotificationLogNotifier notifier, bool isEmpty) {
+  Widget _buildHeader(BuildContext context, WidgetRef ref, NotificationLogNotifier notifier, bool isEmpty, AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
-          const Text('Session Events', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(l10n.sessionEventsTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const Spacer(),
           TextButton.icon(
             onPressed: () => _showReportPreview(context, ref),
             icon: const Icon(Icons.bug_report_outlined, size: 18),
-            label: const Text('Report'),
+            label: Text(l10n.reportButton),
           ),
           if (!isEmpty)
             TextButton(
               onPressed: () => notifier.clearAll(),
-              child: const Text('Clear'),
+              child: Text(l10n.clearButton),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return const Center(
+  Widget _buildEmptyState(AppLocalizations l10n) {
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.notifications_none, size: 64, color: Colors.grey),
-          SizedBox(height: 16),
-          Text('No events in this session', style: TextStyle(color: Colors.grey)),
+          const Icon(Icons.notifications_none, size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          Text(l10n.noEventsInSession, style: const TextStyle(color: Colors.grey)),
         ],
       ),
     );
   }
 
-  Widget _buildList(BuildContext context, WidgetRef ref, List<NotificationLog> logs, NotificationLogNotifier notifier) {
+  Widget _buildList(BuildContext context, WidgetRef ref, List<NotificationLog> logs, NotificationLogNotifier notifier, AppLocalizations l10n) {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: logs.length,
       separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final log = logs[index];
-        return _buildNotificationItem(context, ref, log, notifier);
+        return _buildNotificationItem(context, ref, log, notifier, l10n);
       },
     );
   }
 
-  Widget _buildNotificationItem(BuildContext context, WidgetRef ref, NotificationLog log, NotificationLogNotifier notifier) {
+  Widget _buildNotificationItem(BuildContext context, WidgetRef ref, NotificationLog log, NotificationLogNotifier notifier, AppLocalizations l10n) {
     final color = log.type == NotificationType.error ? Colors.red : Colors.blue;
 
     return Card(
@@ -194,7 +204,7 @@ class NotificationCenterSheet extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       backgroundColor: color.withOpacity(0.1),
                     ),
-                    child: Text(_getActionLabel(log.action)),
+                    child: Text(_getActionLabel(log.action, l10n)),
                   ),
                 ],
               ),
@@ -205,13 +215,13 @@ class NotificationCenterSheet extends ConsumerWidget {
     );
   }
 
-  String _getActionLabel(SyncAction action) {
+  String _getActionLabel(SyncAction action, AppLocalizations l10n) {
     switch (action) {
-      case SyncAction.login: return 'LOGIN';
-      case SyncAction.openShizuku: return 'FIX BRIDGE';
-      case SyncAction.reselectFolder: return 'SETTINGS';
-      case SyncAction.checkNetwork: return 'RETRY';
-      default: return 'FIX';
+      case SyncAction.login: return l10n.actionLogin;
+      case SyncAction.openShizuku: return l10n.actionFixBridge;
+      case SyncAction.reselectFolder: return l10n.actionSettings;
+      case SyncAction.checkNetwork: return l10n.actionRetry;
+      default: return l10n.actionFix;
     }
   }
 

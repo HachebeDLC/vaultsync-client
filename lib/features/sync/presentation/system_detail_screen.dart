@@ -6,6 +6,7 @@ import '../services/system_path_service.dart';
 import '../domain/sync_provider.dart';
 import 'version_history_screen.dart';
 import '../../../core/utils/responsive_layout.dart';
+import '../../../l10n/generated/app_localizations.dart';
 
 class SystemDetailScreen extends ConsumerStatefulWidget {
   final String systemId;
@@ -55,9 +56,20 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Refresh failed: $e')));
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.refreshFailed(e.toString()))));
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  String _getStatusLabel(String status, AppLocalizations l10n) {
+    switch (status) {
+      case 'Synced': return l10n.statusSynced;
+      case 'Modified': return l10n.statusModified;
+      case 'Local Only': return l10n.statusLocalOnly;
+      case 'Remote Only': return l10n.statusRemoteOnly;
+      default: return status;
     }
   }
 
@@ -76,12 +88,13 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
     final String status = file['status'];
     final String type = file['type'] ?? 'Save';
     final String name = relPath.split('/').last;
+    final l10n = AppLocalizations.of(context)!;
 
     final isState = type == 'State';
     final isRetroArch = _localPath?.toLowerCase().contains('retroarch') ?? false;
     
     return Tooltip(
-      message: 'Click to view version history',
+      message: l10n.clickToViewHistory,
       child: ListTile(
         dense: true,
         mouseCursor: SystemMouseCursors.click,
@@ -100,14 +113,14 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
                   color: Colors.blue.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text('STATE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.blue)),
+                child: Text(l10n.stateTag, style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.blue)),
               ),
           ],
         ),
-        subtitle: Text(status, style: TextStyle(color: _getStatusColor(status), fontSize: 11)),
+        subtitle: Text(_getStatusLabel(status, l10n), style: TextStyle(color: _getStatusColor(status), fontSize: 11)),
         trailing: IconButton(
           icon: const Icon(Icons.history, size: 20),
-          tooltip: 'Version History',
+          tooltip: l10n.versionHistoryTooltip,
           onPressed: () {
             Navigator.push(
               context,
@@ -263,6 +276,7 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
     final syncState = ref.watch(syncProvider);
     final isSyncing = syncState.isSyncing;
     final isDesktop = ResponsiveLayout.isDesktop(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
@@ -272,7 +286,9 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
           children: [
             _getSystemIconWidget(widget.systemId),
             const SizedBox(width: 12),
-            Text(isDesktop ? '${widget.systemId.toUpperCase()} Management' : widget.systemId.toUpperCase()),
+            Text(isDesktop 
+              ? l10n.systemManagementTitle(widget.systemId.toUpperCase()) 
+              : widget.systemId.toUpperCase()),
           ],
         ),
         actions: [
@@ -281,14 +297,14 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
               padding: const EdgeInsets.only(right: 8.0),
               child: TextButton.icon(
                 icon: const Icon(Icons.sync),
-                label: const Text('SYNC NOW'),
+                label: Text(l10n.syncNowButton),
                 onPressed: isSyncing ? null : _syncThisSystem,
               ),
             )
           else
             IconButton(
               icon: const Icon(Icons.sync),
-              tooltip: 'Sync This System',
+              tooltip: l10n.syncThisSystemTooltip,
               onPressed: isSyncing ? null : _syncThisSystem,
             ),
           IconButton(
@@ -319,9 +335,9 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
             child: _isLoading 
                 ? const Center(child: CircularProgressIndicator())
                 : _rawFiles == null
-                    ? const Center(child: Text('System not configured.'))
+                    ? Center(child: Text(l10n.systemNotConfigured))
                     : _rawFiles!.isEmpty
-                        ? const Center(child: Text('No files found.'))
+                        ? Center(child: Text(l10n.noFilesFound))
                         : Center(
                             child: Container(
                               constraints: BoxConstraints(maxWidth: isDesktop ? 900 : double.infinity),

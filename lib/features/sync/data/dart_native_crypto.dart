@@ -287,9 +287,10 @@ class DartNativeCrypto {
     final request = http.Request('POST', Uri.parse(url));
     if (token != null) request.headers['Authorization'] = 'Bearer $token';
     request.headers['Content-Type'] = 'application/json';
+    request.headers['Connection'] = 'close';
     request.body = json.encode(reqBody);
 
-    final response = await request.send();
+    final response = await request.send().timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) throw Exception('Download failed: HTTP ${response.statusCode}');
 
     final targetPath = localFilename.startsWith('/') ? localFilename : '$uriStr/$localFilename';
@@ -306,7 +307,7 @@ class DartNativeCrypto {
     final expectedBlockSize = keyBytes != null ? encryptedBlockSize : blockSize;
     
     await processDownloadStream(
-      response.stream,
+      response.stream.timeout(const Duration(seconds: 60)),
       raf,
       keyBytes,
       patchIndices,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../domain/sync_log_provider.dart';
+import '../../../l10n/generated/app_localizations.dart';
 
 class SyncHistoryScreen extends ConsumerWidget {
   const SyncHistoryScreen({super.key});
@@ -9,26 +10,27 @@ class SyncHistoryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final logs = ref.watch(syncLogProvider);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sync History'),
+        title: Text(l10n.syncHistoryTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_sweep_outlined),
             onPressed: () => ref.read(syncLogProvider.notifier).clearLogs(),
-            tooltip: 'Clear History',
+            tooltip: l10n.clearHistoryTooltip,
           ),
         ],
       ),
       body: logs.isEmpty
-          ? const Center(
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('No sync history found.', style: TextStyle(color: Colors.grey)),
+                  const Icon(Icons.history, size: 64, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  Text(l10n.noSyncHistoryFound, style: const TextStyle(color: Colors.grey)),
                 ],
               ),
             )

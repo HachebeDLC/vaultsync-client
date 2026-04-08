@@ -128,6 +128,7 @@ class ApiClient {
     return {
       if (includeJson) 'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
+      'Connection': 'close',
     };
   }
 
@@ -231,7 +232,20 @@ class ApiClient {
   }
 
   Future<Map<String, dynamic>> _request(Future<http.Response> Function() call) async {
-    final response = await call();
+    // Retry once on connection drops (server/proxy closing mid-response).
+    // This is common on Linux/desktop where the HTTP client doesn't auto-retry.
+    http.Response response;
+    try {
+      response = await call();
+    } on Exception catch (e) {
+      final msg = e.toString();
+      if (msg.contains('Connection closed') || msg.contains('Connection reset') || msg.contains('SocketException')) {
+        await Future.delayed(const Duration(seconds: 2));
+        response = await call();
+      } else {
+        rethrow;
+      }
+    }
     return await _handleResponse(response, () async {
       final retryResponse = await call();
       if (retryResponse.statusCode != 200 && retryResponse.statusCode != 201) {

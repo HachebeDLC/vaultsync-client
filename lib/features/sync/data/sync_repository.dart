@@ -327,8 +327,9 @@ class SyncRepository {
           isCancelled: isCancelled,
         );
         await _commitSyncJournal(prefs);
-      } catch (e) {
-        developer.log('SYNC ERROR', name: 'VaultSync', level: 1000, error: e);
+      } catch (e, stack) {
+        // ignore: avoid_print
+        print('[VaultSync] SYNC ERROR ($systemId): $e\n$stack');
         _ref?.read(notificationLogProvider.notifier).addError(e, systemId: systemId);
         onError?.call(e.toString());
         rethrow;

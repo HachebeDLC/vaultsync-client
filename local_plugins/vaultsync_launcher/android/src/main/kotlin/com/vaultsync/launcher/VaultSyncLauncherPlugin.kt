@@ -325,6 +325,34 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 automationEngine.stopMonitoring()
                 result.success(true)
             }
+            "getLocalizedString" -> {
+                val key = call.argument<String>("key") ?: return result.error("ARG_MISSING", "key missing", null)
+                val resId = ctx.resources.getIdentifier(key, "string", ctx.packageName)
+                if (resId != 0) {
+                    result.success(ctx.getString(resId))
+                } else {
+                    result.error("NOT_FOUND", "String resource with key '$key' not found", null)
+                }
+            }
+            "setNativeLocale" -> {
+                val lang = call.argument<String>("languageCode") ?: return result.error("ARG_MISSING", "languageCode missing", null)
+                try {
+                    val locale = java.util.Locale(lang)
+                    java.util.Locale.setDefault(locale)
+                    val resources = ctx.resources
+                    val config = resources.configuration
+                    config.setLocale(locale)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        ctx.createConfigurationContext(config)
+                    } else {
+                        resources.updateConfiguration(config, resources.displayMetrics)
+                    }
+                    android.util.Log.d("VaultSync", "Native locale updated to: $lang")
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.error("LOCALE_ERROR", e.message, null)
+                }
+            }
             "getSwitchSaveRoot" -> {
                 val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
                 val root = fileScanner.findSwitchSaveRoot(Uri.parse(uriStr))

@@ -5,6 +5,7 @@ import 'package:vaultsync_client/features/emulation/presentation/dashboard_scree
 import 'package:vaultsync_client/features/sync/domain/sync_provider.dart';
 import 'package:vaultsync_client/features/sync/services/system_path_service.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:vaultsync_client/l10n/generated/app_localizations.dart';
 
 class MockSyncNotifier extends StateNotifier<SyncState> with Mock implements SyncNotifier {
   MockSyncNotifier() : super(SyncState());
@@ -28,6 +29,8 @@ void main() {
           })),
         ],
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: DashboardScreen(),
         ),
       ),

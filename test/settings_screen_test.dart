@@ -6,11 +6,14 @@ import 'package:mocktail/mocktail.dart';
 import 'package:vaultsync_client/features/settings/presentation/settings_screen.dart';
 import 'package:vaultsync_client/features/sync/services/background_sync_service.dart';
 import 'package:vaultsync_client/features/sync/services/desktop_background_sync_service.dart';
+import 'package:vaultsync_client/core/services/vaultsync_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:vaultsync_client/l10n/generated/app_localizations.dart';
 import 'dart:io';
 
 class MockBackgroundSyncService extends Mock implements BackgroundSyncService {}
 class MockDesktopBackgroundSyncService extends Mock implements DesktopBackgroundSyncService {}
+class MockVaultSyncLauncher extends Mock implements VaultSyncLauncher {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -20,11 +23,16 @@ void main() {
   const channel = MethodChannel('com.vaultsync.app/launcher');
   late MockBackgroundSyncService mockBackgroundSyncService;
   late MockDesktopBackgroundSyncService mockDesktopBackgroundSyncService;
+  late MockVaultSyncLauncher mockVaultSyncLauncher;
 
   setUp(() {
     mockBackgroundSyncService = MockBackgroundSyncService();
     mockDesktopBackgroundSyncService = MockDesktopBackgroundSyncService();
+    mockVaultSyncLauncher = MockVaultSyncLauncher();
     SharedPreferences.setMockInitialValues({});
+
+    when(() => mockVaultSyncLauncher.getAppVersionFull()).thenAnswer((_) async => 'VaultSync v1.3.7-Secure');
+    when(() => mockVaultSyncLauncher.getSyncEngineDescription()).thenAnswer((_) async => 'Hardware-Accelerated Sync Engine');
     
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
@@ -47,8 +55,12 @@ void main() {
       ProviderScope(
         overrides: [
           backgroundSyncServiceProvider.overrideWith((ref) => mockBackgroundSyncService),
+          vaultSyncLauncherProvider.overrideWithValue(mockVaultSyncLauncher),
         ],
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: SettingsScreen(),
         ),
       ),
@@ -74,8 +86,12 @@ void main() {
       ProviderScope(
         overrides: [
           desktopBackgroundSyncServiceProvider.overrideWith((ref) => mockDesktopBackgroundSyncService),
+          vaultSyncLauncherProvider.overrideWithValue(mockVaultSyncLauncher),
         ],
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: SettingsScreen(),
         ),
       ),

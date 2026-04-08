@@ -26,7 +26,7 @@ class SyncDiffService {
     final List<dynamic> all = [];
     String? cursor;
     do {
-      final params = <String, String>{'prefix': prefix, 'limit': '500'};
+      final params = <String, String>{'prefix': prefix, 'limit': '20'};
       if (cursor != null) params['after'] = cursor;
       final response =
           await _apiClient.get('/api/v1/files', queryParams: params);

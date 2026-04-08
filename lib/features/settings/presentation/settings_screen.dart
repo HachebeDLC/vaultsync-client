@@ -8,11 +8,14 @@ import 'package:workmanager/workmanager.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/services/api_client_provider.dart';
 import '../../../core/services/decky_service_installer.dart';
+import '../../../core/services/vaultsync_launcher.dart';
+import '../../../core/localization/locale_provider.dart';
 import '../../auth/domain/auth_provider.dart';
 import '../../sync/services/system_path_service.dart';
 import '../../sync/services/background_sync_service.dart';
 import '../../sync/services/desktop_background_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../l10n/generated/app_localizations.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -29,6 +32,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
   bool _hasUsagePermission = false;
   String _serverUrl = '';
   String _conflictStrategy = 'ask';
+  String _appVersionFull = 'VaultSync v1.3.7-Secure';
+  String _syncEngineDescription = 'Hardware-Accelerated Sync Engine';
 
   @override
   void initState() {
@@ -54,6 +59,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
     final prefs = await SharedPreferences.getInstance();
     final apiClient = ref.read(apiClientProvider);
     final url = await apiClient.getBaseUrl() ?? '';
+    final launcher = ref.read(vaultSyncLauncherProvider);
+
+    // Fetch version from strings.xml if on Android
+    if (Platform.isAndroid) {
+      final version = await launcher.getAppVersionFull();
+      final desc = await launcher.getSyncEngineDescription();
+      if (mounted) {
+        setState(() {
+          _appVersionFull = 'VaultSync $version';
+          _syncEngineDescription = desc;
+        });
+      }
+    }
     
     bool usage = false;
     if (Platform.isAndroid) {
@@ -142,37 +160,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
+    final locale = ref.watch(localeProvider);
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: ListView(
         children: [
-          _buildSection('Server & Account'),
+          _buildSection(l10n.sectionServerAccount),
           ListTile(
-            title: const Text('Server URL'),
-            subtitle: Text(_serverUrl.isEmpty ? 'Not set' : _serverUrl),
+            title: Text(l10n.serverUrlTitle),
+            subtitle: Text(_serverUrl.isEmpty ? l10n.notSet : _serverUrl),
             leading: const Icon(Icons.cloud_queue),
             onTap: () => context.push('/setup'),
           ),
           ListTile(
-            title: const Text('Account'),
-            subtitle: Text(ref.watch(authProvider)?.email ?? 'Not logged in'),
+            title: Text(l10n.accountTitle),
+            subtitle: Text(ref.watch(authProvider)?.email ?? l10n.notLoggedIn),
             leading: const Icon(Icons.person_outline),
             trailing: TextButton(
               onPressed: () => ref.read(authProvider.notifier).logout(),
-              child: const Text('LOGOUT', style: TextStyle(color: Colors.red)),
+              child: Text(l10n.logoutButton, style: const TextStyle(color: Colors.red)),
             ),
           ),
           
-          _buildSection('Automation (Beta)'),
+          _buildSection(l10n.sectionAutomation),
           SwitchListTile(
-            title: const Text('Sync on Game Exit'),
-            subtitle: const Text('Upload saves automatically when you finish playing'),
+            title: Text(l10n.syncOnExitTitle),
+            subtitle: Text(l10n.syncOnExitSubtitle),
             value: _autoSyncOnExit,
             onChanged: _toggleAutoSync,
             secondary: const Icon(Icons.bolt),
           ),
-          if (!_hasUsagePermission && _autoSyncOnExit)
+          if (Platform.isAndroid && !_hasUsagePermission && _autoSyncOnExit)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Container(
@@ -184,111 +204,138 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
                 ),
                 child: Column(
                   children: [
-                    const Text('Usage Access is required to detect when emulators close.', style: TextStyle(fontSize: 12)),
+                    Text(l10n.usageAccessRequired, style: const TextStyle(fontSize: 12)),
                     const SizedBox(height: 8),
                     ElevatedButton(
                       onPressed: _grantUsageStats,
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
-                      child: const Text('GRANT PERMISSION'),
+                      child: Text(l10n.grantPermissionButton),
                     )
                   ],
                 ),
               ),
             ),
           SwitchListTile(
-            title: const Text('Periodic Background Sync'),
-            subtitle: const Text('Perform a catch-up sync every 6 hours'),
+            title: Text(l10n.periodicSyncTitle),
+            subtitle: Text(l10n.periodicSyncSubtitle),
             value: _periodicSync,
             onChanged: _togglePeriodicSync,
             secondary: const Icon(Icons.timer_outlined),
           ),
           ListTile(
-            title: const Text('View Sync History'),
-            subtitle: const Text('Review logs of background sync events'),
+            title: Text(l10n.viewSyncHistoryTitle),
+            subtitle: Text(l10n.viewSyncHistorySubtitle),
             leading: const Icon(Icons.history),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/history'),
           ),
           ListTile(
-            title: const Text('Conflict Strategy'),
-            subtitle: const Text('Choose how to resolve save discrepancies'),
+            title: Text(l10n.conflictStrategyTitle),
+            subtitle: Text(l10n.conflictStrategySubtitle),
             leading: const Icon(Icons.compare_outlined),
             trailing: DropdownButton<String>(
               value: _conflictStrategy,
               onChanged: _setConflictStrategy,
-              items: const [
-                DropdownMenuItem(value: 'ask', child: Text('Ask Every Time')),
-                DropdownMenuItem(value: 'newest', child: Text('Always Newest')),
-                DropdownMenuItem(value: 'local', child: Text('Prefer Local')),
-                DropdownMenuItem(value: 'cloud', child: Text('Prefer Cloud')),
+              items: [
+                DropdownMenuItem(value: 'ask', child: Text(l10n.strategyAsk)),
+                DropdownMenuItem(value: 'newest', child: Text(l10n.strategyNewest)),
+                DropdownMenuItem(value: 'local', child: Text(l10n.strategyLocal)),
+                DropdownMenuItem(value: 'cloud', child: Text(l10n.strategyCloud)),
               ],
             ),
           ),
 
-          _buildSection('Hardware Bridge'),
+          _buildSection(l10n.sectionHardwareBridge),
           if (Platform.isAndroid)
             SwitchListTile(
-              title: const Text('Use Shizuku Bridge'),
-              subtitle: const Text('High-speed access for Android 14+ /data folders'),
+              title: Text(l10n.useShizukuTitle),
+              subtitle: Text(l10n.useShizukuSubtitle),
               value: _useShizuku,
               onChanged: _toggleShizuku,
               secondary: const Icon(Icons.shield_outlined),
             ),
           ListTile(
-            title: const Text('Run System Diagnostics'),
-            subtitle: const Text('Test hardware speed and SAF/Shizuku health'),
+            title: Text(l10n.runDiagnosticsTitle),
+            subtitle: Text(l10n.runDiagnosticsSubtitle),
             leading: const Icon(Icons.speed),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/diagnostics'),
           ),
 
-          if (Platform.isLinux) ..._buildDeckyBridgeSection(),
+          if (Platform.isLinux) ..._buildDeckyBridgeSection(l10n),
 
-          _buildSection('Appearance'),
+          _buildSection(l10n.sectionAppearance),
           ListTile(
-            title: const Text('Theme Mode'),
+            title: Text(l10n.themeModeTitle),
             leading: const Icon(Icons.palette_outlined),
             trailing: DropdownButton<ThemeMode>(
               value: themeMode,
               onChanged: (mode) => ref.read(themeProvider.notifier).setTheme(mode!),
+              items: [
+                DropdownMenuItem(value: ThemeMode.system, child: Text(l10n.themeSystem)),
+                DropdownMenuItem(value: ThemeMode.light, child: Text(l10n.themeLight)),
+                DropdownMenuItem(value: ThemeMode.dark, child: Text(l10n.themeDark)),
+              ],
+            ),
+          ),
+
+          _buildSection(l10n.sectionLanguage),
+          ListTile(
+            title: Text(l10n.languageTitle),
+            leading: const Icon(Icons.language),
+            trailing: DropdownButton<String>(
+              value: locale.languageCode,
+              onChanged: (lang) {
+                if (lang != null) {
+                  ref.read(localeProvider.notifier).setLocale(Locale(lang));
+                }
+              },
               items: const [
-                DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
-                DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
-                DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+                DropdownMenuItem(value: 'en', child: Text('English')),
+                DropdownMenuItem(value: 'es', child: Text('Español')),
+                DropdownMenuItem(value: 'fr', child: Text('Français')),
+                DropdownMenuItem(value: 'de', child: Text('Deutsch')),
+                DropdownMenuItem(value: 'it', child: Text('Italiano')),
               ],
             ),
           ),
           
           const Divider(),
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text('VaultSync v1.2-Secure\nHardware-Accelerated Sync Engine', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 12)),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text('$_appVersionFull\n$_syncEngineDescription', textAlign: TextAlign.center, style: const TextStyle(color: Colors.grey, fontSize: 12)),
           ),
         ],
       ),
     );
   }
 
-  List<Widget> _buildDeckyBridgeSection() {
+  List<Widget> _buildDeckyBridgeSection(AppLocalizations l10n) {
     final installerAsync = ref.watch(deckyServiceInstallerProvider);
     final status = installerAsync.valueOrNull ?? DeckyBridgeStatus.unknown;
 
-    final (statusText, statusColor) = switch (status) {
-      DeckyBridgeStatus.running => ('Running', Colors.green),
-      DeckyBridgeStatus.stopped => ('Stopped', Colors.orange),
-      DeckyBridgeStatus.installing => ('Installing...', Colors.blue),
-      DeckyBridgeStatus.notInstalled => ('Not installed', Colors.grey),
-      DeckyBridgeStatus.unknown => ('Checking...', Colors.grey),
+    final statusText = switch (status) {
+      DeckyBridgeStatus.running => l10n.statusRunning,
+      DeckyBridgeStatus.stopped => l10n.statusStopped,
+      DeckyBridgeStatus.installing => l10n.statusInstalling,
+      DeckyBridgeStatus.notInstalled => l10n.statusNotInstalled,
+      DeckyBridgeStatus.unknown => l10n.statusChecking,
+    };
+
+    final statusColor = switch (status) {
+      DeckyBridgeStatus.running => Colors.green,
+      DeckyBridgeStatus.stopped => Colors.orange,
+      DeckyBridgeStatus.installing => Colors.blue,
+      DeckyBridgeStatus.notInstalled => Colors.grey,
+      DeckyBridgeStatus.unknown => Colors.grey,
     };
 
     return [
-      _buildSection('Decky Plugin Bridge'),
+      _buildSection(l10n.sectionDeckyBridge),
       ListTile(
         leading: Icon(Icons.gamepad_outlined, color: statusColor),
-        title: const Text('Bridge Service'),
-        subtitle: Text(
-          'Serves localhost:5437 for the Decky plugin in Game Mode\nStatus: $statusText',
-        ),
+        title: Text(l10n.bridgeServiceTitle),
+        subtitle: Text(l10n.bridgeServiceSubtitle(statusText)),
         trailing: status == DeckyBridgeStatus.installing
             ? const SizedBox(
                 width: 20,
@@ -305,7 +352,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
               Expanded(
                 child: FilledButton.icon(
                   icon: const Icon(Icons.download_outlined),
-                  label: const Text('Install & Enable'),
+                  label: Text(l10n.installEnableButton),
                   onPressed: () async {
                     final error = await ref
                         .read(deckyServiceInstallerProvider.notifier)
@@ -326,7 +373,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
               Expanded(
                 child: FilledButton.icon(
                   icon: const Icon(Icons.play_arrow),
-                  label: const Text('Start'),
+                  label: Text(l10n.startButton),
                   onPressed: () =>
                       ref.read(deckyServiceInstallerProvider.notifier).start(),
                 ),
@@ -342,13 +389,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
                         SnackBar(content: Text(err)));
                   }
                 },
-                child: const Text('Uninstall'),
+                child: Text(l10n.uninstallButton),
               ),
             ],
             if (status == DeckyBridgeStatus.running) ...[
               OutlinedButton.icon(
                 icon: const Icon(Icons.stop),
-                label: const Text('Stop'),
+                label: Text(l10n.stopButton),
                 onPressed: () =>
                     ref.read(deckyServiceInstallerProvider.notifier).stop(),
               ),

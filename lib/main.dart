@@ -25,6 +25,8 @@ import 'features/sync/presentation/sync_history_screen.dart';
 import 'features/sync/services/sync_service.dart';
 import 'core/services/decky_bridge_service.dart';
 import 'core/utils/offline_banner.dart';
+import 'core/localization/locale_provider.dart';
+import 'l10n/generated/app_localizations.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -93,6 +95,56 @@ void callbackDispatcher() {
   });
 }
 
+/// One-time migration: copies SharedPreferences + SQLite DB from a bare Linux
+/// install into the Flatpak sandbox data directory on first launch.
+///
+/// Must be called BEFORE the first [SharedPreferences.getInstance()] so the
+/// migrated file is already in place when Flutter reads it.
+Future<void> _migrateNativeToFlatpak() async {
+  if (!Platform.isLinux) return;
+  if (!File('/.flatpak-info').existsSync()) return; // not inside Flatpak
+
+  final home = Platform.environment['HOME'];
+  if (home == null) return;
+
+  // XDG_DATA_HOME inside the Flatpak resolves to
+  //   ~/.var/app/com.vaultsync.app/data/
+  // path_provider maps getApplicationSupportDirectory() to
+  //   $XDG_DATA_HOME/vaultsync_client/
+  // The bare install stored everything in ~/.local/share/vaultsync_client/.
+  final oldDir = Directory('$home/.local/share/vaultsync_client');
+  if (!await oldDir.exists()) return;
+
+  final xdgData = Platform.environment['XDG_DATA_HOME'] ??
+      '$home/.var/app/com.vaultsync.app/data';
+  final newDir = Directory('$xdgData/vaultsync_client');
+
+  // Sentinel: skip if migration already ran.
+  final sentinel = File('${newDir.path}/.migrated_from_native');
+  if (await sentinel.exists()) return;
+
+  await newDir.create(recursive: true);
+
+  const filesToMigrate = [
+    'shared_preferences.json',
+    'sync_state.db',
+    'sync_state.db-wal',
+    'sync_state.db-shm',
+  ];
+
+  for (final name in filesToMigrate) {
+    final src = File('${oldDir.path}/$name');
+    if (await src.exists()) {
+      await src.copy('${newDir.path}/$name');
+      developer.log('MIGRATION: copied $name to Flatpak data dir',
+          name: 'VaultSync', level: 800);
+    }
+  }
+
+  await sentinel.writeAsString(DateTime.now().toIso8601String());
+  developer.log('MIGRATION: native → Flatpak complete', name: 'VaultSync', level: 800);
+}
+
 Future<void> _installLinuxShortcut() async {
   if (!Platform.isLinux) return;
   try {
@@ -154,6 +206,8 @@ void main() async {
   }
 
   if (Platform.isLinux) {
+    // Migration must run before SharedPreferences is first accessed.
+    await _migrateNativeToFlatpak();
     await _installLinuxShortcut();
   }
 
@@ -187,9 +241,13 @@ class _VaultSyncAppState extends ConsumerState<VaultSyncApp> {
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeProvider);
     final router = ref.watch(routerProvider);
+    final locale = ref.watch(localeProvider);
 
     return MaterialApp.router(
       title: 'VaultSync',
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue, brightness: Brightness.light),
       darkTheme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue, brightness: Brightness.dark),
       themeMode: themeMode,

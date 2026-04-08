@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VaultSync</string>
+    <string name="app_version">1.3.7</string>
+    <string name="app_version_full">v1.3.7-Secure</string>
+    <string name="sync_engine_description">Motor de sincronización acelerado por hardware</string>
+    
+    <!-- Notification Strings -->
+    <string name="notification_channel_name">VaultSync Sincronización en segundo plano</string>
+    <string name="notification_channel_description">Mantiene VaultSync en ejecución para evitar caídas de conexión</string>
+    <string name="notification_title">VaultSync</string>
+    <string name="notification_content">Sincronización en curso…</string>
+</resources>

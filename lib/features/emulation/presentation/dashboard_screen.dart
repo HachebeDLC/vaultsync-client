@@ -11,6 +11,7 @@ import '../../sync/services/shizuku_service.dart';
 import '../../../core/errors/error_mapper.dart';
 import '../../sync/domain/notification_provider.dart';
 import '../../sync/presentation/notification_center_sheet.dart';
+import '../../../l10n/generated/app_localizations.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -78,15 +79,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Future<void> _fixShizuku() async {
     if (_shizukuStatus == null) return;
+    final l10n = AppLocalizations.of(context)!;
     
     if (!_shizukuStatus!.isRunning) {
        await ref.read(shizukuServiceProvider).openApp();
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Opening Shizuku... Start the service and come back.')));
+       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.openingShizuku)));
     } else {
        final success = await ref.read(shizukuServiceProvider).requestPermission();
        if (success) {
           _checkBridgeHealth();
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Shizuku authorized!')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.shizukuAuthorized)));
        }
     }
   }
@@ -128,13 +130,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
-  String _getActionLabel(SyncAction action) {
+  String _getActionLabel(SyncAction action, AppLocalizations l10n) {
     switch (action) {
-      case SyncAction.login: return 'LOGIN';
-      case SyncAction.openShizuku: return 'FIX';
-      case SyncAction.reselectFolder: return 'SETTINGS';
-      case SyncAction.checkNetwork: return 'RETRY';
-      default: return 'DISMISS';
+      case SyncAction.login: return l10n.actionLogin;
+      case SyncAction.openShizuku: return l10n.actionFix;
+      case SyncAction.reselectFolder: return l10n.actionSettings;
+      case SyncAction.checkNetwork: return l10n.actionRetry;
+      default: return l10n.actionDismiss;
     }
   }
 
@@ -142,46 +144,47 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final syncState = ref.watch(syncProvider);
     final pathsAsync = ref.watch(systemPathsProvider);
+    final l10n = AppLocalizations.of(context)!;
 
     // ACTIONABLE BRIDGE ALERT
     Widget? bridgeAlert;
     if (Platform.isAndroid && !_shizukuEnabled && _androidVersion > 33) { // Android 14+ (API > 33)
        bridgeAlert = _buildActionAlert(
-         'Recommended: Setup Bridge', 
-         'Shizuku is required for full speed on Android $_androidVersion',
+         l10n.bridgeSetupTitle, 
+         l10n.bridgeSetupSubtitle(_androidVersion),
          Icons.bolt, 
          Colors.blue.shade700,
          onAction: _enableShizuku,
-         actionLabel: 'SETUP',
+         actionLabel: l10n.actionSetup,
        );
     } else if (_shizukuEnabled && _shizukuStatus != null) {
        if (!_shizukuStatus!.isRunning) {
           bridgeAlert = _buildActionAlert(
-            'Shizuku is not running', 
-            'restricted folder access is disabled',
+            l10n.shizukuNotRunningTitle, 
+            l10n.shizukuNotRunningSubtitle,
             Icons.warning_amber_rounded, 
             Colors.orange.shade800,
             onAction: _fixShizuku,
-            actionLabel: 'OPEN APP',
+            actionLabel: l10n.actionOpenApp,
           );
        } else if (!_shizukuStatus!.isAuthorized) {
           bridgeAlert = _buildActionAlert(
-            'Shizuku Permission Required', 
-            'authorize VaultSync to continue',
+            l10n.shizukuPermissionTitle, 
+            l10n.shizukuPermissionSubtitle,
             Icons.shield_outlined, 
             Colors.deepOrange,
             onAction: _fixShizuku,
-            actionLabel: 'FIX NOW',
+            actionLabel: l10n.actionFixNow,
           );
        }
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('VaultSync'),
+        title: Text(l10n.appTitle),
         scrolledUnderElevation: 0,
         actions: [
-          IconButton(icon: const Icon(Icons.search), tooltip: 'Scan Library', onPressed: () => context.push('/library-setup')),
+          IconButton(icon: const Icon(Icons.search), tooltip: l10n.scanLibraryTooltip, onPressed: () => context.push('/library-setup')),
           Consumer(
             builder: (context, ref, _) {
               final unreadCount = ref.watch(notificationLogProvider.notifier).unreadActionableCount;
@@ -191,12 +194,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: IconButton(
                   icon: const Icon(Icons.notifications_outlined),
                   onPressed: _showNotificationCenter,
-                  tooltip: 'Notifications',
+                  tooltip: l10n.notificationsTooltip,
                 ),
               );
             },
           ),
-          IconButton(icon: const Icon(Icons.settings_outlined), tooltip: 'Settings', onPressed: () => context.push('/settings')),
+          IconButton(icon: const Icon(Icons.settings_outlined), tooltip: l10n.settingsTooltip, onPressed: () => context.push('/settings')),
           const SizedBox(width: 8),
         ],
       ),
@@ -222,13 +225,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 }
                 ref.read(syncProvider.notifier).clearErrors();
               },
-              actionLabel: _getActionLabel(syncState.syncErrors.first.action),
+              actionLabel: _getActionLabel(syncState.syncErrors.first.action, l10n),
             ),
           
           Expanded(
             child: pathsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, stack) => Center(child: Text('Error: $err')),
+              error: (err, stack) => Center(child: Text('${l10n.actionRetry}: $err')),
               data: (paths) {
                 if (paths.isEmpty) {
                   return Center(
@@ -237,9 +240,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       children: [
                         const Icon(Icons.folder_open, size: 64, color: Colors.grey),
                         const SizedBox(height: 16),
-                        const Text('No systems configured yet.'),
+                        Text(l10n.noSystemsConfigured),
                         const SizedBox(height: 24),
-                        ElevatedButton.icon(icon: const Icon(Icons.search), label: const Text('Scan Library'), onPressed: () => context.push('/library-setup')),
+                        ElevatedButton.icon(icon: const Icon(Icons.search), label: Text(l10n.scanLibraryButton), onPressed: () => context.push('/library-setup')),
                       ],
                     ),
                   );
@@ -279,18 +282,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         children: [
                           Icon(syncState.isSyncing ? Icons.sync : Icons.cloud_done, size: 64, color: syncState.isSyncing ? Colors.blue : Colors.green),
                           const SizedBox(height: 16),
-                          Text(syncState.isSyncing ? 'Syncing...' : 'System Ready', style: Theme.of(context).textTheme.headlineSmall),
+                          Text(syncState.isSyncing ? l10n.syncing : l10n.systemReady, style: Theme.of(context).textTheme.headlineSmall),
                           const SizedBox(height: 24),
                           if (syncState.isSyncing) ...[
                             LinearProgressIndicator(value: syncState.progress > 0 ? syncState.progress : null),
                             const SizedBox(height: 12),
                             Text(syncState.status, style: const TextStyle(fontSize: 12), textAlign: TextAlign.center, maxLines: 2),
                             const SizedBox(height: 24),
-                            OutlinedButton(onPressed: () => ref.read(syncProvider.notifier).cancelSync(), style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50)), child: const Text('STOP SYNC', style: TextStyle(color: Colors.red))),
+                            OutlinedButton(onPressed: () => ref.read(syncProvider.notifier).cancelSync(), style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 50)), child: Text(l10n.stopSyncButton, style: const TextStyle(color: Colors.red))),
                           ] else ...[
-                            Text(syncState.status.isEmpty ? 'Waiting for changes' : syncState.status),
+                            Text(syncState.status.isEmpty ? l10n.waitingForChanges : syncState.status),
                             const SizedBox(height: 24),
-                            ElevatedButton.icon(icon: const Icon(Icons.sync), label: const Text('Sync All'), style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 54)), onPressed: () => ref.read(syncProvider.notifier).sync()),
+                            ElevatedButton.icon(icon: const Icon(Icons.sync), label: Text(l10n.syncAllButton), style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 54)), onPressed: () => ref.read(syncProvider.notifier).sync()),
                           ],
                         ],
                       ),

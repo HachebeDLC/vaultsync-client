@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../domain/auth_provider.dart';
+import '../../../l10n/generated/app_localizations.dart';
 
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
@@ -46,8 +47,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           context.go('/');
         }
       } else if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text(_isRegistering ? 'Registration failed' : 'Login failed')),
+           SnackBar(content: Text(_isRegistering ? l10n.registrationFailed : l10n.loginFailed)),
         );
       }
     } finally {
@@ -57,13 +59,14 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isRegistering ? 'Create Account' : 'Login'),
+        title: Text(_isRegistering ? l10n.createAccountTitle : l10n.loginTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
-            tooltip: 'Server Settings',
+            tooltip: l10n.serverSettingsTooltip,
             onPressed: () => context.push('/setup'),
           ),
         ],
@@ -81,29 +84,29 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 if (_isRegistering)
                   TextField(
                     controller: _usernameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Username',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.person),
+                    decoration: InputDecoration(
+                      labelText: l10n.usernameLabel,
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.person),
                     ),
                   ),
                 if (_isRegistering) const SizedBox(height: 16),
                 TextField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
+                  decoration: InputDecoration(
+                    labelText: l10n.emailLabel,
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.email),
                   ),
                   keyboardType: TextInputType.emailAddress,
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.password),
+                  decoration: InputDecoration(
+                    labelText: l10n.passwordLabel,
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.password),
                   ),
                   obscureText: true,
                 ),
@@ -116,12 +119,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   ),
                   child: _isLoading 
                       ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)) 
-                      : Text(_isRegistering ? 'CREATE ACCOUNT' : 'LOGIN', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      : Text(_isRegistering ? l10n.createAccountButton : l10n.loginButton, style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
                 if (!_isRegistering)
                   TextButton(
                     onPressed: () => context.push('/recovery'),
-                    child: const Text('Forgot Password?'),
+                    child: Text(l10n.forgotPasswordButton),
                   ),
                 const SizedBox(height: 16),
                 TextButton(
@@ -131,8 +134,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                     });
                   },
                   child: Text(_isRegistering 
-                      ? 'Already have an account? Sign In' 
-                      : 'Don\'t have an account? Register Now'),
+                      ? l10n.alreadyHaveAccount
+                      : l10n.dontHaveAccount),
                 ),
               ],
             ),

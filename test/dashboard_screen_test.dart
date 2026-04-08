@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:vaultsync_client/l10n/generated/app_localizations.dart';
 import 'package:vaultsync_client/features/emulation/presentation/dashboard_screen.dart';
 import 'package:vaultsync_client/features/sync/domain/sync_provider.dart';
 import 'package:vaultsync_client/features/sync/services/system_path_service.dart';
@@ -24,6 +25,9 @@ void main() {
           systemPathsProvider.overrideWith((ref) => Future.value(<String, String>{})),
         ],
         child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
           home: DashboardScreen(),
         ),
       ),

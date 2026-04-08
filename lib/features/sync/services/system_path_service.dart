@@ -277,9 +277,12 @@ class SystemPathService {
     }
     if (emuDeckSaves != null) {
       await prefs.setString('emudeck_saves_path', emuDeckSaves);
-      developer.log('EMUDECK: Detected saves at $emuDeckSaves', name: 'VaultSync', level: 800);
+      // ignore: avoid_print
+      print('[VaultSync] EMUDECK: Detected saves at $emuDeckSaves');
     } else {
       await prefs.remove('emudeck_saves_path');
+      // ignore: avoid_print
+      print('[VaultSync] EMUDECK: No saves directory found next to roms');
     }
   }
 
@@ -288,12 +291,42 @@ class SystemPathService {
     return prefs.getString('emudeck_saves_path');
   }
 
+  bool get _isInsideFlatpak => Platform.isLinux && File('/.flatpak-info').existsSync();
+
   Future<String?> openDirectoryPicker({String? initialUri}) async {
     if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      // Inside Flatpak, the GTK file picker returns portal paths
+      // (/run/user/1000/doc/...) which hide sibling directories.
+      // Use the host's native dialog via flatpak-spawn instead.
+      if (_isInsideFlatpak) {
+        // ignore: avoid_print
+        print('[VaultSync] PICKER: Using host kdialog (Flatpak mode)');
+        return _hostDirectoryPicker(initialUri);
+      }
       return await getDirectoryPath(initialDirectory: initialUri, confirmButtonText: 'Select Folder');
     }
     try { return await _platform.invokeMethod('openSafDirectoryPicker', {'initialUri': initialUri}); }
     on PlatformException catch (_) { return null; }
+  }
+
+  Future<String?> _hostDirectoryPicker(String? initialDir) async {
+    // Try kdialog (KDE / Steam Deck), then zenity (GNOME) as fallback.
+    final startDir = initialDir ?? Platform.environment['HOME'] ?? '/';
+    for (final cmd in [
+      ['kdialog', '--getexistingdirectory', startDir],
+      ['zenity', '--file-selection', '--directory', '--filename=$startDir/'],
+    ]) {
+      // ignore: avoid_print
+      print('[VaultSync] PICKER: Running ${cmd.join(' ')}');
+      final result = await Process.run('flatpak-spawn', ['--host', ...cmd]);
+      // ignore: avoid_print
+      print('[VaultSync] PICKER: exitCode=${result.exitCode}, stdout="${result.stdout}", stderr="${result.stderr}"');
+      if (result.exitCode == 0) {
+        final path = result.stdout.toString().trim();
+        if (path.isNotEmpty) return path;
+      }
+    }
+    return null;
   }
 
   Future<int> _getAndroidVersion() async {
@@ -471,8 +504,13 @@ class SystemPathService {
       String rawPath = _convertToPosix(inputPath);
       final path = rawPath.endsWith('/') ? rawPath.substring(0, rawPath.length - 1) : rawPath;
       final dir = Directory(path);
-      developer.log('SCAN: Starting Library Scan for path: "$path"', name: 'VaultSync', level: 800);
-      if (!await dir.exists()) return [];
+      // ignore: avoid_print
+      print('[VaultSync] SCAN: Starting Library Scan for path: "$path"');
+      if (!await dir.exists()) {
+        // ignore: avoid_print
+        print('[VaultSync] SCAN: Directory does not exist: $path');
+        return [];
+      }
       Directory romsDir = dir;
       Directory? emuDeckSaves;
       if (await Directory('$path/roms').exists() && await Directory('$path/saves').exists()) {
@@ -481,6 +519,8 @@ class SystemPathService {
       } else if (path.toLowerCase().endsWith('/roms') && await Directory("${Directory(path).parent.path}/saves").exists()) {
         emuDeckSaves = Directory("${Directory(path).parent.path}/saves");
       }
+      // ignore: avoid_print
+      print('[VaultSync] SCAN: emuDeckSaves=${emuDeckSaves?.path ?? "NULL"}, romsDir=${romsDir.path}');
       final systems = await _emulatorRepository.loadSystems();
       final List<FileSystemEntity> list = await romsDir.list().toList();
       
@@ -497,9 +537,11 @@ class SystemPathService {
           if (await _hasValidRoms(d, system.system.extensions)) {
             if (emuDeckSaves != null) {
               final config = await _getEmuDeckConfig(emuDeckSaves.path, system.system.id);
+              // ignore: avoid_print
+              print('[VaultSync] SCAN: ${system.system.id} -> path=${config['path']}, emu=${config['emulatorId']}');
               results.add({
-                'systemId': system.system.id, 
-                'path': config['path']!, 
+                'systemId': system.system.id,
+                'path': config['path']!,
                 'emulatorId': config['emulatorId']!
               });
             } else {
@@ -511,7 +553,10 @@ class SystemPathService {
           }
         }
       }
-    } catch (e) { developer.log('SCAN: Library scan failed', name: 'VaultSync', level: 900, error: e); }
+    } catch (e) {
+      // ignore: avoid_print
+      print('[VaultSync] SCAN: Library scan failed: $e');
+    }
     await logConfiguredPaths();
     return results;
   }
@@ -519,12 +564,13 @@ class SystemPathService {
   Future<void> logConfiguredPaths() async {
     final paths = await getAllSystemPaths();
     final prefs = await SharedPreferences.getInstance();
-    final buf = StringBuffer('VAULTSYNC CONFIGURATION DUMP\n');
+    final buf = StringBuffer('[VaultSync] CONFIG DUMP:\n');
     for (final entry in paths.entries) {
       final emu = prefs.getString("system_emulator_${entry.key}");
       buf.writeln('  ${entry.key.toUpperCase()}: path=${entry.value}, core=${emu ?? "NOT SET"}');
     }
-    developer.log(buf.toString().trimRight(), name: 'VaultSync', level: 800);
+    // ignore: avoid_print
+    print(buf.toString().trimRight());
   }
 
   Future<bool> mkdirs(String path) async {

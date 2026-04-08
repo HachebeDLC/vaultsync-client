@@ -122,7 +122,9 @@ class SyncService {
       }
       await triggerQueueProcessing();
       onProgress?.call('Sync Complete!');
-    } catch(e) {
+    } catch(e, stack) {
+      // ignore: avoid_print
+      print('[VaultSync] SYNC ERROR (All): $e\n$stack');
       _ref?.read(notificationLogProvider.notifier).addError(e, systemId: 'All');
       final userError = ErrorMapper.map(e);
       _ref?.read(syncLogProvider.notifier).addLog('All', userError.message, isError: true, errorTitle: userError.title);

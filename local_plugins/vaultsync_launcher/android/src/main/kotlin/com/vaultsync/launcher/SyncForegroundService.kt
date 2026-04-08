@@ -35,10 +35,10 @@ class SyncForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "VaultSync Background Sync",
+                getString(resources.getIdentifier("notification_channel_name", "string", packageName)),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Keeps VaultSync running to prevent connection drops"
+                description = getString(resources.getIdentifier("notification_channel_description", "string", packageName))
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
@@ -51,8 +51,8 @@ class SyncForegroundService : Service() {
         val validIcon = if (iconResId != 0) iconResId else android.R.drawable.ic_popup_sync
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("VaultSync")
-            .setContentText("Synchronization in progress...")
+            .setContentTitle(getString(resources.getIdentifier("notification_title", "string", packageName)))
+            .setContentText(getString(resources.getIdentifier("notification_content", "string", packageName)))
             .setSmallIcon(validIcon)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)

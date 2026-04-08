@@ -47,20 +47,27 @@ class LifecycleSyncService with WidgetsBindingObserver {
   Future<void> _checkAndTriggerSync() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (!(prefs.getBool('intelligent_sync') ?? false)) return;
+      if (!(prefs.getBool('auto_sync_on_exit') ?? false)) return;
 
-      // 1. Check if we have permission
+      // On Linux/desktop: resumed = app regained focus (user came back from a
+      // game session). No process-level detection needed — just sync.
+      if (Platform.isLinux || Platform.isWindows) {
+        developer.log('LIFECYCLE: App resumed on desktop. Triggering sync.', name: 'VaultSync', level: 800);
+        _ref.read(syncProvider.notifier).sync();
+        return;
+      }
+
+      // Android: require usage stats permission to detect which emulator closed.
       bool hasPermission = false;
       if (Platform.isAndroid) {
         hasPermission = await _platform.invokeMethod('hasUsageStatsPermission') ?? false;
       }
       if (!hasPermission) return;
 
-      // 2. Define emulator packages to watch
       const emulatorPackages = [
-        'com.aether.sx2', 
-        'xyz.aethersx2.android', 
-        'com.retroarch', 
+        'com.aether.sx2',
+        'xyz.aethersx2.android',
+        'com.retroarch',
         'com.retroarch.aarch64',
         'com.citra.emu',
         'org.citra.citra_emu',
@@ -73,7 +80,6 @@ class LifecycleSyncService with WidgetsBindingObserver {
         'me.magnum.melonds',
       ];
 
-      // 3. Get recently closed emulator
       String? closedPackage;
       if (Platform.isAndroid) {
         closedPackage = await _platform.invokeMethod('getRecentlyClosedEmulator', {
@@ -83,7 +89,6 @@ class LifecycleSyncService with WidgetsBindingObserver {
 
       if (closedPackage != null) {
         developer.log('LIFECYCLE: Detected recently active emulator $closedPackage. Triggering sync.', name: 'VaultSync', level: 800);
-        // For now, trigger a full 'fastSync' to be safe
         _ref.read(syncProvider.notifier).sync();
       }
     } catch (e) {

@@ -38,6 +38,13 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
     return prod; // return production path even if missing — installer will report error
   }
 
+  // When inside a Flatpak sandbox /app/... paths are not visible to systemd
+  // on the host. We copy the script to $HOME/.local/share/vaultsync/ which is
+  // accessible from the host (granted via --filesystem=home in the manifest).
+  String get _hostBridgeScript => _isInsideFlatpak
+      ? '$_home/.local/share/vaultsync/vaultsync_bridge.py'
+      : _bridgeScript;
+
   @override
   Future<DeckyBridgeStatus> build() => _checkStatus();
 
@@ -60,16 +67,37 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
   Future<String?> install() async {
     state = const AsyncData(DeckyBridgeStatus.installing);
     try {
-      // 1. Verify python3
-      final py = await _run('which', ['python3']);
-      if (py.exitCode != 0) {
+      // 1. Find python3 — inside Flatpak, flatpak-spawn --host has a
+      //    minimal PATH, so check known locations directly.
+      String python3 = '';
+      if (_isInsideFlatpak) {
+        for (final p in ['/usr/bin/python3', '/usr/bin/python']) {
+          final check = await _run(p, ['--version']);
+          if (check.exitCode == 0) {
+            python3 = p;
+            break;
+          }
+        }
+      } else {
+        final py = await Process.run('which', ['python3']);
+        if (py.exitCode == 0) python3 = py.stdout.toString().trim();
+      }
+      if (python3.isEmpty) {
         return 'python3 not found. Install it via your package manager.';
       }
-      final python3 = py.stdout.toString().trim();
 
       // 2. Verify bridge script exists
       if (!File(_bridgeScript).existsSync()) {
         return 'Bridge script not found at $_bridgeScript';
+      }
+
+      // 2b. If inside Flatpak, copy bridge script to a host-accessible path
+      //     so the systemd unit (which runs on the host) can reference it.
+      if (_isInsideFlatpak) {
+        final hostScript = _hostBridgeScript;
+        await Directory(File(hostScript).parent.path).create(recursive: true);
+        await File(_bridgeScript).copy(hostScript);
+        await Process.run('chmod', ['+x', hostScript]);
       }
 
       // 3. Create venv (avoids pip3-not-found and externally-managed-env errors
@@ -148,7 +176,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$python3Path $_bridgeScript
+ExecStart=$python3Path $_hostBridgeScript
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

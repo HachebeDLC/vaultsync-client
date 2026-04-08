@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../l10n/generated/app_localizations.dart';
 
 class DiagnosticsScreen extends StatefulWidget {
   const DiagnosticsScreen({super.key});
@@ -134,8 +135,9 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
-      appBar: AppBar(title: const Text('System Diagnostics')),
+      appBar: AppBar(title: Text(l10n.diagnosticsTitle)),
       backgroundColor: Colors.black,
       body: Column(
         children: [
@@ -144,7 +146,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
             child: Consumer(builder: (context, ref, _) => ElevatedButton.icon(
               onPressed: _isRunning ? null : () => _runTests(ref),
               icon: _isRunning ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.speed),
-              label: Text(_isRunning ? 'Running Stress Tests...' : 'Start Delta Sync Test'),
+              label: Text(_isRunning ? l10n.runningStressTests : l10n.startDeltaSyncTest),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue.shade900,
                 foregroundColor: Colors.white,
