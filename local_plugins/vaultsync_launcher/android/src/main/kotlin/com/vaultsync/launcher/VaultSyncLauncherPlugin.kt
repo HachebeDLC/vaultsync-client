@@ -278,7 +278,58 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             "scanRecursive" -> handleScanRecursive(call, result)
             "calculateHash" -> handleCalculateHash(call, result)
             "calculateBlockHashes" -> handleCalculateBlockHashes(call, result)
+            "extractModifiedBlocks" -> {
+                val path = call.argument<String>("path") ?: return result.error("ARG_MISSING", "path missing", null)
+                val versionStorePath = call.argument<String>("versionStorePath") ?: return result.error("ARG_MISSING", "versionStorePath missing", null)
+                val changedBlocksMap = call.argument<Map<String, Boolean>>("changedBlocks") ?: emptyMap()
+                val changedBlocks = changedBlocksMap.mapKeys { it.key.toInt() }
+
+                executor.execute {
+                    try {
+                        val manager = VersionBlockManager(versionStorePath)
+                        // Handle SAF/Shizuku vs Raw file
+                        if (isShizukuPath(path)) {
+                            // Currently, VersionBlockManager only accepts raw File paths for simplicity.
+                            // We need to pass the FD or raw path if possible. 
+                            // Let's assume path is resolving to a raw path for now, or we skip extracting for non-raw.
+                            // Actually, VersionBlockManager uses File(). We need to pass the real raw path for Shizuku,
+                            // which is just getCleanPath(path).
+                            manager.extractModifiedBlocks(getCleanPath(path), changedBlocks)
+                        } else if (path.startsWith("content://")) {
+                            // Can't easily use File APIs on SAF. We'll need a different implementation for SAF if supported.
+                            // But Android 11+ we usually use Shizuku or direct access.
+                            // We'll skip or throw for pure SAF.
+                            throw Exception("Extracting blocks directly from content:// URIs not supported.")
+                        } else {
+                            manager.extractModifiedBlocks(path, changedBlocks)
+                        }
+                        mainHandler.post { result.success(true) }
+                    } catch (e: Exception) {
+                        mainHandler.post { result.error("EXTRACT_ERROR", e.message, null) }
+                    }
+                }
+            }
+            "reconstructFromDeltas" -> {
+                val layoutHashes = call.argument<List<String>>("layoutHashes") ?: emptyList()
+                val livePath = call.argument<String>("livePath") ?: return result.error("ARG_MISSING", "livePath missing", null)
+                val restorePath = call.argument<String>("restorePath") ?: return result.error("ARG_MISSING", "restorePath missing", null)
+                val versionStorePath = call.argument<String>("versionStorePath") ?: return result.error("ARG_MISSING", "versionStorePath missing", null)
+
+                executor.execute {
+                    try {
+                        val manager = VersionBlockManager(versionStorePath)
+                        val cleanLivePath = if (isShizukuPath(livePath)) getCleanPath(livePath) else livePath
+                        val cleanRestorePath = if (isShizukuPath(restorePath)) getCleanPath(restorePath) else restorePath
+                        
+                        manager.reconstructFromDeltas(layoutHashes, cleanLivePath, cleanRestorePath)
+                        mainHandler.post { result.success(true) }
+                    } catch (e: Exception) {
+                        mainHandler.post { result.error("RECONSTRUCT_ERROR", e.message, null) }
+                    }
+                }
+            }
             "calculateBlockHashesAndHash" -> handleCalculateBlockHashesAndHash(call, result)
+
             "uploadFileNative" -> uploadManager.handleUploadFile(call, result)
             "downloadFileNative" -> downloadManager.handleDownloadFile(call, result)
             "listLocalBackups" -> {
