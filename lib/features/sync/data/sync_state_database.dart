@@ -30,7 +30,7 @@ class SyncStateDatabase {
 
     return await openDatabase(
       dbPath,
-      version: 3,
+      version: 4,
       onConfigure: (db) async {
         await db.rawQuery('PRAGMA journal_mode = WAL');
         await db.execute('PRAGMA synchronous = NORMAL');
@@ -60,6 +60,26 @@ class SyncStateDatabase {
           )
         ''');
         await db.execute('CREATE INDEX idx_block_hash ON sync_block_hashes (block_hash)');
+        await db.execute('''
+          CREATE TABLE local_versions(
+            id TEXT PRIMARY KEY,
+            systemId TEXT NOT NULL,
+            filePath TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
+            size INTEGER NOT NULL,
+            fileHash TEXT
+          )
+        ''');
+        await db.execute('CREATE INDEX idx_versions_system_file ON local_versions (systemId, filePath)');
+        await db.execute('''
+          CREATE TABLE version_blocks(
+            versionId TEXT NOT NULL,
+            blockIndex INTEGER NOT NULL,
+            blockHash TEXT NOT NULL,
+            PRIMARY KEY (versionId, blockIndex),
+            FOREIGN KEY (versionId) REFERENCES local_versions(id) ON DELETE CASCADE
+          )
+        ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -74,6 +94,28 @@ class SyncStateDatabase {
             )
           ''');
           await db.execute('CREATE INDEX IF NOT EXISTS idx_block_hash ON sync_block_hashes (block_hash)');
+        }
+        if (oldVersion < 4) {
+          await db.execute('''
+            CREATE TABLE local_versions(
+              id TEXT PRIMARY KEY,
+              systemId TEXT NOT NULL,
+              filePath TEXT NOT NULL,
+              timestamp INTEGER NOT NULL,
+              size INTEGER NOT NULL,
+              fileHash TEXT
+            )
+          ''');
+          await db.execute('CREATE INDEX idx_versions_system_file ON local_versions (systemId, filePath)');
+          await db.execute('''
+            CREATE TABLE version_blocks(
+              versionId TEXT NOT NULL,
+              blockIndex INTEGER NOT NULL,
+              blockHash TEXT NOT NULL,
+              PRIMARY KEY (versionId, blockIndex),
+              FOREIGN KEY (versionId) REFERENCES local_versions(id) ON DELETE CASCADE
+            )
+          ''');
         }
       },
     );

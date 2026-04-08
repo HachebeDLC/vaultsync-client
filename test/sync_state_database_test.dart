@@ -21,6 +21,45 @@ void main() {
     // Clean up the database file
   });
 
+  group('Versioning Schema', () {
+    test('local_versions table should exist and allow inserts', () async {
+      final db = await syncDb.database;
+      
+      final versionId = 'v_${DateTime.now().millisecondsSinceEpoch}';
+      
+      await db.insert('local_versions', {
+        'id': versionId,
+        'systemId': 'ps2',
+        'filePath': 'saves/game.sav',
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'size': 10485760,
+        'fileHash': 'hash123'
+      });
+
+      final result = await db.query('local_versions');
+      expect(result.length, 1);
+      expect(result.first['id'], versionId);
+      expect(result.first['systemId'], 'ps2');
+    });
+
+    test('version_blocks table should exist and allow inserts', () async {
+      final db = await syncDb.database;
+      
+      final versionId = 'v_${DateTime.now().millisecondsSinceEpoch}';
+      
+      await db.insert('version_blocks', {
+        'versionId': versionId,
+        'blockIndex': 0,
+        'blockHash': 'blockhash000'
+      });
+
+      final result = await db.query('version_blocks');
+      expect(result.length, 1);
+      expect(result.first['versionId'], versionId);
+      expect(result.first['blockHash'], 'blockhash000');
+    });
+  });
+
   group('SyncStateDatabase Incremental Hashing', () {
     test('should store and retrieve block hashes', () async {
       const path = '/test/path/game.sav';
