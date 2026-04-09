@@ -28,7 +28,7 @@ class LocalVersioningService {
     return p.join(dir.path, 'versions');
   }
 
-  Future<String?> createSnapshot(String systemId, String filePath, int size, {String? masterKey}) async {
+  Future<String?> createSnapshot(String systemId, String filePath, int size, {String? masterKey, List<String>? currentBlockHashes, String? currentFileHash}) async {
     try {
       final db = await _db.database;
       final previousState = await _db.getState(filePath);
@@ -38,11 +38,19 @@ class LocalVersioningService {
         previousHashes = List<String>.from(jsonDecode(previousState['block_hashes']));
       }
 
-      final hashResult = await _launcher.calculateBlockHashesAndHash(filePath, masterKey: masterKey);
-      if (hashResult == null) return null;
+      List<String> currentHashes;
+      String fileHash;
 
-      final currentHashes = List<String>.from(hashResult['blockHashes']);
-      final fileHash = hashResult['fileHash'] as String;
+      if (currentBlockHashes != null && currentFileHash != null) {
+        currentHashes = currentBlockHashes;
+        fileHash = currentFileHash;
+      } else {
+        final hashResult = await _launcher.calculateBlockHashesAndHash(filePath, masterKey: masterKey);
+        if (hashResult == null) return null;
+
+        currentHashes = List<String>.from(hashResult['blockHashes']);
+        fileHash = hashResult['fileHash'] as String;
+      }
 
       final changedBlocks = <int, bool>{};
       for (int i = 0; i < currentHashes.length; i++) {

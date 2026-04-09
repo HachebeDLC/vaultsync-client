@@ -280,7 +280,7 @@ class SyncRepository {
               final fullHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs, precomputedHash: combined['fileHash'] as String);
               
               onProgress?.call('Snapshotting $relPath...');
-              await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey);
+              await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey, currentBlockHashes: blockHashes, currentFileHash: fullHash);
 
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, fullHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(blockHashes));
             }
@@ -321,7 +321,7 @@ class SyncRepository {
               continue;
             }
             onProgress?.call('Snapshotting $relPath...');
-            await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey);
+            await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey, currentBlockHashes: currentBlockHashes, currentFileHash: localHash);
 
             if (localTs > (remoteInfo['updated_at'] as num)) {
               onProgress?.call('Queueing $relPath for patching (Local Newer)...');
