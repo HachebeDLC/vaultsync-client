@@ -110,7 +110,20 @@ class SyncDiffService {
         if (localInfo == null) {
           status = 'Remote Only';
         } else if (remoteInfo == null) {
-          status = 'Local Only';
+          final cached = await _syncStateDb.getState(localInfo['uri']);
+          if (cached != null) {
+            final int localTs = (localInfo['lastModified'] as num).toInt();
+            final int localSize = (localInfo['size'] as num).toInt();
+            // If the local file matches what's in the cache, it's 'Synced'
+            // If it differs from the cache, it's 'Modified' locally since the last sync.
+            if (cached['size'] == localSize && (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000)) {
+               status = 'Synced';
+            } else {
+               status = 'Modified';
+            }
+          } else {
+            status = 'Local Only'; // Unseen by the DB
+          }
         } else {
           final String remoteHash = remoteInfo['hash'];
           if (isJournaledSynced(prefs, systemId, relPath, remoteHash)) {
