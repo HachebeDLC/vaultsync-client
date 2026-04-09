@@ -123,44 +123,30 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              icon: const Icon(Icons.restore, size: 20),
-              tooltip: 'Local Snapshots',
-              onPressed: () async {
-                final result = await showModalBottomSheet<bool>(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => LocalVersionHistorySheet(
-                    systemId: widget.systemId,
-                    filePath: file['uri'],
-                    effectivePath: _localPath!,
-                    fileName: name,
-                  ),
-                );
-                
-                if (result == true && mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('File restored successfully!')));
-                  _syncThisSystem();
-                }
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.history, size: 20),
-              tooltip: l10n.versionHistoryTooltip,
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => VersionHistoryScreen(
-                      remotePath: file['remotePath'],
-                      localBasePath: _localPath!,
-                      relPath: relPath,
+            if (file['localInfo'] != null)
+              IconButton(
+                icon: const Icon(Icons.restore, size: 20),
+                tooltip: 'Local Snapshots',
+                onPressed: () async {
+                  final result = await showModalBottomSheet<bool>(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (context) => LocalVersionHistorySheet(
+                      systemId: widget.systemId,
+                      filePath: file['localInfo']['uri'],
+                      effectivePath: _localPath!,
+                      fileName: name,
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                  
+                  if (result == true && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('File restored successfully!')));
+                    _syncThisSystem();
+                  }
+                },
+              ),
+            const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
           ],
         ),
         onTap: () {

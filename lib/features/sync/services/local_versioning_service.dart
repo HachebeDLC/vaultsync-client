@@ -152,25 +152,24 @@ class LocalVersioningService {
       final fileName = p.basename(liveFilePath);
       final safeRestorePath = p.join(safeRestoreDir, fileName);
 
-      // Create dirs (if needed via Platform channel or Dart)
-      Directory(safeRestoreDir).createSync(recursive: true);
+      // Create dirs using the native bridge to handle Shizuku/SAF
+      await _launcher.mkdirs(safeRestoreDir);
 
       final success = await reconstructVersion(versionId, liveFilePath, safeRestorePath);
       if (!success) return false;
 
       final undoDir = p.join(effectivePath, '.undo');
-      Directory(undoDir).createSync(recursive: true);
+      await _launcher.mkdirs(undoDir);
       
       final undoPath = p.join(undoDir, fileName);
-      final liveFile = File(liveFilePath);
-      if (liveFile.existsSync()) {
-        liveFile.renameSync(undoPath);
+      
+      final exists = await _launcher.checkPathExists(liveFilePath);
+      if (exists) {
+        await _launcher.renameFile(liveFilePath, undoPath);
       }
 
       // Move safe restore to live path
-      File(safeRestorePath).renameSync(liveFilePath);
-
-      return true;
+      return await _launcher.renameFile(safeRestorePath, liveFilePath);
     } catch (e) {
       print('Error in safe restore: $e');
       return false;

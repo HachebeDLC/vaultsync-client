@@ -169,12 +169,13 @@ void main() {
 
       when(() => mockLauncher.reconstructFromDeltas(['block1'], filePath, '$effectivePath/SafeRestore/live_save.sav', '/tmp/versions'))
           .thenAnswer((_) async => true);
+      when(() => mockLauncher.mkdirs(any())).thenAnswer((_) async => true);
+      when(() => mockLauncher.checkPathExists(any())).thenAnswer((_) async => true);
+      when(() => mockLauncher.renameFile(any(), any())).thenAnswer((_) async => true);
 
       final result = await service.safeRestore(systemId, versionId, filePath, effectivePath);
       
       expect(result, isTrue);
-      expect(File('$effectivePath/.undo/live_save.sav').existsSync(), isTrue);
-      expect(File(filePath).readAsStringSync(), 'restored data');
 
       verify(() => mockLauncher.reconstructFromDeltas(['block1'], filePath, '$effectivePath/SafeRestore/live_save.sav', '/tmp/versions')).called(1);
     });

@@ -366,6 +366,41 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                     }
                 }
             }
+            "renameFile" -> {
+                val oldPath = call.argument<String>("oldPath") ?: return result.error("ARG_MISSING", "oldPath missing", null)
+                val newPath = call.argument<String>("newPath") ?: return result.error("ARG_MISSING", "newPath missing", null)
+                executor.execute {
+                    try {
+                        val ok = when {
+                            isShizukuPath(oldPath) -> getShizukuServiceSync().renameFile(getCleanPath(oldPath), getCleanPath(newPath))
+                            oldPath.startsWith("content://") -> {
+                                // SAF rename is complex and requires document ID. 
+                                // For now, we only support raw and Shizuku for local versioning.
+                                false
+                            }
+                            else -> File(oldPath).renameTo(File(newPath))
+                        }
+                        mainHandler.post { result.success(ok) }
+                    } catch (e: Exception) {
+                        mainHandler.post { result.error("RENAME_ERROR", e.message, null) }
+                    }
+                }
+            }
+            "deleteFile" -> {
+                val path = call.argument<String>("path") ?: return result.error("ARG_MISSING", "path missing", null)
+                executor.execute {
+                    try {
+                        val ok = when {
+                            isShizukuPath(path) -> getShizukuServiceSync().deleteFile(getCleanPath(path))
+                            path.startsWith("content://") -> false
+                            else -> File(path).delete()
+                        }
+                        mainHandler.post { result.success(ok) }
+                    } catch (e: Exception) {
+                        mainHandler.post { result.error("DELETE_ERROR", e.message, null) }
+                    }
+                }
+            }
             "startMonitoring" -> {
                 val packages = call.argument<List<String>>("packages") ?: emptyList()
                 val interval = (call.argument<Any>("interval") as? Number)?.toLong() ?: 15000L

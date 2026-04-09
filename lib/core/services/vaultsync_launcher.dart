@@ -77,4 +77,47 @@ class VaultSyncLauncher {
       return false;
     }
   }
+
+  Future<bool> renameFile(String oldPath, String newPath) async {
+    try {
+      final bool? result = await _platform.invokeMethod('renameFile', {
+        'oldPath': oldPath,
+        'newPath': newPath,
+      });
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print("Failed to rename file: '${e.message}'.");
+      return false;
+    }
+  }
+
+  Future<bool> deleteFile(String path) async {
+    try {
+      final bool? result = await _platform.invokeMethod('deleteFile', {'path': path});
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print("Failed to delete file: '${e.message}'.");
+      return false;
+    }
+  }
+
+  Future<bool> mkdirs(String path) async {
+    try {
+      final bool? result = await _platform.invokeMethod('mkdirs', {'path': path});
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print("Failed to mkdirs: '${e.message}'.");
+      return false;
+    }
+  }
+
+  Future<bool> checkPathExists(String path) async {
+    try {
+      final bool? result = await _platform.invokeMethod('checkPathExists', {'uri': path});
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print("Failed to check path exists: '${e.message}'.");
+      return false;
+    }
+  }
 }
