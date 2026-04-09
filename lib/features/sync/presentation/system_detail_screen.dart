@@ -5,6 +5,7 @@ import '../data/sync_repository.dart';
 import '../services/system_path_service.dart';
 import '../domain/sync_provider.dart';
 import 'version_history_screen.dart';
+import 'local_version_history_sheet.dart';
 import '../../../core/utils/responsive_layout.dart';
 import '../../../l10n/generated/app_localizations.dart';
 
@@ -118,21 +119,48 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
           ],
         ),
         subtitle: Text(_getStatusLabel(status, l10n), style: TextStyle(color: _getStatusColor(status), fontSize: 11)),
-        trailing: IconButton(
-          icon: const Icon(Icons.history, size: 20),
-          tooltip: l10n.versionHistoryTooltip,
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => VersionHistoryScreen(
-                  remotePath: file['remotePath'],
-                  localBasePath: _localPath!,
-                  relPath: relPath,
-                ),
-              ),
-            );
-          },
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.restore, size: 20),
+              tooltip: 'Local Snapshots',
+              onPressed: () async {
+                final result = await showModalBottomSheet<bool>(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => LocalVersionHistorySheet(
+                    systemId: widget.systemId,
+                    filePath: file['uri'],
+                    effectivePath: _localPath!,
+                    fileName: name,
+                  ),
+                );
+                
+                if (result == true && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('File restored successfully!')));
+                  _syncThisSystem();
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.history, size: 20),
+              tooltip: l10n.versionHistoryTooltip,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => VersionHistoryScreen(
+                      remotePath: file['remotePath'],
+                      localBasePath: _localPath!,
+                      relPath: relPath,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
         onTap: () {
           Navigator.push(
