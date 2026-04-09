@@ -59,7 +59,13 @@ class SyncDiffService {
               ? 'RetroArch'
               : systemId);
 
-      final allRemoteFiles = await fetchAllRemoteFiles(cloudPrefix);
+      List<dynamic> allRemoteFiles = [];
+      try {
+        allRemoteFiles = await fetchAllRemoteFiles(cloudPrefix);
+      } catch (e) {
+        // If we fail to fetch remote files, log it but proceed with empty remote files
+        // so that local files can still be viewed and queued for upload.
+      }
 
       final remoteFilesList = allRemoteFiles.where((f) {
         final path = f['path'] as String;

@@ -8,6 +8,7 @@ import 'version_history_screen.dart';
 import 'local_version_history_sheet.dart';
 import '../../../core/utils/responsive_layout.dart';
 import '../../../l10n/generated/app_localizations.dart';
+import '../../../core/services/connectivity_provider.dart';
 
 class SystemDetailScreen extends ConsumerStatefulWidget {
   final String systemId;
@@ -305,6 +306,7 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
     final isSyncing = syncState.isSyncing;
     final isDesktop = ResponsiveLayout.isDesktop(context);
     final l10n = AppLocalizations.of(context)!;
+    final isOnline = ref.watch(isOnlineProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -343,6 +345,24 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
       ),
       body: Column(
         children: [
+          if (!isOnline && !_isLoading && _rawFiles != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              color: Colors.orange.withOpacity(0.2),
+              child: Row(
+                children: [
+                  const Icon(Icons.wifi_off, color: Colors.orange, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'You are offline. Showing local files only.',
+                      style: TextStyle(color: Colors.orange.shade800, fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (isSyncing)
             LinearProgressIndicator(
               value: syncState.progress > 0 ? syncState.progress : null,
