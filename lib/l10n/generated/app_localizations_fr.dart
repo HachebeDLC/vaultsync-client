@@ -378,112 +378,115 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucun historique de synchronisation trouvé.';
 
   @override
-  String get recoverVaultTitle => 'Recover Vault';
+  String get recoverVaultTitle => 'Récupérer le Coffre';
 
   @override
   String get enterEmailToRecover =>
-      'Enter your email to retrieve your recovery questions.';
+      'Entrez votre e-mail pour récupérer vos questions de sécurité.';
 
   @override
-  String get fetchRecoveryInfoButton => 'FETCH RECOVERY INFO';
+  String get fetchRecoveryInfoButton => 'RÉCUPÉRER LES INFORMATIONS';
 
   @override
   String get answerSecurityQuestions =>
-      'Please answer your security questions to restore your master key.';
+      'Veuillez répondre à vos questions de sécurité pour restaurer votre clé maîtresse.';
 
   @override
-  String get masterKeyRestored => 'Master key restored! You can now log in.';
+  String get masterKeyRestored =>
+      'Clé maîtresse restaurée ! Vous pouvez maintenant vous connecter.';
 
   @override
   String recoveryFailed(String error) {
-    return 'Recovery failed: $error';
+    return 'Échec de la récupération : $error';
   }
 
   @override
-  String get restoreMasterKeyButton => 'RESTORE MASTER KEY';
+  String get restoreMasterKeyButton => 'RESTAURER LA CLÉ MAÎTRESSE';
 
   @override
-  String get recoverySetupTitle => 'Recovery Setup';
+  String get recoverySetupTitle => 'Configuration de récupération';
 
   @override
-  String get recoverySetupSaved => 'Recovery setup saved successfully!';
+  String get recoverySetupSaved =>
+      'Configuration de récupération enregistrée avec succès !';
 
   @override
   String errorSavingRecovery(String error) {
-    return 'Error saving recovery: $error';
+    return 'Erreur lors de l\'enregistrement de la récupération : $error';
   }
 
   @override
-  String get saveRecoverySetupButton => 'SAVE RECOVERY SETUP';
+  String get saveRecoverySetupButton =>
+      'ENREGISTRER LA CONFIG. DE RÉCUPÉRATION';
 
   @override
-  String get librarySetupTitle => 'Library Setup';
+  String get librarySetupTitle => 'Configuration de la bibliothèque';
 
   @override
-  String get noSystemsFound => 'No systems found in that folder.';
+  String get noSystemsFound => 'Aucun système trouvé dans ce dossier.';
 
   @override
   String errorGeneric(String error) {
-    return 'Error: $error';
+    return 'Erreur : $error';
   }
 
   @override
   String noInstalledEmulatorsFound(String systemName) {
-    return 'No installed emulators found for $systemName.';
+    return 'Aucun émulateur installé trouvé pour $systemName.';
   }
 
   @override
   String selectEmulatorFor(String systemName) {
-    return 'Select Emulator for $systemName';
+    return 'Sélectionner l\'émulateur pour $systemName';
   }
 
   @override
-  String get configureSavePathTitle => 'Configure Save Path';
+  String get configureSavePathTitle => 'Configurer le chemin de sauvegarde';
 
   @override
   String emulatorLabel(String emulatorName) {
-    return 'Emulator: $emulatorName';
+    return 'Émulateur : $emulatorName';
   }
 
   @override
-  String get saveFolderLabel => 'Save Folder:';
+  String get saveFolderLabel => 'Dossier de sauvegarde :';
 
   @override
-  String get cancelButton => 'Cancel';
+  String get cancelButton => 'Annuler';
 
   @override
-  String get saveButton => 'Save';
+  String get saveButton => 'Enregistrer';
 
   @override
-  String get finishSetupButton => 'FINISH SETUP';
+  String get finishSetupButton => 'TERMINER LA CONFIGURATION';
 
   @override
-  String get selectRomsRoot => 'SELECT ROMS ROOT';
+  String get selectRomsRoot => 'SÉLECTIONNER LA RACINE DES ROMS';
 
   @override
   String get baseFolderDescription =>
-      'Base folder containing your game subfolders (e.g. Roms/ps2, Roms/snes).';
+      'Dossier de base contenant vos sous-dossiers de jeux (ex. Roms/ps2, Roms/snes).';
 
   @override
-  String get pathLabel => 'Path';
+  String get pathLabel => 'Chemin';
 
   @override
-  String get scanLibraryAction => 'SCAN LIBRARY';
+  String get scanLibraryAction => 'SCANNER LA BIBLIOTHÈQUE';
 
   @override
   String get noSystemsDetected =>
-      'No systems detected yet.\nSelect your ROMs root and click \"Scan\".';
+      'Aucun système détecté pour l\'instant.\nSélectionnez votre racine ROMs et cliquez sur « Scanner ».';
 
   @override
-  String get detectedSystems => 'DETECTED SYSTEMS';
+  String get detectedSystems => 'SYSTÈMES DÉTECTÉS';
 
   @override
   String get noInstalledEmulatorsForDetected =>
-      'No installed emulators found for the detected systems.';
+      'Aucun émulateur installé trouvé pour les systèmes détectés.';
 
   @override
-  String get configuredStatus => 'Configured';
+  String get configuredStatus => 'Configuré';
 
   @override
-  String get needsSetupStatus => 'Needs Setup';
+  String get needsSetupStatus => 'Configuration requise';
 }

@@ -45,24 +45,15 @@ class ApiClient {
   }
 
   Future<String?> _secureRead(String key) async {
-    final value = await SecureStorageWrapper.read(key);
-    if (value != null) return value;
-    // Fallback covers Linux (dummy stub returns null) and any keyring failures
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('fallback_$key');
+    return await SecureStorageWrapper.read(key);
   }
 
   Future<void> _secureWrite(String key, String value) async {
     await SecureStorageWrapper.write(key, value);
-    // Mirror to SharedPreferences so Linux (dummy stub) and fallback reads work
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fallback_$key', value);
   }
 
   Future<void> _secureDelete(String key) async {
     await SecureStorageWrapper.delete(key);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('fallback_$key');
   }
 
   Future<String?> getToken() async {
@@ -128,7 +119,6 @@ class ApiClient {
     return {
       if (includeJson) 'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
-      'Connection': 'close',
     };
   }
 

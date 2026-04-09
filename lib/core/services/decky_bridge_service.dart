@@ -20,7 +20,24 @@ class DeckyBridgeService {
 
   DeckyBridgeService(this._ref);
 
+  Future<bool> _systemdBridgeActive() async {
+    try {
+      final isInsideFlatpak = File('/.flatpak-info').existsSync();
+      final result = isInsideFlatpak
+          ? await Process.run('flatpak-spawn', ['--host', 'systemctl', '--user', 'is-active', 'vaultsync-bridge'])
+          : await Process.run('systemctl', ['--user', 'is-active', 'vaultsync-bridge']);
+      return result.stdout.toString().trim() == 'active';
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> start({int port = 5437}) async {
+    // Don't bind if the headless systemd bridge already owns port 5437.
+    if (await _systemdBridgeActive()) {
+      developer.log('DECKY BRIDGE: systemd service active — skipping in-process server', name: 'VaultSync', level: 800);
+      return;
+    }
     try {
       _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
       developer.log('DECKY BRIDGE: Server running on ${_server!.address.address}:${_server!.port}', name: 'VaultSync', level: 800);

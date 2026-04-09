@@ -135,5 +135,15 @@
   "emulatorLabel": "Emulador: {emulatorName}",
   "saveFolderLabel": "Carpeta de guardado:",
   "cancelButton": "Cancelar",
-  "saveButton": "Guardar"
+  "saveButton": "Guardar",
+  "finishSetupButton": "FINALIZAR CONFIGURACIÓN",
+  "selectRomsRoot": "SELECCIONAR CARPETA RAÍZ DE ROMS",
+  "baseFolderDescription": "Carpeta base que contiene tus subcarpetas de juegos (p. ej. Roms/ps2, Roms/snes).",
+  "pathLabel": "Ruta",
+  "scanLibraryAction": "ESCANEAR BIBLIOTECA",
+  "noSystemsDetected": "Aún no se detectaron sistemas.\nSelecciona la raíz de tus ROMs y haz clic en \"Escanear\".",
+  "detectedSystems": "SISTEMAS DETECTADOS",
+  "noInstalledEmulatorsForDetected": "No se encontraron emuladores instalados para los sistemas detectados.",
+  "configuredStatus": "Configurado",
+  "needsSetupStatus": "Necesita configuración"
 }

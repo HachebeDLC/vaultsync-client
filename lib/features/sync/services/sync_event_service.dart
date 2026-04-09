@@ -21,6 +21,7 @@ class SyncEventService {
   StreamSubscription? _subscription;
   bool _isConnected = false;
   int _retryCount = 0;
+  int _consecutive401s = 0;
   Timer? _reconnectTimer;
 
   SyncEventService(this._apiClient, this._repository);
@@ -71,6 +72,7 @@ class SyncEventService {
             developer.log('SSE: Connected', name: 'VaultSync', level: 800);
             _isConnected = true;
             _retryCount = 0;
+            _consecutive401s = 0;
           }
           
           if (event.data != null && event.data!.isNotEmpty) {
@@ -142,16 +144,25 @@ class SyncEventService {
 
   Future<void> _handle401() async {
     if (!_isConnected && _subscription == null) return; // Already handling or stopped
-    
+
     _isConnected = false;
     _subscription?.cancel();
     _subscription = null;
     _reconnectTimer?.cancel();
     SSEClient.unsubscribeFromSSE();
 
-    developer.log('SSE: Token expired — attempting refresh', name: 'VaultSync', level: 900);
+    _consecutive401s++;
+    developer.log('SSE: Token expired (consecutive 401s: $_consecutive401s) — attempting refresh', name: 'VaultSync', level: 900);
+
+    // Give up after 3 consecutive 401s — refresh isn't helping
+    if (_consecutive401s >= 3) {
+      developer.log('SSE: Persistent 401 after $_consecutive401s attempts. Stopping event listener. Manual sync required.', name: 'VaultSync', level: 1000);
+      _consecutive401s = 0;
+      return;
+    }
+
     final refreshed = await _apiClient.refreshAccessToken();
-    
+
     if (refreshed) {
       developer.log('SSE: Token refreshed, reconnecting', name: 'VaultSync', level: 800);
       _retryCount = 0;
@@ -162,9 +173,10 @@ class SyncEventService {
       final token = await _apiClient.getToken();
       if (token == null) {
         developer.log('SSE: Session is terminal (logged out). Stopping event listener.', name: 'VaultSync', level: 1000);
-        return; 
+        _consecutive401s = 0;
+        return;
       }
-      
+
       // If we still have a token but refresh failed (e.g. network error), do a backoff retry
       developer.log('SSE: Token refresh failed (possibly network). Backing off.', name: 'VaultSync', level: 900);
       _handleDisconnect();

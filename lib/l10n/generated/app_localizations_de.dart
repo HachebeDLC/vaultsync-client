@@ -167,7 +167,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Öffne Shizuku... Starten Sie den Dienst und kommen Sie zurück.';
 
   @override
-  String get shizukuAuthorized => 'Shizuku authorized!';
+  String get shizukuAuthorized => 'Shizuku autorisiert!';
 
   @override
   String get actionLogin => 'LOGIN';
@@ -377,67 +377,69 @@ class AppLocalizationsDe extends AppLocalizations {
   String get noSyncHistoryFound => 'Kein Sync-Verlauf gefunden.';
 
   @override
-  String get recoverVaultTitle => 'Recover Vault';
+  String get recoverVaultTitle => 'Vault wiederherstellen';
 
   @override
   String get enterEmailToRecover =>
-      'Enter your email to retrieve your recovery questions.';
+      'Gib deine E-Mail-Adresse ein, um deine Sicherheitsfragen abzurufen.';
 
   @override
-  String get fetchRecoveryInfoButton => 'FETCH RECOVERY INFO';
+  String get fetchRecoveryInfoButton => 'WIEDERHERSTELLUNGSINFOS ABRUFEN';
 
   @override
   String get answerSecurityQuestions =>
-      'Please answer your security questions to restore your master key.';
+      'Beantworte deine Sicherheitsfragen, um deinen Master-Key wiederherzustellen.';
 
   @override
-  String get masterKeyRestored => 'Master key restored! You can now log in.';
+  String get masterKeyRestored =>
+      'Master-Key wiederhergestellt! Du kannst dich jetzt anmelden.';
 
   @override
   String recoveryFailed(String error) {
-    return 'Recovery failed: $error';
+    return 'Wiederherstellung fehlgeschlagen: $error';
   }
 
   @override
-  String get restoreMasterKeyButton => 'RESTORE MASTER KEY';
+  String get restoreMasterKeyButton => 'MASTER-KEY WIEDERHERSTELLEN';
 
   @override
-  String get recoverySetupTitle => 'Recovery Setup';
+  String get recoverySetupTitle => 'Wiederherstellungs-Setup';
 
   @override
-  String get recoverySetupSaved => 'Recovery setup saved successfully!';
+  String get recoverySetupSaved =>
+      'Wiederherstellungs-Setup erfolgreich gespeichert!';
 
   @override
   String errorSavingRecovery(String error) {
-    return 'Error saving recovery: $error';
+    return 'Fehler beim Speichern der Wiederherstellung: $error';
   }
 
   @override
-  String get saveRecoverySetupButton => 'SAVE RECOVERY SETUP';
+  String get saveRecoverySetupButton => 'WIEDERHERSTELLUNGS-SETUP SPEICHERN';
 
   @override
-  String get librarySetupTitle => 'Library Setup';
+  String get librarySetupTitle => 'Bibliotheks-Setup';
 
   @override
-  String get noSystemsFound => 'No systems found in that folder.';
+  String get noSystemsFound => 'Keine Systeme in diesem Ordner gefunden.';
 
   @override
   String errorGeneric(String error) {
-    return 'Error: $error';
+    return 'Fehler: $error';
   }
 
   @override
   String noInstalledEmulatorsFound(String systemName) {
-    return 'No installed emulators found for $systemName.';
+    return 'Keine installierten Emulatoren für $systemName gefunden.';
   }
 
   @override
   String selectEmulatorFor(String systemName) {
-    return 'Select Emulator for $systemName';
+    return 'Emulator für $systemName auswählen';
   }
 
   @override
-  String get configureSavePathTitle => 'Configure Save Path';
+  String get configureSavePathTitle => 'Speicherpfad konfigurieren';
 
   @override
   String emulatorLabel(String emulatorName) {
@@ -445,44 +447,44 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get saveFolderLabel => 'Save Folder:';
+  String get saveFolderLabel => 'Speicherordner:';
 
   @override
-  String get cancelButton => 'Cancel';
+  String get cancelButton => 'Abbrechen';
 
   @override
-  String get saveButton => 'Save';
+  String get saveButton => 'Speichern';
 
   @override
-  String get finishSetupButton => 'FINISH SETUP';
+  String get finishSetupButton => 'SETUP ABSCHLIESSEN';
 
   @override
-  String get selectRomsRoot => 'SELECT ROMS ROOT';
+  String get selectRomsRoot => 'ROM-STAMMORDNER AUSWÄHLEN';
 
   @override
   String get baseFolderDescription =>
-      'Base folder containing your game subfolders (e.g. Roms/ps2, Roms/snes).';
+      'Basisordner mit deinen Spiel-Unterordnern (z. B. Roms/ps2, Roms/snes).';
 
   @override
-  String get pathLabel => 'Path';
+  String get pathLabel => 'Pfad';
 
   @override
-  String get scanLibraryAction => 'SCAN LIBRARY';
+  String get scanLibraryAction => 'BIBLIOTHEK SCANNEN';
 
   @override
   String get noSystemsDetected =>
-      'No systems detected yet.\nSelect your ROMs root and click \"Scan\".';
+      'Noch keine Systeme erkannt.\nWähle deinen ROM-Stammordner aus und klicke auf \"Scannen\".';
 
   @override
-  String get detectedSystems => 'DETECTED SYSTEMS';
+  String get detectedSystems => 'ERKANNTE SYSTEME';
 
   @override
   String get noInstalledEmulatorsForDetected =>
-      'No installed emulators found for the detected systems.';
+      'Keine installierten Emulatoren für die erkannten Systeme gefunden.';
 
   @override
-  String get configuredStatus => 'Configured';
+  String get configuredStatus => 'Konfiguriert';
 
   @override
-  String get needsSetupStatus => 'Needs Setup';
+  String get needsSetupStatus => 'Setup erforderlich';
 }

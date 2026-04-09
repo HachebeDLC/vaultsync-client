@@ -21,14 +21,10 @@ class DartNativeCrypto {
   static int getEncryptedBlockSize(int fileSize) => getBlockSize(fileSize) + overhead;
   
   static final _magicBytes = utf8.encode(magicHeader);
-  static final _random = Random.secure();
 
-  static Uint8List _generateSecureIV() {
-    final bytes = Uint8List(ivSize);
-    for (int i = 0; i < ivSize; i++) {
-      bytes[i] = _random.nextInt(256);
-    }
-    return bytes;
+  static Uint8List _generateDeterministicIV(List<int> data) {
+    final hash = md5.convert(data);
+    return Uint8List.fromList(hash.bytes);
   }
 
   /// Returns standard file metadata (size and lastModified) for a given local path.
@@ -75,7 +71,7 @@ class DartNativeCrypto {
       if (buffer.isEmpty) break;
       
       if (keyBytes != null) {
-        final iv = _generateSecureIV();
+        final iv = _generateDeterministicIV(buffer);
         final cipher = PaddedBlockCipher('AES/CBC/PKCS7')
           ..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
         
@@ -128,16 +124,18 @@ class DartNativeCrypto {
       // Feed raw bytes into the running file digest
       fileHashInput.add(buffer);
 
-      // Compute block hash (encrypt + SHA-256)
       if (keyBytes != null) {
-        final iv = _generateSecureIV();
+        final iv = _generateDeterministicIV(buffer);
         final cipher = PaddedBlockCipher('AES/CBC/PKCS7')
           ..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
+        
         final encryptedBytes = cipher.process(Uint8List.fromList(buffer));
+        
         final outBuffer = BytesBuilder();
         outBuffer.add(_magicBytes);
         outBuffer.add(iv);
         outBuffer.add(encryptedBytes);
+        
         hashes.add(sha256.convert(outBuffer.toBytes()).toString());
       } else {
         hashes.add(sha256.convert(buffer).toString());
@@ -199,7 +197,7 @@ class DartNativeCrypto {
             List<int> uploadData;
             
             if (keyBytes != null && blockData.isNotEmpty) {
-              final iv = _generateSecureIV();
+              final iv = _generateDeterministicIV(blockData);
               final cipher = PaddedBlockCipher('AES/CBC/PKCS7')
                 ..init(true, PaddedBlockCipherParameters(ParametersWithIV(KeyParameter(keyBytes), iv), null));
               
@@ -258,7 +256,7 @@ class DartNativeCrypto {
     final token = args['token'] as String?;
     final masterKey = args['masterKey'] as String?;
     final remoteFilename = args['remoteFilename'] as String;
-    final uriStr = args['uri'] as String; 
+    final uriStr = args['uri'] as String;
     final localFilename = args['localFilename'] as String;
     final patchIndices = (args['patchIndices'] as List?)?.cast<int>();
     final versionId = args['versionId'] as String?;
@@ -266,7 +264,6 @@ class DartNativeCrypto {
     final fileSize = args['fileSize'] as int? ?? 0;
     final blockSize = getBlockSize(fileSize);
     final encryptedBlockSize = getEncryptedBlockSize(fileSize);
-
     if (localFilename.contains('..')) throw Exception('Invalid path');
 
     Uint8List? keyBytes;
@@ -295,11 +292,19 @@ class DartNativeCrypto {
 
     final targetPath = localFilename.startsWith('/') ? localFilename : '$uriStr/$localFilename';
     final file = File(targetPath);
-    if (!await file.parent.exists()) await file.parent.create(recursive: true);
+
+    // Use mkdir -p instead of Dart's create(recursive: true) because the parent
+    // path may contain symlinks (e.g. EmuDeck's retroarch/saves -> ~/.var/...) whose
+    // targets don't yet exist. Dart's recursive create fails in that case; mkdir -p handles it.
+    final parentDir = file.parent.path;
+    if (!await file.parent.exists()) {
+      final mkResult = await Process.run('mkdir', ['-p', parentDir]);
+      if (mkResult.exitCode != 0) throw Exception('Failed to create $parentDir: ${mkResult.stderr}');
+    }
 
     final tmpFile = File('$targetPath.vstmp');
     if (patchIndices != null && await file.exists()) {
-      await file.copy(tmpFile.path); 
+      await file.copy(tmpFile.path);
     }
     
     final raf = await tmpFile.open(mode: patchIndices != null ? FileMode.append : FileMode.write);
@@ -314,7 +319,7 @@ class DartNativeCrypto {
       expectedBlockSize,
       blockSize,
     );
-    
+
     await raf.close();
     if (await file.exists()) await file.delete();
     await tmpFile.rename(file.path);
@@ -356,7 +361,7 @@ class DartNativeCrypto {
         while (bufferLen >= expectedBlockSize) {
           final currentChunk = Uint8List.view(ringBuffer.buffer, 0, expectedBlockSize);
           List<int> decryptedData = _decryptBlock(currentChunk, keyBytes, cipher);
-          
+
           final blockIndex = patchIndices != null ? patchIndices[currentIdx] : currentIdx;
           await raf.setPosition(blockIndex * blockSize);
           await raf.writeFrom(decryptedData);

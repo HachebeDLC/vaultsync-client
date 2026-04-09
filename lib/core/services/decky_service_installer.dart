@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'decky_bridge_service.dart';
 
 enum DeckyBridgeStatus { unknown, notInstalled, stopped, running, installing }
 
@@ -50,9 +51,18 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
 
   Future<DeckyBridgeStatus> _checkStatus() async {
     if (!Platform.isLinux) return DeckyBridgeStatus.unknown;
-    if (!File(_serviceFilePath).existsSync()) {
+    final serviceFile = File(_serviceFilePath);
+    if (!serviceFile.existsSync()) return DeckyBridgeStatus.notInstalled;
+
+    // If the service file doesn't reference the expected bridge script path it
+    // was written by an old installer (pointing at a now-deleted bundle).
+    // Treat it as not-installed so the user is prompted to reinstall cleanly.
+    final serviceContent = serviceFile.readAsStringSync();
+    if (!serviceContent.contains(_hostBridgeScript)) {
+      developer.log('DECKY INSTALLER: stale service file detected (wrong ExecStart path)', name: 'VaultSync', level: 900);
       return DeckyBridgeStatus.notInstalled;
     }
+
     final result = await _run(
       'systemctl', ['--user', 'is-active', _serviceName],
     );
@@ -63,6 +73,26 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
 
   String get _venvDir => '$_home/.local/share/vaultsync/venv';
   String get _venvPython => '$_venvDir/bin/python3';
+
+  /// Removes the autostart .desktop created by the old install_autostart.sh
+  /// script if it points to a non-existent binary (i.e. a deleted bundle).
+  void _removeStaleAutostart() {
+    final desktopFile = File('$_home/.config/autostart/vaultsync.desktop');
+    if (!desktopFile.existsSync()) return;
+    try {
+      final content = desktopFile.readAsStringSync();
+      final execMatch = RegExp(r'^Exec=(.+)$', multiLine: true).firstMatch(content);
+      if (execMatch != null) {
+        final execBin = execMatch.group(1)!.split(' ').first;
+        if (!File(execBin).existsSync()) {
+          desktopFile.deleteSync();
+          developer.log('DECKY INSTALLER: removed stale autostart desktop ($execBin no longer exists)', name: 'VaultSync', level: 800);
+        }
+      }
+    } catch (e) {
+      developer.log('DECKY INSTALLER: could not check autostart desktop: $e', name: 'VaultSync', level: 900);
+    }
+  }
 
   Future<String?> install() async {
     state = const AsyncData(DeckyBridgeStatus.installing);
@@ -127,7 +157,15 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
       await serviceDir.create(recursive: true);
       await File(_serviceFilePath).writeAsString(_buildServiceUnit(_venvPython));
 
-      // 6. Enable and start
+      // 5b. Remove the legacy autostart .desktop left by install_autostart.sh.
+      //     The Flatpak app registers itself via the system app list; a stale
+      //     autostart entry pointing at a deleted bundle binary just causes errors.
+      _removeStaleAutostart();
+
+      // 6. Stop the in-process Dart bridge so the systemd service can bind port 5437.
+      await ref.read(deckyBridgeServiceProvider).stop();
+
+      // 7. Enable and start
       await _run('systemctl', ['--user', 'daemon-reload']);
       await _run('systemctl', ['--user', 'enable', '--now', _serviceName]);
 
@@ -144,6 +182,8 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
   }
 
   Future<void> start() async {
+    // Free the port before starting the systemd service.
+    await ref.read(deckyBridgeServiceProvider).stop();
     await _run('systemctl', ['--user', 'start', _serviceName]);
     await Future.delayed(const Duration(seconds: 1));
     state = AsyncData(await _checkStatus());
@@ -160,7 +200,10 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
       await File(_serviceFilePath).delete();
     } catch (_) {}
     await _run('systemctl', ['--user', 'daemon-reload']);
+    _removeStaleAutostart();
     state = const AsyncData(DeckyBridgeStatus.notInstalled);
+    // Restore the in-process Dart bridge now that the port is free.
+    await ref.read(deckyBridgeServiceProvider).start();
     return null;
   }
 

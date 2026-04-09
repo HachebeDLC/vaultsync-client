@@ -32,7 +32,7 @@ class AuthRepository {
       return null;
     } catch (e) {
       developer.log('Login error', name: 'VaultSync', level: 1000, error: e);
-      return null;
+      rethrow;
     }
   }
 
@@ -62,7 +62,7 @@ class AuthRepository {
       return null;
     } catch (e) {
       developer.log('Register error', name: 'VaultSync', level: 1000, error: e);
-      return null;
+      rethrow;
     }
   }
 

@@ -457,35 +457,35 @@ class AppLocalizationsEs extends AppLocalizations {
   String get saveButton => 'Guardar';
 
   @override
-  String get finishSetupButton => 'FINISH SETUP';
+  String get finishSetupButton => 'FINALIZAR CONFIGURACIÓN';
 
   @override
-  String get selectRomsRoot => 'SELECT ROMS ROOT';
+  String get selectRomsRoot => 'SELECCIONAR CARPETA RAÍZ DE ROMS';
 
   @override
   String get baseFolderDescription =>
-      'Base folder containing your game subfolders (e.g. Roms/ps2, Roms/snes).';
+      'Carpeta base que contiene tus subcarpetas de juegos (p. ej. Roms/ps2, Roms/snes).';
 
   @override
-  String get pathLabel => 'Path';
+  String get pathLabel => 'Ruta';
 
   @override
-  String get scanLibraryAction => 'SCAN LIBRARY';
+  String get scanLibraryAction => 'ESCANEAR BIBLIOTECA';
 
   @override
   String get noSystemsDetected =>
-      'No systems detected yet.\nSelect your ROMs root and click \"Scan\".';
+      'Aún no se detectaron sistemas.\nSelecciona la raíz de tus ROMs y haz clic en \"Escanear\".';
 
   @override
-  String get detectedSystems => 'DETECTED SYSTEMS';
+  String get detectedSystems => 'SISTEMAS DETECTADOS';
 
   @override
   String get noInstalledEmulatorsForDetected =>
-      'No installed emulators found for the detected systems.';
+      'No se encontraron emuladores instalados para los sistemas detectados.';
 
   @override
-  String get configuredStatus => 'Configured';
+  String get configuredStatus => 'Configurado';
 
   @override
-  String get needsSetupStatus => 'Needs Setup';
+  String get needsSetupStatus => 'Necesita configuración';
 }
