@@ -69,8 +69,10 @@ class SyncDiffService {
 
       final remoteFilesList = allRemoteFiles.where((f) {
         final path = f['path'] as String;
-        final rel =
-            path.contains('/') ? path.split('/').skip(1).join('/') : path;
+        // rel is the path WITHOUT the cloudPrefix/ part
+        final rel = path.startsWith('$cloudPrefix/') 
+            ? path.substring(cloudPrefix.length + 1) 
+            : path;
         final firstSegment = rel.split('/').first.toLowerCase();
         if (isSwitch) {
           final isTitleId =
@@ -91,8 +93,9 @@ class SyncDiffService {
 
       final cloudRelPaths = <String>{
         ...localFiles.keys,
-        ...remoteFiles.keys
-            .map((p) => p.substring(cloudPrefix.length + 1))
+        ...remoteFiles.keys.map((p) => p.startsWith('$cloudPrefix/') 
+            ? p.substring(cloudPrefix.length + 1) 
+            : p)
       };
       final results = <Map<String, dynamic>>[];
 

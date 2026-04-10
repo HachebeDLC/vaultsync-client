@@ -1,12 +1,9 @@
 import 'dart:developer' as developer;
-import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:workmanager/workmanager.dart';
 import '../../../core/services/api_client_provider.dart';
 import '../../../core/services/api_client.dart';
-import '../../auth/domain/auth_provider.dart';
-import '../data/sync_repository.dart';
 import '../services/sync_service.dart';
 
 @pragma('vm:entry-point')

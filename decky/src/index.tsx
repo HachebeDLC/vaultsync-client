@@ -12,13 +12,62 @@ import { FaSync, FaExclamationTriangle, FaGamepad } from "react-icons/fa";
 const getStatus = callable<[], any>("get_status");
 const getSystems = callable<[], any>("get_systems");
 const getConflicts = callable<[], any>("get_conflicts");
+const getSystemDiff = callable<[{ system_id: string }], any>("get_system_diff");
 const triggerSyncCall = callable<[{ system_id?: string }], any>("trigger_sync");
+
+const SystemDetail: VFC<{ systemId: string; onBack: () => void }> = ({ systemId, onBack }) => {
+  const [diff, setDiff] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const fetchDiff = async () => {
+    setLoading(true);
+    try {
+      const res = await getSystemDiff({ system_id: systemId });
+      if (res?.diff) setDiff(res.diff);
+    } catch (_) {}
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchDiff();
+  }, [systemId]);
+
+  return (
+    <PanelSection title={`${systemId.toUpperCase()} Details`}>
+      <PanelSectionRow>
+        <ButtonItem layout="below" onClick={onBack}>
+          Back to Dashboard
+        </ButtonItem>
+      </PanelSectionRow>
+
+      {loading ? (
+        <PanelSectionRow>
+          <p>Loading diff...</p>
+        </PanelSectionRow>
+      ) : diff.length === 0 ? (
+        <PanelSectionRow>
+          <p>No files found or up to date.</p>
+        </PanelSectionRow>
+      ) : (
+        diff.map((item: any) => (
+          <PanelSectionRow key={item.relPath}>
+            <Field
+              label={item.name}
+              description={`${item.status} - ${item.type}`}
+            />
+          </PanelSectionRow>
+        ))
+      )}
+    </PanelSection>
+  );
+};
 
 const Content: VFC<{}> = () => {
   const [status, setStatus] = useState<any>(null);
   const [systems, setSystems] = useState<string[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [selectedSystem, setSelectedSystem] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -73,10 +122,14 @@ const Content: VFC<{}> = () => {
           </div>
         </PanelSectionRow>
         <PanelSectionRow>
-          <p style={{ fontSize: "0.8em" }}>Run install_autostart.sh from the VaultSync bundle, or go to Settings → Decky Plugin Bridge in the VaultSync app to install the service.</p>
+          <p style={{ fontSize: "0.8em" }}>Open the VaultSync app and go to Settings → Decky Plugin Bridge to install the bridge service.</p>
         </PanelSectionRow>
       </PanelSection>
     );
+  }
+
+  if (selectedSystem) {
+    return <SystemDetail systemId={selectedSystem} onBack={() => setSelectedSystem(null)} />;
   }
 
   return (
@@ -120,8 +173,7 @@ const Content: VFC<{}> = () => {
             <PanelSectionRow key={sys}>
               <ButtonItem
                 layout="below"
-                disabled={loading || status?.is_syncing}
-                onClick={() => triggerSync(sys)}
+                onClick={() => setSelectedSystem(sys)}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <FaGamepad />

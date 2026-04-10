@@ -112,11 +112,6 @@ modules:
       - type: file
         path: linux/com.vaultsync.app.metainfo.xml
 
-      # Pre-built Decky plugin (pnpm build runs before flatpak-builder)
-      - type: dir
-        path: decky
-        dest: decky_src
-
     build-commands:
       # Install Flutter bundle. Exclude pre-built ayatana/dbusmenu libs —
       # the Flatpak-built ones in /app/lib/ are used instead via LD_LIBRARY_PATH.
@@ -144,10 +139,6 @@ modules:
       - install -Dm644 com.vaultsync.app.metainfo.xml /app/share/metainfo/com.vaultsync.app.metainfo.xml
       - install -Dm644 data/flutter_assets/assets/vaultsync_icon.png /app/share/icons/hicolor/256x256/apps/com.vaultsync.app.png
 
-      # Decky plugin
-      - mkdir -p /app/lib/vaultsync/decky_plugin/dist /app/lib/vaultsync/decky_plugin/assets
-      - cp decky_src/dist/index.js   /app/lib/vaultsync/decky_plugin/dist/
-      - cp decky_src/plugin.json     /app/lib/vaultsync/decky_plugin/
-      - cp decky_src/main.py         /app/lib/vaultsync/decky_plugin/
-      - cp decky_src/package.json    /app/lib/vaultsync/decky_plugin/
-      - cp -r decky_src/assets/.     /app/lib/vaultsync/decky_plugin/assets/
+      # Install pre-built Decky plugin (built by CI before flatpak-builder runs,
+      # copied into the bundle by the "Prepare Linux bundle" step).
+      - cp -r decky_plugin /app/lib/vaultsync/decky_plugin

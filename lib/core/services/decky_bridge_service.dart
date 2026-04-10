@@ -60,6 +60,9 @@ class DeckyBridgeService {
         await _handleStatus(request);
       } else if (path == '/systems' && method == 'GET') {
         await _handleSystems(request);
+      } else if (path.startsWith('/systems/') && path.endsWith('/diff') && method == 'GET') {
+        final systemId = path.split('/')[2];
+        await _handleSystemDiff(request, systemId);
       } else if (path == '/conflicts' && method == 'GET') {
         await _handleConflicts(request);
       } else if (path == '/sync' && method == 'POST') {
@@ -107,6 +110,18 @@ class DeckyBridgeService {
       final syncService = _ref.read(syncServiceProvider);
       final conflicts = await syncService.getConflicts();
       _sendJsonResponse(request, {'conflicts': conflicts});
+    } catch (e) {
+      _sendJsonResponse(request, {'error': e.toString()}, statusCode: HttpStatus.internalServerError);
+    }
+  }
+
+  Future<void> _handleSystemDiff(HttpRequest request, String systemId) async {
+    try {
+      final syncService = _ref.read(syncServiceProvider);
+      final pathService = _ref.read(systemPathServiceProvider);
+      final path = await pathService.getEffectivePath(systemId);
+      final diff = await syncService.diffSystem(systemId, path);
+      _sendJsonResponse(request, {'system_id': systemId, 'diff': diff});
     } catch (e) {
       _sendJsonResponse(request, {'error': e.toString()}, statusCode: HttpStatus.internalServerError);
     }

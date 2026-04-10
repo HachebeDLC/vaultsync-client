@@ -233,7 +233,10 @@ class SyncRepository {
             final cached = await _syncStateDb.getState(localInfo['uri']);
             if (cached == null || cached['size'] != localSize || cached['last_modified'] != localTs) {
               onProgress?.call('Snapshotting $relPath...');
-              await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey);
+              final snapshotId = await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey);
+              if (snapshotId == null) {
+                throw Exception('Critical: Failed to create local snapshot for $relPath. Sync aborted to prevent data loss.');
+              }
 
               await _syncStateDb.upsertState(
                 localInfo['uri'], localSize, localTs, cached?['hash'] ?? '',
@@ -280,17 +283,22 @@ class SyncRepository {
               final fullHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs, precomputedHash: combined['fileHash'] as String);
               
               onProgress?.call('Snapshotting $relPath...');
-              await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey, currentBlockHashes: blockHashes, currentFileHash: fullHash);
+              final snapshotId = await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey, currentBlockHashes: blockHashes, currentFileHash: fullHash);
+              if (snapshotId == null) {
+                throw Exception('Critical: Failed to create local snapshot for $relPath. Sync aborted to prevent data loss.');
+              }
 
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, fullHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(blockHashes));
             }
           } else if (localInfo == null && remoteInfo != null) {
             onProgress?.call('Queueing $relPath for download...');
-            final destRelPath = _pathResolver.getLocalRelPath(systemId, relPath, localFiles, _lastScanList, probedProfileId: (systemId.toLowerCase() == 'switch' || systemId.toLowerCase() == 'eden') ? await _pathService.probeProfileId(effectivePath) : null);
+            // relPath here is already stripped of cloudPrefix/ by the loop logic
+            final destRelPath = _pathResolver.getLocalRelPath(systemId, '$cloudPrefix/$relPath', localFiles, _lastScanList, probedProfileId: (systemId.toLowerCase() == 'switch' || systemId.toLowerCase() == 'eden') ? await _pathService.probeProfileId(effectivePath) : null);
             final destUri = p.join(effectivePath, destRelPath);
             developer.log('SYNC: Queueing download: $relPath -> $destUri', name: 'VaultSync', level: 800);
             await _syncStateDb.upsertState(destUri, remoteInfo['size'], remoteInfo['updated_at'], remoteInfo['hash'], 'pending_download', systemId: systemId, remotePath: remotePath, relPath: destRelPath);
-          } else if (localInfo != null && remoteInfo != null) {
+          }
+ else if (localInfo != null && remoteInfo != null) {
             final String remoteHash = remoteInfo['hash'];
             final int localTs = (localInfo['lastModified'] as num).toInt();
             final int localSize = (localInfo['size'] as num).toInt();
@@ -321,7 +329,10 @@ class SyncRepository {
               continue;
             }
             onProgress?.call('Snapshotting $relPath...');
-            await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey, currentBlockHashes: currentBlockHashes, currentFileHash: localHash);
+            final snapshotId = await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey, currentBlockHashes: currentBlockHashes, currentFileHash: localHash);
+            if (snapshotId == null) {
+              throw Exception('Critical: Failed to create local snapshot for $relPath. Sync aborted to prevent data loss.');
+            }
 
             if (localTs > (remoteInfo['updated_at'] as num)) {
               onProgress?.call('Queueing $relPath for patching (Local Newer)...');

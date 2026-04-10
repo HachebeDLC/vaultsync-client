@@ -145,5 +145,17 @@
   "detectedSystems": "SYSTÈMES DÉTECTÉS",
   "noInstalledEmulatorsForDetected": "Aucun émulateur installé trouvé pour les systèmes détectés.",
   "configuredStatus": "Configuré",
-  "needsSetupStatus": "Configuration requise"
-}
+  "needsSetupStatus": "Configuration Requise",
+  "deployToDeckyButton": "Installer sur Decky",
+  "deployToDeckySubtitle": "Installe les fichiers du plugin dans le mode Jeu",
+  "pluginDeployedSuccess": "Plugin Decky déployé ! Redémarrez Decky ou rechargez les plugins pour le voir.",
+  "deployFailed": "Échec du déploiement : {error}",
+  "@deployFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
+  }
+

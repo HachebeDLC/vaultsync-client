@@ -344,6 +344,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
               )
             : Icon(Icons.circle, size: 12, color: statusColor),
       ),
+      ListTile(
+        leading: const Icon(Icons.cable),
+        title: Text(l10n.deployToDeckyButton),
+        subtitle: Text(l10n.deployToDeckySubtitle),
+        trailing: _isDeploying 
+          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+          : const Icon(Icons.chevron_right),
+        onTap: _isDeploying ? null : _deployDeckyPlugin,
+      ),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: Row(
@@ -409,6 +418,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
           ],
         ),
       ),
+      const SizedBox(height: 8),
+    ];
+  }
+
+  Widget _buildSection(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      child: Text(title.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
+    );
+  }
+}
+   ),
       const SizedBox(height: 8),
     ];
   }

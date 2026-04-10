@@ -64,6 +64,19 @@ class Plugin:
             logger.error(f"Systems error: {e}")
             return {"error": str(e)}
 
+    async def get_system_diff(self, system_id):
+        try:
+            url = self.settings.get("server_url", "http://localhost:5437")
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{url}/systems/{system_id}/diff", timeout=timeout) as res:
+                    if res.status == 200:
+                        return await res.json()
+                    return {"error": f"Bridge error: {res.status}"}
+        except Exception as e:
+            logger.error(f"System diff error: {e}")
+            return {"error": str(e)}
+
     async def get_conflicts(self):
         try:
             url = self.settings.get("server_url", "http://localhost:5437")

@@ -90,6 +90,7 @@ class DownloadManager(
         val localFilename = call.argument<String>("localFilename") ?: return result.error("ARG_MISSING", "localFilename is missing", null)
         val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong()
         val patchIndices = call.argument<List<Int>>("patchIndices")
+        val versionId = call.argument<String>("versionId")
         val fileSize = (call.argument<Any>("fileSize") as? Number)?.toLong() ?: 0L
 
         executor.execute {
@@ -107,7 +108,14 @@ class DownloadManager(
                 }
                 
                 val reqBody = JSONObject().put("path", remoteFilename)
-                if (patchIndices != null) reqBody.put("indices", JSONArray(patchIndices)) else reqBody.put("filename", remoteFilename)
+                if (versionId != null) {
+                    reqBody.put("version_id", versionId)
+                }
+                if (patchIndices != null) {
+                    reqBody.put("indices", JSONArray(patchIndices))
+                } else {
+                    reqBody.put("filename", remoteFilename)
+                }
                 
                 networkClient.openDownloadConnection(url, token, reqBody).use { connection ->
                     if (connection.responseCode != 200) throw Exception("Download failed: HTTP ${connection.responseCode}")

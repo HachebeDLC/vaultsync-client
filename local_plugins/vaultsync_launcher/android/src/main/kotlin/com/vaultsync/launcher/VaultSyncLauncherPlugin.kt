@@ -287,23 +287,36 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 executor.execute {
                     try {
                         val manager = VersionBlockManager(versionStorePath)
-                        // Handle SAF/Shizuku vs Raw file
-                        if (isShizukuPath(path)) {
-                            // Currently, VersionBlockManager only accepts raw File paths for simplicity.
-                            // We need to pass the FD or raw path if possible. 
-                            // Let's assume path is resolving to a raw path for now, or we skip extracting for non-raw.
-                            // Actually, VersionBlockManager uses File(). We need to pass the real raw path for Shizuku,
-                            // which is just getCleanPath(path).
-                            manager.extractModifiedBlocks(getCleanPath(path), changedBlocks)
-                        } else if (path.startsWith("content://")) {
-                            // Can't easily use File APIs on SAF. We'll need a different implementation for SAF if supported.
-                            // But Android 11+ we usually use Shizuku or direct access.
-                            // We'll skip or throw for pure SAF.
-                            throw Exception("Extracting blocks directly from content:// URIs not supported.")
-                        } else {
-                            manager.extractModifiedBlocks(path, changedBlocks)
+                        var fileSize = 0L
+                        val inputStream = when {
+                            isShizukuPath(path) -> {
+                                val svc = getShizukuServiceSync()
+                                fileSize = svc.getFileSize(getCleanPath(path))
+                                svc.openFile(getCleanPath(path), "r")?.let { java.io.FileInputStream(it.fileDescriptor) }
+                            }
+                            path.startsWith("content://") -> {
+                                val uri = Uri.parse(path)
+                                DocumentFile.fromSingleUri(ctx, uri)?.let { df ->
+                                    fileSize = df.length()
+                                }
+                                ctx.contentResolver.openInputStream(uri)
+                            }
+                            else -> {
+                                val file = File(path)
+                                if (file.exists()) {
+                                    fileSize = file.length()
+                                    file.inputStream()
+                                } else null
+                            }
                         }
-                        mainHandler.post { result.success(true) }
+
+                        if (inputStream == null) {
+                            mainHandler.post { result.error("EXTRACT_ERROR", "Could not open input stream for $path", null) }
+                            return@execute
+                        }
+
+                        val success = manager.extractModifiedBlocks(inputStream, fileSize, changedBlocks)
+                        mainHandler.post { result.success(success) }
                     } catch (e: Exception) {
                         mainHandler.post { result.error("EXTRACT_ERROR", e.message, null) }
                     }
@@ -318,11 +331,54 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 executor.execute {
                     try {
                         val manager = VersionBlockManager(versionStorePath)
-                        val cleanLivePath = if (isShizukuPath(livePath)) getCleanPath(livePath) else livePath
-                        val cleanRestorePath = if (isShizukuPath(restorePath)) getCleanPath(restorePath) else restorePath
-                        
-                        manager.reconstructFromDeltas(layoutHashes, cleanLivePath, cleanRestorePath)
-                        mainHandler.post { result.success(true) }
+                        var liveFileSize = 0L
+                        val liveFileChannel = when {
+                            isShizukuPath(livePath) -> {
+                                val svc = getShizukuServiceSync()
+                                liveFileSize = svc.getFileSize(getCleanPath(livePath))
+                                svc.openFile(getCleanPath(livePath), "r")?.let { java.io.FileInputStream(it.fileDescriptor).channel }
+                            }
+                            livePath.startsWith("content://") -> {
+                                val uri = Uri.parse(livePath)
+                                DocumentFile.fromSingleUri(ctx, uri)?.let { df ->
+                                    liveFileSize = df.length()
+                                }
+                                ctx.contentResolver.openFileDescriptor(uri, "r")?.let { java.io.FileInputStream(it.fileDescriptor).channel }
+                            }
+                            else -> {
+                                val file = File(livePath)
+                                if (file.exists()) {
+                                    liveFileSize = file.length()
+                                    java.io.FileInputStream(file).channel
+                                } else null
+                            }
+                        }
+
+                        val outputStream = when {
+                            isShizukuPath(restorePath) -> {
+                                val svc = getShizukuServiceSync()
+                                svc.openFile(getCleanPath(restorePath), "wt")?.let { java.io.FileOutputStream(it.fileDescriptor) }
+                            }
+                            restorePath.startsWith("content://") -> {
+                                ctx.contentResolver.openFileDescriptor(Uri.parse(restorePath), "wt")?.let { java.io.FileOutputStream(it.fileDescriptor) }
+                            }
+                            else -> {
+                                val file = File(restorePath)
+                                file.parentFile?.mkdirs()
+                                file.outputStream()
+                            }
+                        }
+
+                        if (outputStream == null) {
+                            liveFileChannel?.close()
+                            mainHandler.post { result.error("RECONSTRUCT_ERROR", "Could not open output stream for $restorePath", null) }
+                            return@execute
+                        }
+
+                        val success = manager.reconstructFromDeltas(layoutHashes, liveFileChannel, liveFileSize, outputStream)
+                        liveFileChannel?.close()
+                        // outputStream is closed inside reconstructFromDeltas (.use block)
+                        mainHandler.post { result.success(success) }
                     } catch (e: Exception) {
                         mainHandler.post { result.error("RECONSTRUCT_ERROR", e.message, null) }
                     }

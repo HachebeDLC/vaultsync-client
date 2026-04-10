@@ -17,6 +17,16 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
   String get _home => Platform.environment['HOME'] ?? '/home/deck';
   String get _serviceFilePath => '$_home/$_serviceFile';
 
+  /// Returns the real host home directory, bypassing the Flatpak sandbox home.
+  Future<String> _getHostHome() async {
+    if (!_isInsideFlatpak) return _home;
+    try {
+      final result = await Process.run('flatpak-spawn', ['--host', 'sh', '-c', 'echo \$HOME']);
+      if (result.exitCode == 0) return result.stdout.toString().trim();
+    } catch (_) {}
+    return '/home/deck'; // Steam Deck default fallback
+  }
+
   // When the app is running inside a Flatpak sandbox, systemctl and python3
   // must be invoked on the host via flatpak-spawn --host.
   bool get _isInsideFlatpak => File('/.flatpak-info').existsSync();
@@ -209,6 +219,50 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
 
   Future<void> refresh() async {
     state = AsyncData(await _checkStatus());
+  }
+
+  Future<String?> deployPlugin() async {
+    if (!Platform.isLinux) return 'Deployment only supported on Linux';
+    try {
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      final pluginSrc = '$_isInsideFlatpak' == 'true' 
+          ? '/app/lib/vaultsync/decky_plugin'
+          : '$exeDir/decky_plugin';
+      
+      if (!Directory(pluginSrc).existsSync()) {
+        // Fallback for dev environment
+        final devPath = '$exeDir/../../../vaultsync_decky';
+        if (!Directory(devPath).existsSync()) {
+          return 'Plugin source not found at $pluginSrc';
+        }
+      }
+
+      final destDir = '$_home/homebrew/plugins/VaultSync';
+      
+      // 1. Ensure destination exists
+      await _run('mkdir', ['-p', destDir]);
+
+      // 2. Copy files (recursive)
+      // Note: cp -r inside flatpak-spawn needs careful path handling.
+      // Since we have home filesystem access, we can copy from /app/lib to ~/homebrew
+      if (_isInsideFlatpak) {
+        // Use a shell script on the host to do the heavy lifting of copying from the container
+        // Actually, Flatpak can't easily see its own /app from the host shell.
+        // We'll use the 'tar' trick to stream files out.
+        final tarCmd = 'tar -C $pluginSrc -cf - . | flatpak-spawn --host tar -C $destDir -xf -';
+        final result = await Process.run('sh', ['-c', tarCmd]);
+        if (result.exitCode != 0) return 'Failed to deploy plugin: ${result.stderr}';
+      } else {
+        await Process.run('cp', ['-r', '$pluginSrc/.', destDir]);
+      }
+
+      // 3. Set permissions
+      await _run('chmod', ['-R', '755', destDir]);
+
+      return null; // Success
+    } catch (e) {
+      return e.toString();
+    }
   }
 
   String _buildServiceUnit(String python3Path) => '''

@@ -90,6 +90,14 @@ class SyncPathResolver {
        if (anchorIdx != -1) return parts.sublist(anchorIdx).join('/');
     }
 
+    // 8. RetroArch (Universal Core Logic)
+    if (sid.contains('retroarch') || localRelPath.toLowerCase().contains('retroarch')) {
+      final anchorIdx = parts.indexWhere((p) => ['saves', 'states'].contains(p.toLowerCase()));
+      if (anchorIdx != -1) {
+        return parts.sublist(anchorIdx).join('/');
+      }
+    }
+
     return localRelPath;
   }
 
@@ -97,9 +105,21 @@ class SyncPathResolver {
     final sid = systemId.toLowerCase();
     final isSwitch = sid == 'switch' || sid == 'eden';
 
-    // For Switch, NEVER anchor on root-level files
+    // 0. Direct lookup (normalized cloud keys)
     if (!isSwitch && localFiles.containsKey(cloudRelPath)) {
       return localFiles[cloudRelPath]['originalRelPath'] ?? cloudRelPath;
+    }
+
+    // 1. RetroArch (Core-aware mapping)
+    if (cloudRelPath.startsWith('RetroArch/')) {
+       final suffix = cloudRelPath.substring(10); // strip 'RetroArch/'
+       // Try to find if we have this file locally already at SOME path
+       if (localFiles.containsKey(cloudRelPath)) {
+         return localFiles[cloudRelPath]['originalRelPath']!;
+       }
+       final hasFilesDir = lastScanList.any((f) => (f['relPath'] as String).startsWith('files/'));
+       final prefix = hasFilesDir ? 'files/' : '';
+       return '$prefix$suffix';
     }
 
     if (isSwitch) {
