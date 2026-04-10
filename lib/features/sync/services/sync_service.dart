@@ -199,6 +199,10 @@ class SyncService {
     return await _repository.getAllRemoteConflicts();
   }
 
+  Future<List<Map<String, dynamic>>> diffSystem(String systemId, String localPath) async {
+    return await _repository.diffSystem(systemId, localPath);
+  }
+
   Future<List<String>> _resolveEffectivePaths(String systemId) async {
     if (systemId == 'RetroArch') {
       final paths = await _pathService.getRetroArchPaths();

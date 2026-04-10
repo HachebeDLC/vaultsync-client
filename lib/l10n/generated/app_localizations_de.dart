@@ -487,4 +487,20 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get needsSetupStatus => 'Setup erforderlich';
+
+  @override
+  String get deployToDeckyButton => 'Im Decky installieren';
+
+  @override
+  String get deployToDeckySubtitle =>
+      'Installiert die Plugin-Dateien im Spielmodus';
+
+  @override
+  String get pluginDeployedSuccess =>
+      'Decky-Plugin bereitgestellt! Starten Sie Decky neu oder laden Sie die Plugins neu.';
+
+  @override
+  String deployFailed(String error) {
+    return 'Bereitstellung fehlgeschlagen: $error';
+  }
 }

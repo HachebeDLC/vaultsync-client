@@ -30,6 +30,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
   bool _autoSyncOnExit = false;
   bool _periodicSync = false;
   bool _hasUsagePermission = false;
+  bool _isDeploying = false;
   String _serverUrl = '';
   String _conflictStrategy = 'ask';
   String _appVersionFull = 'VaultSync v1.3.7-Secure';
@@ -151,9 +152,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
       developer.log('SCHEDULER: Background sync is not supported on this platform', name: 'VaultSync', level: 800);
     }
   }
+
   Future<void> _grantUsageStats() async {
     if (Platform.isAndroid) {
       await _platform.invokeMethod('openUsageStatsSettings');
+    }
+  }
+
+  Future<void> _deployDeckyPlugin() async {
+    setState(() => _isDeploying = true);
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final error = await ref.read(deckyServiceInstallerProvider.notifier).deployPlugin();
+      if (!mounted) return;
+
+      if (error == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.pluginDeployedSuccess), backgroundColor: Colors.green),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.deployFailed(error)), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDeploying = false);
     }
   }
 
@@ -418,18 +441,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
           ],
         ),
       ),
-      const SizedBox(height: 8),
-    ];
-  }
-
-  Widget _buildSection(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-      child: Text(title.toUpperCase(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
-    );
-  }
-}
-   ),
       const SizedBox(height: 8),
     ];
   }

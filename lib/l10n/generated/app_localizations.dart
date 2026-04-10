@@ -985,6 +985,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Needs Setup'**
   String get needsSetupStatus;
+
+  /// No description provided for @deployToDeckyButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Deploy to Decky'**
+  String get deployToDeckyButton;
+
+  /// No description provided for @deployToDeckySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Installs the plugin files to Game Mode'**
+  String get deployToDeckySubtitle;
+
+  /// No description provided for @pluginDeployedSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Decky plugin deployed! Restart Decky or reload plugins to see it.'**
+  String get pluginDeployedSuccess;
+
+  /// No description provided for @deployFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Deployment failed: {error}'**
+  String deployFailed(String error);
 }
 
 class _AppLocalizationsDelegate

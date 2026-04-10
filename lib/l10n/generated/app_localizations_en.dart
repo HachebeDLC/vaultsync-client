@@ -481,4 +481,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get needsSetupStatus => 'Needs Setup';
+
+  @override
+  String get deployToDeckyButton => 'Deploy to Decky';
+
+  @override
+  String get deployToDeckySubtitle => 'Installs the plugin files to Game Mode';
+
+  @override
+  String get pluginDeployedSuccess =>
+      'Decky plugin deployed! Restart Decky or reload plugins to see it.';
+
+  @override
+  String deployFailed(String error) {
+    return 'Deployment failed: $error';
+  }
 }
