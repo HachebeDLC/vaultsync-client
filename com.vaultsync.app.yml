@@ -75,6 +75,8 @@ modules:
     cleanup:
       - /include
       - /lib/pkgconfig
+      - /lib/girepository-1.0
+      - /share/gir-1.0
     sources:
       - type: archive
         url: https://github.com/AyatanaIndicators/libayatana-appindicator/archive/refs/tags/0.5.93.tar.gz
