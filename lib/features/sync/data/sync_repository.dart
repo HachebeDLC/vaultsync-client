@@ -133,7 +133,10 @@ class SyncRepository {
   final Map<String, String> _pendingJournal = {};
 
   void _recordSyncSuccess(SharedPreferences prefs, String systemId, String relPath, String hash, [int? localTs]) {
-    _pendingJournal['journal_${systemId}_$relPath'] = localTs != null ? '$localTs:$hash' : hash;
+    final key = 'journal_${systemId.toLowerCase()}_$relPath';
+    // Normalize timestamp to second-precision to avoid sub-second jitter loops on Linux
+    final normalizedTs = localTs != null ? (localTs ~/ 1000) * 1000 : null;
+    _pendingJournal[key] = normalizedTs != null ? '$normalizedTs:$hash' : hash;
   }
 
   Future<void> _commitSyncJournal(SharedPreferences prefs) async {
@@ -143,13 +146,15 @@ class SyncRepository {
   }
 
   bool _isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash, {int? localTs}) {
-    final key = 'journal_${systemId}_$relPath';
+    final key = 'journal_${systemId.toLowerCase()}_$relPath';
+    final normalizedTs = localTs != null ? (localTs ~/ 1000) * 1000 : null;
+    
     if (_pendingJournal.containsKey(key)) {
       final stored = _pendingJournal[key]!;
-      if (localTs != null) return stored == '$localTs:$remoteHash';
+      if (normalizedTs != null) return stored == '$normalizedTs:$remoteHash';
       return stored == remoteHash || stored.endsWith(':$remoteHash');
     }
-    return _conflictResolver.isJournaledSynced(prefs, systemId, relPath, remoteHash, localTs: localTs);
+    return _conflictResolver.isJournaledSynced(prefs, systemId.toLowerCase(), relPath, remoteHash, localTs: normalizedTs);
   }
 
   // --- Local filesystem scan with 30s cache ---
@@ -231,7 +236,12 @@ class SyncRepository {
             final int localTs = (localInfo['lastModified'] as num).toInt();
             final int localSize = (localInfo['size'] as num).toInt();
             final cached = await _syncStateDb.getState(localInfo['uri']);
-            if (cached == null || cached['size'] != localSize || cached['last_modified'] != localTs) {
+            
+            // Normalize for comparison
+            final localTsSec = localTs ~/ 1000;
+            final cachedTsSec = (cached?['last_modified'] as num? ?? 0).toInt() ~/ 1000;
+
+            if (cached == null || cached['size'] != localSize || cachedTsSec != localTsSec) {
               onProgress?.call('Snapshotting $relPath...');
               final snapshotId = await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey);
               if (snapshotId == null) {
@@ -273,7 +283,11 @@ class SyncRepository {
             final int localTs = (localInfo['lastModified'] as num).toInt();
             final int localSize = (localInfo['size'] as num).toInt();
             final cached = await _syncStateDb.getState(localInfo['uri']);
-            if (cached != null && cached['size'] == localSize && cached['last_modified'] == localTs && cached['status'] == 'synced') {
+            
+            final localTsSec = localTs ~/ 1000;
+            final cachedTsSec = (cached?['last_modified'] as num? ?? 0).toInt() ~/ 1000;
+
+            if (cached != null && cached['size'] == localSize && cachedTsSec == localTsSec && cached['status'] == 'synced') {
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, cached['hash'], 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: cached['block_hashes']);
             } else {
               onProgress?.call('Hashing $relPath...');
@@ -443,9 +457,13 @@ class SyncRepository {
       }
     }
 
-    if (localTs > updatedAt) {
+    // Normalize timestamps to seconds to avoid sub-second precision loops on Linux
+    final localTsSec = localTs ~/ 1000;
+    final remoteTsSec = updatedAt ~/ 1000;
+
+    if (localTsSec > remoteTsSec) {
       developer.log(
-        'SSE: Skipping download for $path — local ($localTs) is newer than remote ($updatedAt)',
+        'SSE: Skipping download for $path — local ($localTsSec s) is newer than remote ($remoteTsSec s)',
         name: 'VaultSync', level: 800,
       );
       return;

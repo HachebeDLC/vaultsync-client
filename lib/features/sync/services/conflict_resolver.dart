@@ -7,10 +7,14 @@ class ConflictResolver {
   ConflictResolver(this._pathResolver);
 
   bool isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash, {int? localTs}) {
-    final key = 'journal_${systemId}_$relPath';
+    final key = 'journal_${systemId.toLowerCase()}_$relPath';
     final stored = prefs.getString(key);
     if (stored == null) return false;
-    if (localTs != null) return stored == '$localTs:$remoteHash';
+
+    // Normalize timestamp to second-precision (match SyncRepository)
+    final normalizedTs = localTs != null ? (localTs ~/ 1000) * 1000 : null;
+    
+    if (normalizedTs != null) return stored == '$normalizedTs:$remoteHash';
     // Legacy format (no localTs) or callers that don't provide it.
     return stored == remoteHash || stored.endsWith(':$remoteHash');
   }

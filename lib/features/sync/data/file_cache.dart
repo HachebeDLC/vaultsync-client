@@ -83,10 +83,11 @@ class FileCache {
 
   Future<String?> getCachedHash(String path, int size, int lastModified) async {
     final db = await database;
+    final normalizedTs = (lastModified ~/ 1000) * 1000;
     final List<Map<String, dynamic>> maps = await db.query(
       'cache',
       where: 'path = ? AND size = ? AND lastModified = ?',
-      whereArgs: [path, size, lastModified],
+      whereArgs: [path, size, normalizedTs],
     );
 
     if (maps.isNotEmpty) {
@@ -97,12 +98,13 @@ class FileCache {
 
   Future<void> updateCache(String path, int size, int lastModified, String hash) async {
     final db = await database;
+    final normalizedTs = (lastModified ~/ 1000) * 1000;
     await db.insert(
       'cache',
       {
         'path': path,
         'size': size,
-        'lastModified': lastModified,
+        'lastModified': normalizedTs,
         'hash': hash,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,

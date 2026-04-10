@@ -129,13 +129,14 @@ class SyncDiffService {
           }
         } else {
           final String remoteHash = remoteInfo['hash'];
-          if (isJournaledSynced(prefs, systemId, relPath, remoteHash)) {
+          final int localTs = (localInfo['lastModified'] as num).toInt();
+          final int localSize = (localInfo['size'] as num).toInt();
+
+          if (isJournaledSynced(prefs, systemId.toLowerCase(), relPath, remoteHash)) {
             status = 'Synced';
           } else {
             final cached = await _syncStateDb.getState(localInfo['uri']);
-            final int localTs = (localInfo['lastModified'] as num).toInt();
-            final int localSize = (localInfo['size'] as num).toInt();
-
+            
             if (cached != null && cached['status'] == 'synced' && cached['hash'] == remoteHash) {
               // If the DB knows it's synced and the hashes match, trust it even if timestamps drifted slightly
               status = 'Synced';
@@ -147,10 +148,10 @@ class SyncDiffService {
               status = 'Synced';
               recordSyncSuccess(prefs, systemId, relPath, remoteHash);
             } else {
-              final int remoteTs =
-                  (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
-              if (localInfo['size'] != remoteInfo['size'] ||
-                  (localTs ~/ 1000) != remoteTs) {
+              final int remoteTs = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
+              final int localTsSec = localTs ~/ 1000;
+
+              if (localSize != remoteInfo['size'] || localTsSec != remoteTs) {
                 status = 'Modified';
               }
             }
