@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.vaultsync.app</id>
+
+  <name>VaultSync</name>
+  <summary>High-performance emulator save synchronization</summary>
+
+  <metadata_license>MIT</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+
+  <developer id="com.vaultsync">
+    <name>HachebeDLC</name>
+  </developer>
+
+  <description>
+    <p>
+      VaultSync keeps your emulator save files in sync across all your devices.
+      It works with EmuDeck, RetroArch, and standalone emulators, and includes
+      a Steam Deck Decky plugin for in-game syncing without leaving your session.
+    </p>
+    <ul>
+      <li>Self-hosted — your saves stay on your own server</li>
+      <li>Hardware-encrypted transfer</li>
+      <li>Delta sync to minimize bandwidth</li>
+      <li>Steam Deck Decky plugin included</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.vaultsync.app.desktop</launchable>
+
+  <url type="homepage">https://github.com/HachebeDLC/vaultsync-client</url>
+  <url type="bugtracker">https://github.com/HachebeDLC/vaultsync-client/issues</url>
+
+  <provides>
+    <binary>vaultsync-launch</binary>
+  </provides>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="1.4.0" date="2026-04-10"/>
+  </releases>
+</component>

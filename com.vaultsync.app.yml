@@ -107,6 +107,9 @@ modules:
       - type: file
         path: linux/com.vaultsync.app.desktop
 
+      - type: file
+        path: linux/com.vaultsync.app.metainfo.xml
+
       # Pre-built Decky plugin (pnpm build runs before flatpak-builder)
       - type: dir
         path: decky
@@ -136,6 +139,7 @@ modules:
 
       # Desktop integration
       - install -Dm644 com.vaultsync.app.desktop /app/share/applications/com.vaultsync.app.desktop
+      - install -Dm644 com.vaultsync.app.metainfo.xml /app/share/metainfo/com.vaultsync.app.metainfo.xml
       - install -Dm644 data/flutter_assets/assets/vaultsync_icon.png /app/share/icons/hicolor/256x256/apps/com.vaultsync.app.png
 
       # Decky plugin
