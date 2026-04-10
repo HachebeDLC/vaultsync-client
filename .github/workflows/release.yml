@@ -140,6 +140,11 @@ jobs:
             org.freedesktop.Platform//24.08 \
             org.freedesktop.Sdk//24.08
 
+      - name: Clone shared-modules (libappindicator dep chain)
+        if: matrix.target == 'Linux'
+        run: |
+          git clone --depth=1 https://github.com/flathub/shared-modules.git shared-modules
+
       - name: Build Flatpak
         if: matrix.target == 'Linux'
         run: |

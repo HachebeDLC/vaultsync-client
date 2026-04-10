@@ -1,0 +1,5 @@
+#!/bin/sh
+# Wrapper: ensures /app/lib (where Flatpak modules land) is on the search
+# path alongside the Flutter bundle's own lib/ directory.
+export LD_LIBRARY_PATH=/app/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+exec /app/lib/vaultsync/VaultSync "$@"

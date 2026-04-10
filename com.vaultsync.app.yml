@@ -2,23 +2,88 @@ app-id: com.vaultsync.app
 runtime: org.freedesktop.Platform
 runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
-command: VaultSync
+command: vaultsync-launch
 
 finish-args:
   - --share=network
-  - --socket=wayland
-  - --socket=fallback-x11
   - --share=ipc
+  - --socket=wayland
+  - --socket=x11
+  - --socket=pulseaudio
   - --device=dri
   # Emulator saves can live anywhere under home — required for EmuDeck,
   # RetroArch, standalone emulators, etc.
   - --filesystem=home
+  - --filesystem=~/.var/app
+  - --filesystem=/run/media
   # Tray icon support (KDE/Plasma StatusNotifier + legacy AppIndicator)
   - --talk-name=org.kde.StatusNotifierWatcher
   - --talk-name=com.canonical.AppMenu.Registrar
   - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.Flatpak
 
 modules:
+
+  # ── libdbusmenu + full Canonical dep chain (from flathub/shared-modules) ──
+  - shared-modules/libappindicator/libappindicator-gtk3-12.10.json
+
+  # ── ayatana-ido: widget set used by libayatana-indicator ─────────────────
+  - name: ayatana-ido
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DENABLE_TESTS=NO
+      - -DCMAKE_INSTALL_LIBDIR=lib
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+    sources:
+      - type: archive
+        url: https://github.com/AyatanaIndicators/ayatana-ido/archive/refs/tags/0.10.1.tar.gz
+        sha256: 26187915a6f3402195e2c78d9e8a54549112a3cd05bb2fbe2059d3e78fc0e071
+      - type: shell
+        commands:
+          - sed -i 's/if (INTROSPECTION_FOUND)/if (FALSE)/' src/CMakeLists.txt
+
+  # ── libayatana-indicator ──────────────────────────────────────────────────
+  - name: libayatana-indicator
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DENABLE_TESTS=NO
+      - -DENABLE_IDO=NO
+      - -DCMAKE_INSTALL_LIBDIR=lib
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+    sources:
+      - type: archive
+        url: https://github.com/AyatanaIndicators/libayatana-indicator/archive/refs/tags/0.9.3.tar.gz
+        sha256: 09c5456fcb430b6ee0626fafdf99a32eb8746b267d56ab2bd4c8a8dd6ca731da
+      - type: shell
+        commands:
+          - sed -i 's/if (INTROSPECTION_FOUND)/if (FALSE)/' src/CMakeLists.txt || true
+
+  # ── libayatana-appindicator: the exact soname system_tray links against ───
+  - name: libayatana-appindicator
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DENABLE_BINDINGS_MONO=NO
+      - -DENABLE_BINDINGS_VALA=NO
+      - -DENABLE_TESTS=NO
+      - -DENABLE_IDO=NO
+      - -DENABLE_GTKDOC=NO
+      - -DCMAKE_INSTALL_LIBDIR=lib
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+    sources:
+      - type: archive
+        url: https://github.com/AyatanaIndicators/libayatana-appindicator/archive/refs/tags/0.5.93.tar.gz
+        sha256: cbefed7a918a227bf71286246e237fcd3a9c8499b3eaac4897811a869409edf0
+      - type: shell
+        commands:
+          - sed -i 's/if (INTROSPECTION_FOUND)/if (FALSE)/' src/CMakeLists.txt || true
+
+  # ── VaultSync Flutter bundle ──────────────────────────────────────────────
   - name: vaultsync
     buildsystem: simple
 
@@ -36,16 +101,27 @@ modules:
       - type: file
         path: linux/install_shortcut.sh
 
+      - type: file
+        path: linux/vaultsync-launch
+
+      - type: file
+        path: linux/com.vaultsync.app.desktop
+
       # Pre-built Decky plugin (pnpm build runs before flatpak-builder)
       - type: dir
         path: decky
         dest: decky_src
 
     build-commands:
-      # Install Flutter bundle maintaining $ORIGIN/lib rpath — binary finds
-      # its libs at /app/lib/vaultsync/lib/ without any patchelf fixup.
-      - mkdir -p /app/bin /app/lib/vaultsync
-      - cp -r VaultSync lib data /app/lib/vaultsync/
+      # Install Flutter bundle. Exclude pre-built ayatana/dbusmenu libs —
+      # the Flatpak-built ones in /app/lib/ are used instead via LD_LIBRARY_PATH.
+      - mkdir -p /app/lib/vaultsync/lib
+      - install -Dm755 VaultSync /app/lib/vaultsync/VaultSync
+      - cp -r data /app/lib/vaultsync/data
+      - find lib -maxdepth 1 -name '*.so*'
+          ! -name 'libayatana-*'
+          ! -name 'libdbusmenu-*'
+          -exec cp {} /app/lib/vaultsync/lib/ \;
 
       # Bridge daemon and installer scripts land next to the binary so that
       # Platform.resolvedExecutable-based path resolution finds them at
@@ -54,6 +130,14 @@ modules:
       - install -Dm755 install_autostart.sh  /app/lib/vaultsync/install_autostart.sh
       - install -Dm755 install_shortcut.sh   /app/lib/vaultsync/install_shortcut.sh
 
+      # Launcher wrapper: puts /app/lib on LD_LIBRARY_PATH so Flatpak-built
+      # ayatana libs are found before the excluded pre-built ones.
+      - install -Dm755 vaultsync-launch /app/bin/vaultsync-launch
+
+      # Desktop integration
+      - install -Dm644 com.vaultsync.app.desktop /app/share/applications/com.vaultsync.app.desktop
+      - install -Dm644 data/flutter_assets/assets/vaultsync_icon.png /app/share/icons/hicolor/256x256/apps/com.vaultsync.app.png
+
       # Decky plugin
       - mkdir -p /app/lib/vaultsync/decky_plugin/dist /app/lib/vaultsync/decky_plugin/assets
       - cp decky_src/dist/index.js   /app/lib/vaultsync/decky_plugin/dist/
@@ -61,12 +145,3 @@ modules:
       - cp decky_src/main.py         /app/lib/vaultsync/decky_plugin/
       - cp decky_src/package.json    /app/lib/vaultsync/decky_plugin/
       - cp -r decky_src/assets/.     /app/lib/vaultsync/decky_plugin/assets/
-
-      # Thin wrapper so Flatpak finds the command at /app/bin/VaultSync.
-      # The real binary stays at /app/lib/vaultsync/ so Flutter can locate
-      # its data/ directory via $ORIGIN.
-      - |
-        install -Dm755 /dev/stdin /app/bin/VaultSync << 'EOF'
-        #!/bin/sh
-        exec /app/lib/vaultsync/VaultSync "$@"
-        EOF

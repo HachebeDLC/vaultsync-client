@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Name=VaultSync
+Comment=High-performance emulator save synchronization
+Exec=vaultsync-launch
+Icon=com.vaultsync.app
+Terminal=false
+Type=Application
+Categories=Utility;Game;
+StartupWMClass=vaultsync_client
