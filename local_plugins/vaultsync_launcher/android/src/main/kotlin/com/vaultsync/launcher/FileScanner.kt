@@ -14,6 +14,8 @@ import java.util.concurrent.Callable
 import kotlin.math.min
 
 class FileScanner(private val context: Context) {
+    private val headerScanner = BinaryHeaderScanner()
+
     companion object {
         const val MAX_EXTENSION_SCAN_DEPTH = 3
         const val MAX_SCAN_DEPTH = 15
@@ -386,6 +388,26 @@ class FileScanner(private val context: Context) {
                             // Record index for deferred parallel fstat (if needed)
                             pendingFstats?.add(Pair(results.length(), docUri))
 
+                            val probedMetadata = JSONObject()
+                            try {
+                                if (name == ".nx_save_meta.bin") {
+                                    headerScanner.parseJksvMeta(context.contentResolver.openInputStream(docUri)!!)?.let {
+                                        probedMetadata.put("titleId", it)
+                                    }
+                                } else if (name.endsWith(".gci", ignoreCase = true)) {
+                                    headerScanner.parseGciHeader(context.contentResolver.openInputStream(docUri)!!)?.let {
+                                        probedMetadata.put("gameId", it.gameId)
+                                        probedMetadata.put("makerCode", it.makerCode)
+                                        probedMetadata.put("region", it.region)
+                                    }
+                                } else if (name == "PARAM.SFO") {
+                                    headerScanner.parseParamSfo(context.contentResolver.openInputStream(docUri)!!)?.let {
+                                        it["DISC_ID"]?.let { id -> probedMetadata.put("gameId", id) }
+                                        it["TITLE"]?.let { title -> probedMetadata.put("title", title) }
+                                    }
+                                }
+                            } catch (_: Exception) {}
+
                             results.put(JSONObject().apply {
                                 put("name", name)
                                 put("relPath", relPath)
@@ -393,6 +415,9 @@ class FileScanner(private val context: Context) {
                                 put("size", fSize)
                                 put("lastModified", fLast)
                                 put("uri", docUri.toString())
+                                if (probedMetadata.length() > 0) {
+                                    put("probedMetadata", probedMetadata)
+                                }
                             })
                         }
                     }
@@ -471,6 +496,30 @@ class FileScanner(private val context: Context) {
                     walkShizuku(fullPath, relPath, depth + 1)
                 } else {
                     if (shouldSyncFile(sid, relPath, name)) {
+                        val probedMetadata = JSONObject()
+                        try {
+                            if (name == ".nx_save_meta.bin" || name.endsWith(".gci", ignoreCase = true) || name == "PARAM.SFO") {
+                                service.openFile(fullPath, "r")?.use { pfd ->
+                                    java.io.FileInputStream(pfd.fileDescriptor).use { stream ->
+                                        if (name == ".nx_save_meta.bin") {
+                                            headerScanner.parseJksvMeta(stream)?.let { probedMetadata.put("titleId", it) }
+                                        } else if (name.endsWith(".gci", ignoreCase = true)) {
+                                            headerScanner.parseGciHeader(stream)?.let {
+                                                probedMetadata.put("gameId", it.gameId)
+                                                probedMetadata.put("makerCode", it.makerCode)
+                                                probedMetadata.put("region", it.region)
+                                            }
+                                        } else if (name == "PARAM.SFO") {
+                                            headerScanner.parseParamSfo(stream)?.let {
+                                                it["DISC_ID"]?.let { id -> probedMetadata.put("gameId", id) }
+                                                it["TITLE"]?.let { title -> probedMetadata.put("title", title) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (_: Exception) {}
+
                         results.put(JSONObject().apply {
                             put("name", name)
                             put("relPath", relPath)
@@ -478,6 +527,9 @@ class FileScanner(private val context: Context) {
                             put("size", f.getLong("size"))
                             put("lastModified", f.getLong("lastModified"))
                             put("uri", "shizuku://$fullPath")
+                            if (probedMetadata.length() > 0) {
+                                put("probedMetadata", probedMetadata)
+                            }
                         })
                     }
                 }
@@ -525,6 +577,26 @@ class FileScanner(private val context: Context) {
                     walkLocal(file, relPath)
                 } else {
                     if (shouldSyncFile(sid, relPath, file.name)) {
+                        val probedMetadata = JSONObject()
+                        try {
+                            if (file.name == ".nx_save_meta.bin") {
+                                headerScanner.parseJksvMeta(file.absolutePath)?.let {
+                                    probedMetadata.put("titleId", it)
+                                }
+                            } else if (file.name.endsWith(".gci", ignoreCase = true)) {
+                                headerScanner.parseGciHeader(file.absolutePath)?.let {
+                                    probedMetadata.put("gameId", it.gameId)
+                                    probedMetadata.put("makerCode", it.makerCode)
+                                    probedMetadata.put("region", it.region)
+                                }
+                            } else if (file.name == "PARAM.SFO") {
+                                headerScanner.parseParamSfo(file.absolutePath)?.let {
+                                    it["DISC_ID"]?.let { id -> probedMetadata.put("gameId", id) }
+                                    it["TITLE"]?.let { title -> probedMetadata.put("title", title) }
+                                }
+                            }
+                        } catch (_: Exception) {}
+
                         results.put(JSONObject().apply {
                             put("name", file.name)
                             put("relPath", relPath)
@@ -532,6 +604,9 @@ class FileScanner(private val context: Context) {
                             put("size", file.length())
                             put("lastModified", file.lastModified())
                             put("uri", file.absolutePath)
+                            if (probedMetadata.length() > 0) {
+                                put("probedMetadata", probedMetadata)
+                            }
                         })
                     }
                 }
