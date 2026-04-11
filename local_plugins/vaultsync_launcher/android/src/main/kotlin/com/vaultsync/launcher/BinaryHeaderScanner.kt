@@ -89,6 +89,15 @@ class BinaryHeaderScanner {
     }
 
     /**
+     * Parses a GCI file header to extract GameID, Maker Code, and Region.
+     */
+    fun parseGciHeader(filePath: String): GciMetadata? {
+        val file = File(filePath)
+        if (!file.exists() || !file.isFile) return null
+        return parseGciHeader(file.inputStream())
+    }
+
+    /**
      * Parses PARAM.SFO (PSP metadata) to extract GameID and Title.
      */
     fun parseParamSfo(inputStream: java.io.InputStream): Map<String, String>? {
