@@ -51,7 +51,9 @@ class VersionBlockManagerTest {
         )
 
         // Extract
-        manager.extractModifiedBlocks(liveFile.absolutePath, changedBlocks)
+        liveFile.inputStream().use { input ->
+            manager.extractModifiedBlocks(input, liveFile.length(), changedBlocks)
+        }
 
         // Verify only block 0 and block 2 are in the version store
         val block0File = File(versionStore, block0Hash)
@@ -79,7 +81,9 @@ class VersionBlockManagerTest {
         
         // Extract all blocks as if it was a full save initially
         val allChanged = (0 until 11).associateWith { true }
-        manager.extractModifiedBlocks(liveFile.absolutePath, allChanged)
+        liveFile.inputStream().use { input ->
+            manager.extractModifiedBlocks(input, liveFile.length(), allChanged)
+        }
 
         // Now modify the live file to represent Version 2 (Current)
         val v2Data = v1Data.clone()
@@ -97,7 +101,11 @@ class VersionBlockManagerTest {
         val restoreFile = tempFolder.newFile("restore.dat")
 
         // Reconstruct V1!
-        manager.reconstructFromDeltas(v1LayoutHashes, liveFile.absolutePath, restoreFile.absolutePath)
+        java.io.FileInputStream(liveFile).channel.use { liveChannel ->
+            java.io.FileOutputStream(restoreFile).use { outStream ->
+                manager.reconstructFromDeltas(v1LayoutHashes, liveChannel, liveFile.length(), outStream)
+            }
+        }
 
         // Verify reconstructed file matches V1 exactly
         val reconstructedData = restoreFile.readBytes()
