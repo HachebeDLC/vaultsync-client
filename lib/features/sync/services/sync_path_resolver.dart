@@ -1,12 +1,19 @@
 import 'dart:developer' as developer;
 
 class SyncPathResolver {
-  String getCloudRelPath(String systemId, String localRelPath) {
+  String getCloudRelPath(String systemId, String localRelPath, {Map<String, dynamic>? probedMetadata}) {
     final sid = systemId.toLowerCase();
     final parts = localRelPath.split('/');
 
     // 1. Switch / Eden Logic (Flattened)
     if (sid == 'switch' || sid == 'eden') {
+      // Prioritize probed Title ID if available
+      final probedTitleId = probedMetadata?['titleId'] as String?;
+      if (probedTitleId != null) {
+        final fileName = parts.last;
+        return '$probedTitleId/$fileName';
+      }
+
       // We look for a Title ID (16 hex chars starting with 0100)
       final titleIdx = parts.indexWhere((p) => RegExp(r'^0100[0-9A-Fa-f]{12}$').hasMatch(p));
       if (titleIdx == -1) return '';
@@ -52,26 +59,19 @@ class SyncPathResolver {
     }
 
     // 4. GameCube Logic (canonical cloud path always includes GC/ prefix)
-    if (sid == 'gc') {
+    if (sid == 'gc' || sid == 'dolphin') {
+      final probedGameId = probedMetadata?['gameId'] as String?;
+      if (probedGameId != null) {
+         final fileName = parts.last;
+         final ext = fileName.contains('.') ? fileName.substring(fileName.lastIndexOf('.')) : '.gci';
+         return 'GC/$probedGameId$ext';
+      }
+
       final gcIdx = parts.indexWhere((p) => p.toLowerCase() == 'gc');
       if (gcIdx != -1) return parts.sublist(gcIdx).join('/');
       // EmuDeck: scan root is already dolphin-emu/GC/, no GC component in the relPath.
       // Prepend GC/ so the canonical cloud path is consistent with Android Dolphin uploads.
       return 'GC/$localRelPath';
-    }
-
-    // 5. Dolphin (Generic — covers installations that aren't split into gc/wii system IDs)
-    if (sid == 'dolphin') {
-      if (localRelPath.toLowerCase().contains('/wii/title/')) {
-         final idx = parts.indexWhere((p) => p.toLowerCase() == 'title');
-         if (idx != -1 && idx < parts.length - 1) {
-           return parts.sublist(idx + 1).join('/');
-         }
-      }
-      final gcIdx = parts.indexWhere((p) => p.toLowerCase() == 'gc');
-      if (gcIdx != -1) return parts.sublist(gcIdx).join('/');
-      // Fallback: sync at the relative path as-is rather than dropping the file.
-      return localRelPath;
     }
 
     // 6. 3DS / Citra / Azahar
@@ -86,6 +86,10 @@ class SyncPathResolver {
     }
 
     if (sid == 'psp' || sid == 'ppsspp') {
+       final probedGameId = probedMetadata?['gameId'] as String?;
+       if (probedGameId != null) {
+          return 'SAVEDATA/$probedGameId';
+       }
        final anchorIdx = parts.indexWhere((p) => ['savedata', 'ppsspp_state'].contains(p.toLowerCase()));
        if (anchorIdx != -1) return parts.sublist(anchorIdx).join('/');
     }

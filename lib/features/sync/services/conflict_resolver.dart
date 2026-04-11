@@ -31,7 +31,11 @@ class ConflictResolver {
         final ext = originalRelPath.split('.').last.toLowerCase();
         if (['ps2', 'srm', 'sav', 'save', 'state'].contains(ext)) continue;
       }
-      final String cloudRelPath = _pathResolver.getCloudRelPath(systemId, originalRelPath);
+      final String cloudRelPath = _pathResolver.getCloudRelPath(
+        systemId, 
+        originalRelPath, 
+        probedMetadata: f['probedMetadata'] != null ? Map<String, dynamic>.from(f['probedMetadata']) : null
+      );
       if (cloudRelPath.isEmpty || cloudRelPath.endsWith('/')) continue;
       
       final existing = localFiles[cloudRelPath];
