@@ -95,7 +95,14 @@ class SyncDiffService {
         return true;
       }).toList();
 
-      final remoteFiles = {for (var f in remoteFilesList) f['path']: f};
+      final remoteFiles = <String, dynamic>{};
+      for (var f in remoteFilesList) {
+        final path = f['path'] as String;
+        final rel = path.startsWith('$cloudPrefix/') 
+            ? path.substring(cloudPrefix.length + 1) 
+            : path;
+        remoteFiles[rel] = f;
+      }
       final localList =
           await getCachedOrNewScan(systemId, effectivePath, ignoredFolders);
       final localFiles =
