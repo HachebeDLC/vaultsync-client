@@ -53,11 +53,12 @@ class SyncDiffService {
       final prefs = await SharedPreferences.getInstance();
       final sid = systemId.toLowerCase();
       final isSwitch = sid == 'eden' || sid == 'switch';
+      final isRetroArch = sid.contains('retroarch') || localPath.toLowerCase().contains('retroarch');
       final cloudPrefix = isSwitch
           ? 'switch'
-          : (localPath.toLowerCase().contains('retroarch')
+          : (isRetroArch
               ? 'RetroArch'
-              : systemId);
+              : (sid == 'gc' || sid == 'dolphin' ? 'GC' : systemId));
 
       List<dynamic> allRemoteFiles = [];
       try {
@@ -69,16 +70,25 @@ class SyncDiffService {
 
       final remoteFilesList = allRemoteFiles.where((f) {
         final path = f['path'] as String;
-        // rel is the path WITHOUT the cloudPrefix/ part
+        final parts = path.split('/');
+        if (parts.isEmpty) return false;
+        
+        final firstSegment = parts.first.toLowerCase();
+        final actualPrefix = cloudPrefix.toLowerCase();
+        
+        if (firstSegment != actualPrefix) return false;
+
         final rel = path.startsWith('$cloudPrefix/') 
             ? path.substring(cloudPrefix.length + 1) 
             : path;
-        final firstSegment = rel.split('/').first.toLowerCase();
+        
         if (isSwitch) {
-          final isTitleId =
-              RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(firstSegment);
+          final relParts = rel.split('/');
+          if (relParts.isEmpty) return false;
+          final titleIdSegment = relParts.first;
+          final isTitleId = RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(titleIdSegment);
           final isSystemPath = ['nand', 'config', 'files', 'gpu_drivers']
-              .contains(firstSegment);
+              .contains(titleIdSegment);
           return isTitleId && !isSystemPath;
         }
         if (sid == '3ds' || sid == 'azahar') return rel.startsWith('saves/');

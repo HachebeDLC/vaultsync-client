@@ -235,9 +235,11 @@ class DartNativeCrypto {
       client.close();
     }
 
+    final rommKey = args['rommKey'] as String?;
     final finalizeUrl = url.endsWith('/') ? '${url}finalize' : '$url/finalize';
     final finReq = http.Request('POST', Uri.parse(finalizeUrl));
     if (token != null) finReq.headers['Authorization'] = 'Bearer $token';
+    if (rommKey != null) finReq.headers['x-vaultsync-romm-key'] = rommKey;
     finReq.headers['Content-Type'] = 'application/json';
     finReq.body = json.encode({
       'path': remotePath,

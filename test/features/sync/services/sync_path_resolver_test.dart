@@ -32,7 +32,7 @@ void main() {
         'GALE01.gci',
         probedMetadata: {'gameId': 'GZLE', 'makerCode': '01'},
       );
-      expect(result, 'GC/GZLE.gci');
+      expect(result, 'GZLE.gci');
     });
 
     test('should use probed gameId for PSP', () {

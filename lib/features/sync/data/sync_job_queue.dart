@@ -28,10 +28,16 @@ class SyncJobQueue {
     required Future<String> Function() getDeviceName,
     required void Function(SharedPreferences, String, String, String)
         recordSyncSuccess,
+    required Future<String?> Function() getMasterKey,
     bool Function()? isCancelled,
   }) async {
     final jobs = await _db.getPendingJobs();
     final prefs = await SharedPreferences.getInstance();
+
+    String? rommKey;
+    if (prefs.getBool('romm_sync_enabled') ?? false) {
+      rommKey = await getMasterKey();
+    }
 
     for (final job in jobs) {
       if (isCancelled?.call() == true) { onProgress?.call('Sync Cancelled'); break; }
@@ -57,8 +63,10 @@ class SyncJobQueue {
             onRecordSuccess: (sid, rp, h) => recordSyncSuccess(prefs, sid, rp, h),
             plainHash: job['hash'],
             localBlockHashes: blockHashes,
+            rommKey: rommKey,
           );
         } else if (status == 'pending_download') {
+
           onProgress?.call(
               'Downloading ${relPath?.split("/").last ?? path.split("/").last}...');
           final downloadResult = await _networkService.downloadFile(
@@ -125,6 +133,7 @@ class SyncJobQueue {
     required Future<String> Function() getDeviceName,
     required void Function(SharedPreferences, String, String, String)
         recordSyncSuccess,
+    required Future<String?> Function() getMasterKey,
   }) async {
     final jobs = await _db.getPendingJobs();
     final processed = <String>{};
@@ -138,6 +147,7 @@ class SyncJobQueue {
         (msg) => developer.log('Queue: $msg', name: 'VaultSync', level: 800),
         getDeviceName: getDeviceName,
         recordSyncSuccess: recordSyncSuccess,
+        getMasterKey: getMasterKey,
       );
     }
   }

@@ -10,6 +10,12 @@ class SyncPathResolver {
       // Prioritize probed Title ID if available
       final probedTitleId = probedMetadata?['titleId'] as String?;
       if (probedTitleId != null) {
+        // Find the Title ID in the path and replace that segment and everything before it
+        final titleIdx = parts.indexWhere((p) => RegExp(r'^0100[0-9A-Fa-f]{12}$').hasMatch(p));
+        if (titleIdx != -1) {
+           return [probedTitleId, ...parts.sublist(titleIdx + 1)].join('/');
+        }
+        // If not found in path (e.g. folder was renamed), just use TitleID/filename
         final fileName = parts.last;
         return '$probedTitleId/$fileName';
       }
@@ -47,31 +53,38 @@ class SyncPathResolver {
       return localRelPath;
     }
 
-    // 3. Wii Logic (Surgical Flattening)
-    if (sid == 'wii') {
-      // Anchor on the 'title' directory to capture all title types
-      // (00010000 = retail, 00010001 = VC/DLC, 00010002 = system, 00010004 = WiiWare, etc.)
-      final titleIdx = parts.lastIndexWhere((p) => p.toLowerCase() == 'title');
-      if (titleIdx != -1 && titleIdx < parts.length - 1) {
-        return parts.sublist(titleIdx + 1).join('/');
+    // 4. Dolphin / GameCube / Wii (canonical cloud path)
+    if (sid == 'gc' || sid == 'dolphin' || sid == 'wii') {
+      // 4a. Specific Wii detection inside generic 'dolphin' system
+      if (sid == 'dolphin' && localRelPath.toLowerCase().contains('/wii/title/')) {
+         final idx = parts.indexWhere((p) => p.toLowerCase() == 'title');
+         if (idx != -1 && idx < parts.length - 1) {
+           return parts.sublist(idx + 1).join('/');
+         }
       }
-      return '';
-    }
 
-    // 4. GameCube Logic (canonical cloud path always includes GC/ prefix)
-    if (sid == 'gc' || sid == 'dolphin') {
+      // 4b. Probed GameID (from GCI header)
       final probedGameId = probedMetadata?['gameId'] as String?;
       if (probedGameId != null) {
          final fileName = parts.last;
          final ext = fileName.contains('.') ? fileName.substring(fileName.lastIndexOf('.')) : '.gci';
-         return 'GC/$probedGameId$ext';
+         return '$probedGameId$ext';
       }
 
+      // 4c. Standard GC anchor
       final gcIdx = parts.indexWhere((p) => p.toLowerCase() == 'gc');
-      if (gcIdx != -1) return parts.sublist(gcIdx).join('/');
-      // EmuDeck: scan root is already dolphin-emu/GC/, no GC component in the relPath.
-      // Prepend GC/ so the canonical cloud path is consistent with Android Dolphin uploads.
-      return 'GC/$localRelPath';
+      if (gcIdx != -1) return parts.sublist(gcIdx + 1).join('/');
+      
+      // 4d. Fallback for Wii if sid was explicitly 'wii'
+      if (sid == 'wii') {
+        final titleIdx = parts.lastIndexWhere((p) => p.toLowerCase() == 'title');
+        if (titleIdx != -1 && titleIdx < parts.length - 1) {
+          return parts.sublist(titleIdx + 1).join('/');
+        }
+      }
+
+      // Prepend GC/ for Dolphin/GC roots
+      if (sid != 'wii') return localRelPath;
     }
 
     // 6. 3DS / Citra / Azahar
@@ -100,6 +113,10 @@ class SyncPathResolver {
       if (anchorIdx != -1) {
         return parts.sublist(anchorIdx).join('/');
       }
+      
+      // If we are in a package root (no folders yet) and it's not a known save folder, 
+      // ignore it to prevent syncing internal app files.
+      return '';
     }
 
     return localRelPath;
@@ -117,10 +134,21 @@ class SyncPathResolver {
     // 1. RetroArch (Core-aware mapping)
     if (cloudRelPath.startsWith('RetroArch/')) {
        final suffix = cloudRelPath.substring(10); // strip 'RetroArch/'
-       // Try to find if we have this file locally already at SOME path
-       if (localFiles.containsKey(cloudRelPath)) {
-         return localFiles[cloudRelPath]['originalRelPath']!;
+       
+       // If the cloud path is e.g. RetroArch/saves/game.srm
+       // And our scan results are already anchored in the folder that CONTAINS 'saves/'
+       // We should return just 'saves/game.srm'
+       
+       final hasExplicitAnchor = lastScanList.any((f) {
+          final p = (f['relPath'] as String).toLowerCase();
+          return p.startsWith('saves/') || p.startsWith('states/');
+       });
+
+       if (hasExplicitAnchor) {
+          return suffix;
        }
+
+       // Otherwise, if we're in a package root, we might need 'files/' prefix
        final hasFilesDir = lastScanList.any((f) => (f['relPath'] as String).startsWith('files/'));
        final prefix = hasFilesDir ? 'files/' : '';
        return '$prefix$suffix';

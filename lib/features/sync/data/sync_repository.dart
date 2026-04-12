@@ -132,7 +132,8 @@ class SyncRepository {
 
   final Map<String, String> _pendingJournal = {};
 
-  void _recordSyncSuccess(SharedPreferences prefs, String systemId, String relPath, String hash, [int? localTs]) {
+  @visibleForTesting
+  void recordSyncSuccess(SharedPreferences prefs, String systemId, String relPath, String hash, [int? localTs]) {
     final key = 'journal_${systemId.toLowerCase()}_$relPath';
     // Normalize timestamp to second-precision to avoid sub-second jitter loops on Linux
     final normalizedTs = localTs != null ? (localTs ~/ 1000) * 1000 : null;
@@ -145,7 +146,8 @@ class SyncRepository {
     _pendingJournal.clear();
   }
 
-  bool _isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash, {int? localTs}) {
+  @visibleForTesting
+  bool isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash, {int? localTs}) {
     final key = 'journal_${systemId.toLowerCase()}_$relPath';
     final normalizedTs = localTs != null ? (localTs ~/ 1000) * 1000 : null;
     
@@ -203,10 +205,11 @@ class SyncRepository {
       systemId, localPath,
       effectivePath: effectivePath,
       getCachedOrNewScan: _getCachedOrNewScan,
-      isJournaledSynced: _isJournaledSynced,
-      recordSyncSuccess: _recordSyncSuccess,
+      isJournaledSynced: isJournaledSynced,
+      recordSyncSuccess: recordSyncSuccess, getMasterKey: () async => await _getMasterKey(),
       ignoredFolders: ignoredFolders,
     );
+
   }
 
   Future<void> syncSystem(String systemId, String localPath, {List<String>? ignoredFolders, Function(String)? onProgress, Function(String)? onError, String? filenameFilter, bool fastSync = false, bool Function()? isCancelled, bool ignoreConnectivity = false}) async {
@@ -316,10 +319,10 @@ class SyncRepository {
             final String remoteHash = remoteInfo['hash'];
             final int localTs = (localInfo['lastModified'] as num).toInt();
             final int localSize = (localInfo['size'] as num).toInt();
-            if (_isJournaledSynced(prefs, systemId, relPath, remoteHash, localTs: localTs)) continue;
+            if (isJournaledSynced(prefs, systemId, relPath, remoteHash, localTs: localTs)) continue;
             final cached = await _syncStateDb.getState(localInfo['uri']);
             if (cached != null && cached['size'] == localSize && (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) && cached['hash'] == remoteHash && cached['status'] == 'synced') {
-              _recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
+              recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
               continue;
             }
             onProgress?.call('Checking $relPath blocks...');
@@ -339,7 +342,7 @@ class SyncRepository {
             }
             if (localHash == remoteHash) {
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'synced', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
-              _recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
+              recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
               continue;
             }
             onProgress?.call('Snapshotting $relPath...');
@@ -365,7 +368,7 @@ class SyncRepository {
 
         await _jobQueue.process(systemId, effectivePath, onProgress,
           getDeviceName: _getDeviceName,
-          recordSyncSuccess: _recordSyncSuccess,
+          recordSyncSuccess: recordSyncSuccess, getMasterKey: () async => await _getMasterKey(),
           isCancelled: isCancelled,
         );
         await _commitSyncJournal(prefs);
@@ -381,7 +384,7 @@ class SyncRepository {
   Future<void> processManualQueue() async {
     await _jobQueue.processManual(
       getDeviceName: _getDeviceName,
-      recordSyncSuccess: _recordSyncSuccess,
+      recordSyncSuccess: recordSyncSuccess, getMasterKey: () async => await _getMasterKey(),
     );
   }
 
@@ -391,11 +394,27 @@ class SyncRepository {
 
   Future<void> uploadFile(dynamic localPathOrFile, String remotePath, {required String systemId, required String relPath, required SharedPreferences prefs, String? plainHash, List<String>? localBlockHashes, bool force = false}) async {
     final path = localPathOrFile is File ? localPathOrFile.path : localPathOrFile.toString();
-    await _networkService.uploadFile(path, remotePath, systemId: systemId, relPath: relPath, deviceName: await _getDeviceName(), onRecordSuccess: (sid, rp, h) => _recordSyncSuccess(prefs, sid, rp, h), plainHash: plainHash, localBlockHashes: localBlockHashes, force: force);
+    
+    String? rommKey;
+    if (prefs.getBool('romm_sync_enabled') ?? false) {
+      rommKey = await _getMasterKey();
+    }
+
+    await _networkService.uploadFile(
+      path, remotePath, 
+      systemId: systemId, 
+      relPath: relPath, 
+      deviceName: await _getDeviceName(), 
+      onRecordSuccess: (sid, rp, h) => recordSyncSuccess(prefs, sid, rp, h), 
+      plainHash: plainHash, 
+      localBlockHashes: localBlockHashes, 
+      force: force,
+      rommKey: rommKey,
+    );
   }
 
   Future<dynamic> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, required int fileSize, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
-    return await _networkService.downloadFile(remotePath, localBasePath, relPath, systemId: systemId, fileSize: fileSize, onRecordSuccess: (sid, rp, h) => _recordSyncSuccess(prefs, sid, rp, h), remoteHash: remoteHash, updatedAt: updatedAt, serverBlocks: serverBlocks, localUri: localUri);
+    return await _networkService.downloadFile(remotePath, localBasePath, relPath, systemId: systemId, fileSize: fileSize, onRecordSuccess: (sid, rp, h) => recordSyncSuccess(prefs, sid, rp, h), remoteHash: remoteHash, updatedAt: updatedAt, serverBlocks: serverBlocks, localUri: localUri);
   }
 
   Future<void> deleteRemoteFile(String path) async { await _apiClient.delete('/api/v1/files', body: {'filename': path}); }
@@ -482,3 +501,5 @@ class SyncRepository {
     );
   }
 }
+
+
