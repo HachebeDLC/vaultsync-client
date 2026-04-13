@@ -111,7 +111,7 @@ class SyncPathResolver {
     if (sid.contains('retroarch') || localRelPath.toLowerCase().contains('retroarch')) {
       final anchorIdx = parts.indexWhere((p) => ['saves', 'states'].contains(p.toLowerCase()));
       if (anchorIdx != -1) {
-        return parts.sublist(anchorIdx).join('/');
+        return parts.sublist(anchorIdx + 1).join('/');
       }
       
       // If we are in a package root (no folders yet) and it's not a known save folder, 
@@ -144,15 +144,22 @@ class SyncPathResolver {
     // 1. RetroArch (Core-aware mapping)
     if (sid.contains('retroarch') || cloudRelPath.toLowerCase().startsWith('retroarch/')) {
        final suffix = relPath;
+       
+       final isState = suffix.toLowerCase().contains('.state') || suffix.toLowerCase().endsWith('.png');
+       final folder = isState ? 'states' : 'saves';
+
        final hasExplicitAnchor = lastScanList.any((f) {
           final p = (f['relPath'] as String).toLowerCase();
           return p.startsWith('saves/') || p.startsWith('states/');
        });
 
-       if (hasExplicitAnchor) return suffix;
-
        final hasFilesDir = lastScanList.any((f) => (f['relPath'] as String).startsWith('files/'));
-       return hasFilesDir ? 'files/$suffix' : suffix;
+
+       if (hasExplicitAnchor) {
+           return hasFilesDir ? 'files/$folder/$suffix' : '$folder/$suffix';
+       }
+
+       return hasFilesDir ? 'files/$folder/$suffix' : '$folder/$suffix';
     }
 
     if (isSwitch) {
