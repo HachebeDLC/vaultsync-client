@@ -267,11 +267,15 @@ class SyncRepository {
       try {
         final fileList = await _diffService.fetchAllRemoteFiles(cloudPrefix);
         final remoteFiles = {for (var f in fileList) f['path']: f};
+        final actualPrefix = cloudPrefix.toLowerCase();
         final cloudRelPaths = <String>{
-
-
           ...localFiles.keys,
-          ...remoteFiles.keys.map((p) => p.substring(cloudPrefix.length + 1)),
+          ...remoteFiles.keys.map((p) {
+            if (p.toLowerCase().startsWith(actualPrefix + '/')) {
+              return p.substring(actualPrefix.length + 1);
+            }
+            return p;
+          }),
         };
 
         for (final relPath in cloudRelPaths) {
@@ -280,7 +284,15 @@ class SyncRepository {
           final remotePath = '$cloudPrefix/$relPath';
           if (filenameFilter != null && !remotePath.contains(filenameFilter)) continue;
           final localInfo = localFiles[relPath];
-          final remoteInfo = remoteFiles[remotePath];
+          var remoteInfo = remoteFiles[remotePath];
+          
+          if (remoteInfo == null) {
+            final lowerRemotePath = remotePath.toLowerCase();
+            remoteInfo = remoteFiles.entries.firstWhere(
+              (e) => e.key.toLowerCase() == lowerRemotePath, 
+              orElse: () => MapEntry('', null)
+            ).value;
+          }
 
           if (localInfo != null && remoteInfo == null) {
             final int localTs = (localInfo['lastModified'] as num).toInt();
