@@ -156,7 +156,7 @@ class SyncDiffService {
           final int localTs = (localInfo['lastModified'] as num).toInt();
           final int localSize = (localInfo['size'] as num).toInt();
 
-          if (isJournaledSynced(prefs, systemId.toLowerCase(), relPath, remoteHash)) {
+          if (isJournaledSynced(prefs, systemId.toLowerCase(), relPath, remoteHash, localTs: localTs)) {
             status = 'Synced';
           } else {
             final cached = await _syncStateDb.getState(localInfo['uri']);

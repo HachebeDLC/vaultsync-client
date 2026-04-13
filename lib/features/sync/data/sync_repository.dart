@@ -363,7 +363,10 @@ class SyncRepository {
               throw Exception('Critical: Failed to create local snapshot for $relPath. Sync aborted to prevent data loss.');
             }
 
-            if (localTs > (remoteInfo['updated_at'] as num)) {
+            final int remoteTsSec = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
+            final int localTsSecToCompare = localTs ~/ 1000;
+
+            if (localTsSecToCompare >= remoteTsSec) {
               onProgress?.call('Queueing $relPath for patching (Local Newer)...');
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
             } else {
@@ -422,8 +425,8 @@ class SyncRepository {
       systemId: systemId, 
       relPath: relPath, 
       deviceName: await _getDeviceName(), 
-      onRecordSuccess: (sid, rp, h) => recordSyncSuccess(prefs, sid, rp, h), 
-      plainHash: plainHash, 
+      onRecordSuccess: (sid, rp, h, ts) => recordSyncSuccess(prefs, sid, rp, h, ts),
+      plainHash: plainHash,
       localBlockHashes: localBlockHashes, 
       force: force,
       rommKey: rommKey,
@@ -434,7 +437,7 @@ class SyncRepository {
   }
 
   Future<dynamic> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, required int fileSize, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {
-    return await _networkService.downloadFile(remotePath, localBasePath, relPath, systemId: systemId, fileSize: fileSize, onRecordSuccess: (sid, rp, h) => recordSyncSuccess(prefs, sid, rp, h), remoteHash: remoteHash, updatedAt: updatedAt, serverBlocks: serverBlocks, localUri: localUri);
+    return await _networkService.downloadFile(remotePath, localBasePath, relPath, systemId: systemId, fileSize: fileSize, onRecordSuccess: (sid, rp, h, ts) => recordSyncSuccess(prefs, sid, rp, h, ts), remoteHash: remoteHash, updatedAt: updatedAt, serverBlocks: serverBlocks, localUri: localUri);
   }
 
   Future<void> deleteRemoteFile(String path) async { await _apiClient.delete('/api/v1/files', body: {'filename': path}); }
