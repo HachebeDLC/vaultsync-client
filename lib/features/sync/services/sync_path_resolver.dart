@@ -125,37 +125,37 @@ class SyncPathResolver {
   String getLocalRelPath(String systemId, String cloudRelPath, Map<String, dynamic> localFiles, List<dynamic> lastScanList, {String? probedProfileId}) {
     final sid = systemId.toLowerCase();
     final isSwitch = sid == 'switch' || sid == 'eden';
+    
+    final cloudPrefix = isSwitch 
+      ? 'switch' 
+      : (sid.contains('retroarch') || cloudRelPath.toLowerCase().startsWith('retroarch/') ? 'RetroArch' : (sid == 'gc' || sid == 'dolphin' ? 'GC' : systemId));
+    
+    // Normalize: strip the cloud prefix if it exists to get the true relative path.
+    String relPath = cloudRelPath;
+    if (relPath.toLowerCase().startsWith('${cloudPrefix.toLowerCase()}/')) {
+      relPath = relPath.substring(cloudPrefix.length + 1);
+    }
 
     // 0. Direct lookup (normalized cloud keys)
-    if (!isSwitch && localFiles.containsKey(cloudRelPath)) {
-      return localFiles[cloudRelPath]['originalRelPath'] ?? cloudRelPath;
+    if (!isSwitch && localFiles.containsKey(relPath)) {
+      return localFiles[relPath]['originalRelPath'] ?? relPath;
     }
 
     // 1. RetroArch (Core-aware mapping)
-    if (cloudRelPath.startsWith('RetroArch/')) {
-       final suffix = cloudRelPath.substring(10); // strip 'RetroArch/'
-       
-       // If the cloud path is e.g. RetroArch/saves/game.srm
-       // And our scan results are already anchored in the folder that CONTAINS 'saves/'
-       // We should return just 'saves/game.srm'
-       
+    if (sid.contains('retroarch') || cloudRelPath.toLowerCase().startsWith('retroarch/')) {
+       final suffix = relPath;
        final hasExplicitAnchor = lastScanList.any((f) {
           final p = (f['relPath'] as String).toLowerCase();
           return p.startsWith('saves/') || p.startsWith('states/');
        });
 
-       if (hasExplicitAnchor) {
-          return suffix;
-       }
+       if (hasExplicitAnchor) return suffix;
 
-       // Otherwise, if we're in a package root, we might need 'files/' prefix
        final hasFilesDir = lastScanList.any((f) => (f['relPath'] as String).startsWith('files/'));
-       final prefix = hasFilesDir ? 'files/' : '';
-       return '$prefix$suffix';
+       return hasFilesDir ? 'files/$suffix' : suffix;
     }
 
     if (isSwitch) {
-       // Probing: Use the explicitly provided profile ID or find the FIRST valid 32-char Profile ID on the device
        String? foundProfileId = probedProfileId;
        final profileRegex = RegExp(r'^[0-9A-Fa-f]{32}$');
 
@@ -173,82 +173,50 @@ class SyncPathResolver {
          }
        }
 
-       // Final fallback if no profile discovered yet
        final profileId = foundProfileId ?? '00000000000000000000000000000000';
-
-       // We assume the root is the emulator root ('files/').
-       // We ALWAYS anchor on 'nand/user/save' for consistency.
-       final result = 'nand/user/save/0000000000000000/$profileId/$cloudRelPath';
+       final result = 'nand/user/save/0000000000000000/$profileId/$relPath';
        developer.log('RESOLVER: Switch Target -> $result (Detected: ${foundProfileId ?? "NONE"})', name: 'VaultSync', level: 800);
        return result;
     }
 
     final hasFilesDir = lastScanList.any((f) => (f['relPath'] as String).startsWith('files/'));
+    final prefix = hasFilesDir ? 'files/' : '';
 
     if (sid == 'ps2' || sid == 'aethersx2' || sid == 'nethersx2' || sid == 'pcsx2' || sid == 'duckstation') {
-       final prefix = hasFilesDir ? 'files/' : '';
-       // Always restore to the same relative path the file was uploaded from.
-       // Previously this prepended memcards/ for unanchored paths, which created
-       // a spurious memcards/ folder in EmuDeck's pcsx2/saves/ directory.
-       return '$prefix$cloudRelPath';
+       return '$prefix$relPath';
     }
 
     if (sid == 'wii') {
-       final prefix = hasFilesDir ? 'files/' : '';
-       // Detect if the local scan is already rooted inside the Wii/ directory.
-       // EmuDeck sets the path to dolphin-emu/Wii/, so relPaths start with 'title/'.
-       // Android Dolphin sets the path to the 'files/' dir, so relPaths start with 'Wii/'.
-       final isWiiRooted = !hasFilesDir &&
-           lastScanList.isNotEmpty &&
-           lastScanList.any((f) => (f['relPath'] as String).startsWith('title/'));
-       if (isWiiRooted) {
-         return 'title/$cloudRelPath';
-       }
-       // Standard path: reconstruct from Wii/ root.
+       final isWiiRooted = !hasFilesDir && lastScanList.isNotEmpty && lastScanList.any((f) => (f['relPath'] as String).startsWith('title/'));
+       if (isWiiRooted) return 'title/$relPath';
        const knownTitleTypes = ['00010000', '00010001', '00010002', '00010004', '00010005'];
-       if (knownTitleTypes.contains(cloudRelPath.split('/').first)) {
-         return '${prefix}Wii/title/$cloudRelPath';
-       }
-       return '${prefix}Wii/title/00010000/$cloudRelPath';
+       if (knownTitleTypes.contains(relPath.split('/').first)) return '${prefix}Wii/title/$relPath';
+       return '${prefix}Wii/title/00010000/$relPath';
     }
 
     if (sid == 'gc' || sid == 'dolphin') {
-       final prefix = hasFilesDir ? 'files/' : '';
-       // Detect if the local scan is already rooted inside the GC/ directory.
-       // EmuDeck sets the path to dolphin-emu/GC/, so relPaths have no 'GC/' prefix.
-       // Android Dolphin sets the path to the 'files/' dir, so relPaths start with 'GC/'.
-       // Use a non-empty scan to distinguish: if scan has files but none start with 'GC/',
-       // we're already inside the GC/ root and should strip the prefix on restore.
        final hasGcPrefixPaths = lastScanList.any((f) => (f['relPath'] as String).startsWith('GC/'));
        final isGcRooted = !hasFilesDir && lastScanList.isNotEmpty && !hasGcPrefixPaths;
-       if (isGcRooted && cloudRelPath.startsWith('GC/')) {
-         return cloudRelPath.substring(3); // strip 'GC/'
+       if (isGcRooted && relPath.startsWith('GC/')) {
+         return relPath.substring(3);
        }
-       return '$prefix$cloudRelPath';
+       return '$prefix$relPath';
     }
 
     if (sid == '3ds' || sid == 'citra' || sid == 'azahar') {
-       if (cloudRelPath.startsWith('saves/')) {
-          final suffix = cloudRelPath.substring(6); // everything after 'saves/'
-          final prefix = hasFilesDir ? 'files/' : '';
-          // Detect deep NAND structure (Android Citra): scan has paths containing '00040000'.
-          // EmuDeck / desktop Azahar uses a flat saves directory — restore directly as suffix.
-          final hasDeepNandPaths = lastScanList.any((f) => (f['relPath'] as String).contains('00040000'));
-          if (hasDeepNandPaths) {
-            return '${prefix}sdmc/Nintendo 3DS/0000000000000000/0000000000000000/title/00040000/$suffix';
-          }
-          return suffix;
-       }
-       return cloudRelPath;
+       final isRooted = lastScanList.any((f) => (f['relPath'] as String).startsWith('title/'));
+       if (!isRooted) return '${prefix}saves/$relPath';
+       if (relPath.startsWith('saves/')) return relPath.substring(6);
+       return relPath;
     }
 
     if (sid == 'psp' || sid == 'ppsspp') {
-       if (!cloudRelPath.startsWith('SAVEDATA') && !cloudRelPath.startsWith('PPSSPP_STATE')) {
-          return 'SAVEDATA/$cloudRelPath';
+       if (!relPath.startsWith('SAVEDATA') && !relPath.startsWith('PPSSPP_STATE')) {
+          return 'SAVEDATA/$relPath';
        }
-       return cloudRelPath;
+       return relPath;
     }
 
-    return cloudRelPath;
+    return relPath;
   }
 }
