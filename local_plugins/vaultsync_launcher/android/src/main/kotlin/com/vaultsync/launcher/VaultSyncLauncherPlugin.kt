@@ -775,68 +775,46 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         executor.execute {
             try {
                 var fileSize = 0L
-                val input = when {
-                    path.startsWith("shizuku://") -> {
+                val resultObj = try {
+                    if (path.startsWith("shizuku://")) {
                         getShizukuServiceSync().let { svc ->
-                            fileSize = svc.getFileSize(getCleanPath(path))
-                            svc.openFile(getCleanPath(path), "r")?.let { java.io.FileInputStream(it.fileDescriptor) }
+                            val cleanPath = getCleanPath(path)
+                            fileSize = svc.getFileSize(cleanPath)
+                            svc.openFile(cleanPath, "r")?.use { pfd ->
+                                java.io.FileInputStream(pfd.fileDescriptor).use { stream ->
+                                    processHashingStream(stream, secretKey, fileSize, fileDigest, blockHashes)
+                                }
+                            }
                         }
-                    }
-                    path.startsWith("content://") -> {
+                    } else if (path.startsWith("content://")) {
                         val uri = Uri.parse(path)
                         DocumentFile.fromSingleUri(ctx, uri)?.let { df ->
                             fileSize = df.length()
                         }
-                        ctx.contentResolver.openInputStream(uri)
-                    }
-                    else -> {
+                        ctx.contentResolver.openInputStream(uri)?.use { stream ->
+                            processHashingStream(stream, secretKey, fileSize, fileDigest, blockHashes)
+                        }
+                    } else {
                         val f = java.io.File(path)
                         fileSize = f.length()
-                        f.inputStream()
-                    }
-                }
-
-                val secretKey = masterKey?.let {
-                    val keyBytes = android.util.Base64.decode(it, android.util.Base64.URL_SAFE).sliceArray(0 until 32)
-                    javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
-                }
-
-                val blockSize = CryptoEngine.getBlockSize(fileSize)
-                val encryptedBlockSize = CryptoEngine.getEncryptedBlockSize(fileSize)
-
-                val blockHashes = JSONArray()
-                val buffer = ByteArray(blockSize)
-                val encryptedBuffer = ByteArray(encryptedBlockSize)
-                // Running digest for full-file double-SHA-256
-                val fileDigest = java.security.MessageDigest.getInstance("SHA-256")
-
-                input?.use { stream ->
-                    while (true) {
-                        val read = stream.read(buffer)
-                        if (read == -1) break
-
-                        // Feed raw bytes into the file-level digest
-                        fileDigest.update(buffer, 0, read)
-
-                        // Compute encrypted block hash
-                        if (secretKey != null) {
-                            val encryptedLength = cryptoEngine.encryptBlock(buffer, read, secretKey, encryptedBuffer)
-                            blockHashes.put(cryptoEngine.calculateHash(encryptedBuffer, encryptedLength))
-                        } else {
-                            blockHashes.put(cryptoEngine.calculateHash(buffer, read))
+                        f.inputStream().use { stream ->
+                            processHashingStream(stream, secretKey, fileSize, fileDigest, blockHashes)
                         }
                     }
+
+                    // Finalize double-hash
+                    val firstDigest = fileDigest.digest()
+                    val fileHash = cryptoEngine.calculateHash(firstDigest, firstDigest.size)
+                    
+                    JSONObject().apply {
+                        put("blockHashes", blockHashes)
+                        put("fileHash", fileHash)
+                    }
+                } catch (e: Exception) {
+                    throw e
                 }
 
-                // Double-hash: SHA-256(SHA-256(file_bytes)) — matches handleCalculateHash behavior
-                val firstDigest = fileDigest.digest()
-                val fileHash = cryptoEngine.calculateHash(firstDigest, firstDigest.size)
-
-                val resultObj = JSONObject().apply {
-                    put("blockHashes", blockHashes)
-                    put("fileHash", fileHash)
-                }
-                mainHandler.post { result.success(resultObj.toString()) }
+                mainHandler.post { result.success(resultObj?.toString()) }
             } catch (e: Exception) {
                 mainHandler.post { result.error("COMBINED_HASH_ERROR", e.message, null) }
             }
@@ -868,6 +846,35 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         }
     }
 
+
+    private fun processHashingStream(
+        stream: java.io.InputStream,
+        secretKey: javax.crypto.spec.SecretKeySpec?,
+        fileSize: Long,
+        fileDigest: java.security.MessageDigest,
+        blockHashes: JSONArray
+    ) {
+        val blockSize = CryptoEngine.getBlockSize(fileSize)
+        val encryptedBlockSize = CryptoEngine.getEncryptedBlockSize(fileSize)
+        val buffer = ByteArray(blockSize)
+        val encryptedBuffer = ByteArray(encryptedBlockSize)
+
+        while (true) {
+            val read = stream.read(buffer)
+            if (read == -1) break
+
+            // Feed raw bytes into the file-level digest
+            fileDigest.update(buffer, 0, read)
+
+            // Compute encrypted block hash
+            if (secretKey != null) {
+                val encryptedLength = cryptoEngine.encryptBlock(buffer, read, secretKey, encryptedBuffer)
+                blockHashes.put(cryptoEngine.calculateHash(encryptedBuffer, encryptedLength))
+            } else {
+                blockHashes.put(cryptoEngine.calculateHash(buffer, read))
+            }
+        }
+    }
     private fun handleGetFileInfo(call: MethodCall, result: MethodChannel.Result) {
         val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
         val ctx = context ?: return result.error("NO_CONTEXT", "Context is null", null)
