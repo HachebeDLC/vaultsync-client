@@ -11,11 +11,10 @@ class ConflictResolver {
     final stored = prefs.getString(key);
     if (stored == null) return false;
 
-    // Normalize timestamp to second-precision (match SyncRepository)
-    final normalizedTs = localTs != null ? (localTs ~/ 1000) * 1000 : null;
-    
-    if (normalizedTs != null) return stored == '$normalizedTs:$remoteHash';
-    // Legacy format (no localTs) or callers that don't provide it.
+    // Always accept if the hash portion matches, regardless of timestamp.
+    // Timestamp-keyed entries exist as an optimisation but timestamp setting is
+    // a no-op on SAF (content://) paths, so the stored ts may differ from the
+    // actual file ts. The hash is the real integrity signal.
     return stored == remoteHash || stored.endsWith(':$remoteHash');
   }
 

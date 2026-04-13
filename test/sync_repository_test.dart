@@ -98,6 +98,7 @@ void main() {
       when(() => mockJobQueue.processManual(
         getDeviceName: any(named: 'getDeviceName'),
         recordSyncSuccess: any(named: 'recordSyncSuccess'),
+        getMasterKey: any(named: 'getMasterKey'),
       )).thenAnswer((_) async {});
 
       await repository.processManualQueue();
@@ -105,6 +106,7 @@ void main() {
       verify(() => mockJobQueue.processManual(
         getDeviceName: any(named: 'getDeviceName'),
         recordSyncSuccess: any(named: 'recordSyncSuccess'),
+        getMasterKey: any(named: 'getMasterKey'),
       )).called(1);
     });
   });

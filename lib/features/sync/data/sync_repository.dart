@@ -150,7 +150,6 @@ class SyncRepository {
   bool isJournaledSynced(SharedPreferences prefs, String systemId, String relPath, String remoteHash, {int? localTs}) {
     final key = 'journal_${systemId.toLowerCase()}_$relPath';
     final normalizedTs = localTs != null ? (localTs ~/ 1000) * 1000 : null;
-    
     if (_pendingJournal.containsKey(key)) {
       final stored = _pendingJournal[key]!;
       if (normalizedTs != null) return stored == '$normalizedTs:$remoteHash';
@@ -331,10 +330,14 @@ class SyncRepository {
             final String remoteHash = remoteInfo['hash'];
             final int localTs = (localInfo['lastModified'] as num).toInt();
             final int localSize = (localInfo['size'] as num).toInt();
-            if (isJournaledSynced(prefs, systemId, relPath, remoteHash, localTs: localTs)) continue;
+            if (isJournaledSynced(prefs, systemId, relPath, remoteHash)) continue;
             final cached = await _syncStateDb.getState(localInfo['uri']);
-            if (cached != null && cached['size'] == localSize && (cached['last_modified'] ~/ 1000) == (localTs ~/ 1000) && cached['hash'] == remoteHash && cached['status'] == 'synced') {
+            // Primary: hash + synced status match is sufficient — SAF/content:// paths
+            // cannot reliably set lastModified after a download, so timestamp matching
+            // would always fail and trigger an expensive re-hash on every subsequent sync.
+            if (cached != null && cached['hash'] == remoteHash && cached['status'] == 'synced') {
               recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
+              developer.log('SYNC: DB-cached synced (hash match) — skipping $relPath', name: 'VaultSync', level: 800);
               continue;
             }
             onProgress?.call('Checking $relPath blocks...');
@@ -355,8 +358,10 @@ class SyncRepository {
             if (localHash == remoteHash) {
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'synced', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
               recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
+              developer.log('SYNC: Hash matched — marking synced $relPath', name: 'VaultSync', level: 800);
               continue;
             }
+            developer.log('SYNC: Hash mismatch for $relPath — local=$localHash remote=$remoteHash', name: 'VaultSync', level: 900);
             onProgress?.call('Snapshotting $relPath...');
             final snapshotId = await _ref?.read(localVersioningServiceProvider).createSnapshot(systemId, localInfo['uri'], localSize, masterKey: masterKey, currentBlockHashes: currentBlockHashes, currentFileHash: localHash);
             if (snapshotId == null) {
@@ -376,7 +381,10 @@ class SyncRepository {
               // would cause the file to be written to a ghost location (e.g. missing
               // the Switch profile-ID directory).
               final localRelPath = (localInfo['originalRelPath'] as String?) ?? relPath;
-              await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'pending_download', systemId: systemId, remotePath: remotePath, relPath: localRelPath, blockHashes: json.encode(currentBlockHashes));
+              // Store remote size/timestamp/hash so the job queue uses the correct
+              // values for fileSize (block calculation) and records the right hash
+              // after download. blockHashes are the LOCAL hashes for delta patching.
+              await _syncStateDb.upsertState(localInfo['uri'], (remoteInfo['size'] as num).toInt(), (remoteInfo['updated_at'] as num).toInt(), remoteHash, 'pending_download', systemId: systemId, remotePath: remotePath, relPath: localRelPath, blockHashes: json.encode(currentBlockHashes));
             }
           }
         }
@@ -417,7 +425,7 @@ class SyncRepository {
       rommKey = await _getMasterKey();
       rommUrl = prefs.getString('romm_url');
       rommApiKey = prefs.getString('romm_api_key');
-      developer.log('SYNC: Attaching RomM Key for ${relPath}', name: 'VaultSync', level: 800);
+      developer.log('SYNC: Attaching RomM Key for $relPath', name: 'VaultSync', level: 800);
     }
 
     await _networkService.uploadFile(

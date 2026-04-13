@@ -26,7 +26,7 @@ class SyncJobQueue {
     String effectivePath,
     Function(String)? onProgress, {
     required Future<String> Function() getDeviceName,
-    required void Function(SharedPreferences, String, String, String)
+    required void Function(SharedPreferences, String, String, String, int?)
         recordSyncSuccess,
     required Future<String?> Function() getMasterKey,
     bool Function()? isCancelled,
@@ -65,7 +65,7 @@ class SyncJobQueue {
             systemId: systemId,
             relPath: relPath!,
             deviceName: await getDeviceName(),
-            onRecordSuccess: (sid, rp, h) => recordSyncSuccess(prefs, sid, rp, h),
+            onRecordSuccess: (sid, rp, h, ts) => recordSyncSuccess(prefs, sid, rp, h, ts),
             plainHash: job['hash'],
             localBlockHashes: blockHashes,
             rommKey: rommKey,
@@ -77,11 +77,23 @@ class SyncJobQueue {
 
           onProgress?.call(
               'Downloading ${relPath?.split("/").last ?? path.split("/").last}...');
+
+          // Derive the CLOUD relative path for journaling by stripping the
+          // system-prefix segment from remotePath (e.g. 'RetroArch/saves/game.srm'
+          // → 'saves/game.srm').  relPath is the LOCAL write destination which may
+          // differ from the cloud path on systems with path transforms (3DS, PSP,
+          // Switch, …).  Using relPath as the journal key would produce a mismatch
+          // on subsequent sync lookups that use the cloud path.
+          final cloudRelPathForJournal = remotePath != null && remotePath.contains('/')
+              ? remotePath.substring(remotePath.indexOf('/') + 1)
+              : relPath;
+
           final downloadResult = await _networkService.downloadFile(
             remotePath!, effectivePath, relPath!,
             systemId: systemId,
             fileSize: job['size'],
-            onRecordSuccess: (sid, rp, h) => recordSyncSuccess(prefs, sid, rp, h),
+            onRecordSuccess: (sid, _, h, ts) =>
+                recordSyncSuccess(prefs, sid, cloudRelPathForJournal ?? '', h, ts),
             remoteHash: job['hash'],
             updatedAt: (job['last_modified'] as num?)?.toInt(),
             localUri: path,
@@ -139,7 +151,7 @@ class SyncJobQueue {
 
   Future<void> processManual({
     required Future<String> Function() getDeviceName,
-    required void Function(SharedPreferences, String, String, String)
+    required void Function(SharedPreferences, String, String, String, int?)
         recordSyncSuccess,
     required Future<String?> Function() getMasterKey,
   }) async {

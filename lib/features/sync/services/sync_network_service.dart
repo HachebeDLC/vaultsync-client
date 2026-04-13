@@ -82,12 +82,12 @@ class SyncNetworkService {
   }
 
   Future<void> uploadFile(
-    String path, 
+    String path,
     String remotePath, {
-    required String systemId, 
-    required String relPath, 
+    required String systemId,
+    required String relPath,
     required String deviceName,
-    required Function(String, String, String) onRecordSuccess,
+    required Function(String, String, String, int?) onRecordSuccess,
     String? plainHash, 
     List<String>? localBlockHashes,
     bool force = false,
@@ -120,9 +120,9 @@ class SyncNetworkService {
       try {
         final checkResult = await _apiClient.post('/api/v1/blocks/check', body: {'path': remotePath, 'blocks': hashes});
         final List missing = checkResult['missing'] ?? [];
-        if (missing.isEmpty && !force) { 
-          onRecordSuccess(systemId, relPath, hash); 
-          return; 
+        if (missing.isEmpty && !force) {
+          onRecordSuccess(systemId, relPath, hash, updatedAt);
+          return;
         }
         dirtyIndices = List<int>.from(missing);
       } catch (e) { developer.log('Delta check failed', name: 'VaultSync', level: 900, error: e); }
@@ -145,7 +145,7 @@ class SyncNetworkService {
 
     await _executeNative('uploadFileNative', uploadArgs);
 
-    onRecordSuccess(systemId, relPath, hash);
+    onRecordSuccess(systemId, relPath, hash, updatedAt);
   }
 
   Future<dynamic> downloadFile(
@@ -154,7 +154,7 @@ class SyncNetworkService {
     String relPath, {
     required String systemId, 
     required int fileSize, 
-    required Function(String, String, String) onRecordSuccess,
+    required Function(String, String, String, int?) onRecordSuccess,
     String? remoteHash, 
     int? updatedAt, 
     dynamic serverBlocks, 
@@ -192,8 +192,8 @@ class SyncNetworkService {
     };
 
     final result = await _executeNative('downloadFileNative', downloadArgs);
-    if (onRecordSuccess != null && remoteHash != null) {
-        onRecordSuccess(systemId, relPath, remoteHash);
+    if (remoteHash != null) {
+        onRecordSuccess(systemId, relPath, remoteHash, updatedAt);
     }
     return result;
   }

@@ -43,9 +43,9 @@ class SyncDiffService {
     required String effectivePath,
     required Future<List<dynamic>> Function(String, String, List<String>?)
         getCachedOrNewScan,
-    required bool Function(SharedPreferences, String, String, String)
+    required bool Function(SharedPreferences, String, String, String, {int? localTs})
         isJournaledSynced,
-    required void Function(SharedPreferences, String, String, String)
+    required void Function(SharedPreferences, String, String, String, [int?])
         recordSyncSuccess,
     List<String>? ignoredFolders,
   }) async {

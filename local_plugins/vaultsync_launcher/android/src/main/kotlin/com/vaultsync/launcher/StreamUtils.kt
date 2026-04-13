@@ -60,5 +60,15 @@ internal fun decryptEncryptedStream(
         val blockIndex = if (patchIndices != null) patchIndices[currentIdx].toLong() else currentIdx.toLong()
         output.position(blockIndex * plainBlockSize)
         output.write(ByteBuffer.wrap(decryptedBuffer, 0, decryptedLength))
+        currentIdx++
+    }
+
+    // Validate all requested patch blocks were received. An early EOF from the server
+    // means some blocks were never written; marking the file as synced in that state
+    // would leave it silently corrupt.
+    if (patchIndices != null && currentIdx < patchIndices.size) {
+        throw java.io.EOFException(
+            "Incomplete patch download: received $currentIdx of ${patchIndices.size} blocks"
+        )
     }
 }
