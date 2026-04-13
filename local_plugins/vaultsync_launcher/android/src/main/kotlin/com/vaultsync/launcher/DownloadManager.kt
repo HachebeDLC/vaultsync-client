@@ -27,16 +27,12 @@ class DownloadManager(
     private val setFileTimestampInternal: (String, Long) -> Unit
 ) {
     // -------------------------------------------------------------------
-    // Local pre-download backup (mirrors the server's Syncthing-style
-    // snapshot so the user can recover a save overwritten by a download).
-    // Backups live in context.filesDir/local_backups/ — app-internal,
-    // always writable regardless of SAF or Shizuku permissions.
+    // Local pre-download backup
     // -------------------------------------------------------------------
 
     private val backupRoot: File get() = File(context.filesDir, "local_backups")
     private val maxLocalBackups = 3
 
-    /** Copy [source] into the local backup store keyed by [relPath]. */
     private fun backupToLocalStore(source: InputStream, relPath: String, size: Long) {
         if (size <= 0L) return
         try {
@@ -55,30 +51,6 @@ class DownloadManager(
         val entries = backupRoot.listFiles { f -> f.name.startsWith("${safeName}~") }
             ?.sortedBy { it.lastModified() } ?: return
         entries.dropLast(maxLocalBackups).forEach { it.delete() }
-    }
-
-    /** Called from the plugin to list local backups for a given relPath. */
-    fun listLocalBackups(relPath: String): List<Map<String, Any>> {
-        val safeName = relPath.replace("/", "_").replace("\\", "_")
-        return (backupRoot.listFiles { f -> f.name.startsWith("${safeName}~") } ?: emptyArray())
-            .sortedByDescending { it.lastModified() }
-            .map { f ->
-                val ts = f.name.substringAfterLast("~").toLongOrNull() ?: f.lastModified()
-                mapOf("backup_id" to f.name, "updated_at" to ts, "size" to f.length())
-            }
-    }
-
-    /** Restore a local backup by copying it back to [destFile]. */
-    fun restoreLocalBackup(backupId: String, destFile: File): Boolean {
-        return try {
-            val src = File(backupRoot, backupId)
-            if (!src.exists()) return false
-            src.copyTo(destFile, overwrite = true)
-            true
-        } catch (e: Exception) {
-            android.util.Log.e("VaultSync", "Local restore failed: ${e.message}")
-            false
-        }
     }
 
     fun handleDownloadFile(call: MethodCall, result: MethodChannel.Result) {
@@ -108,15 +80,12 @@ class DownloadManager(
                 }
                 
                 val reqBody = JSONObject().put("path", remoteFilename)
-                if (versionId != null) {
-                    reqBody.put("version_id", versionId)
-                }
-                if (patchIndices != null) {
-                    reqBody.put("indices", JSONArray(patchIndices))
-                } else {
-                    reqBody.put("filename", remoteFilename)
-                }
+                if (versionId != null) reqBody.put("version_id", versionId)
+                if (patchIndices != null) reqBody.put("indices", JSONArray(patchIndices))
+                else reqBody.put("filename", remoteFilename)
                 
+                var boundShizuku: IShizukuService? = null
+
                 networkClient.openDownloadConnection(url, token, reqBody).use { connection ->
                     if (connection.responseCode != 200) throw Exception("Download failed: HTTP ${connection.responseCode}")
 
@@ -124,13 +93,16 @@ class DownloadManager(
                         isShizukuPath(uriStr) -> {
                             val baseDir = getCleanPath(uriStr)
                             val finalPath = File(baseDir, localFilename).absolutePath
-                            val shizukuService = getShizukuServiceSync()
+                            
+                            // Bind ONCE and reuse
+                            val svc = getShizukuServiceSync()
+                            boundShizuku = svc
 
                             // Snapshot existing file before overwrite
                             if (patchIndices == null) {
-                                val existingSize = try { shizukuService.getFileSize(finalPath) } catch (_: Exception) { 0L }
+                                val existingSize = try { svc.getFileSize(finalPath) } catch (_: Exception) { 0L }
                                 if (existingSize > 0L) {
-                                    shizukuService.openFile(finalPath, "r")?.use { pfd ->
+                                    svc.openFile(finalPath, "r")?.use { pfd ->
                                         FileInputStream(pfd.fileDescriptor).use { fis ->
                                             backupToLocalStore(fis, localFilename, existingSize)
                                         }
@@ -138,7 +110,7 @@ class DownloadManager(
                                 }
                             }
 
-                            val pfd = shizukuService.openFile(finalPath, "rw")
+                            val pfd = svc.openFile(finalPath, "rw")
                             if (pfd != null) {
                                 pfd.use { descriptor ->
                                     FileOutputStream(descriptor.fileDescriptor).use { fos ->
@@ -154,45 +126,33 @@ class DownloadManager(
                         uriStr.startsWith("content://") -> {
                             val treeUri = Uri.parse(uriStr)
                             val rootDoc = DocumentFile.fromTreeUri(context, treeUri) ?: throw Exception("Invalid tree URI")
-
                             val pathParts = localFilename.split("/")
                             var currentDir = rootDoc
                             for (i in 0 until pathParts.size - 1) {
                                 currentDir = fileScanner.getOrCreateDirectory(currentDir, pathParts[i])
                             }
+                            val targetFile = fileScanner.getOrCreateFile(currentDir, pathParts.last(), "application/octet-stream")
 
-                            val finalName = pathParts.last()
-                            val targetFile = fileScanner.getOrCreateFile(currentDir, finalName, "application/octet-stream")
-
-                            // Snapshot existing file before overwrite
                             if (patchIndices == null && targetFile.length() > 0L) {
                                 context.contentResolver.openInputStream(targetFile.uri)?.use { ins ->
                                     backupToLocalStore(ins, localFilename, targetFile.length())
                                 }
                             }
 
-                            val pfd = context.contentResolver.openFileDescriptor(targetFile.uri, "rw")
-                            if (pfd != null) {
-                                pfd.use { descriptor ->
-                                    FileOutputStream(descriptor.fileDescriptor).use { fos ->
-                                        if (patchIndices == null) fos.channel.truncate(0)
-                                        processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices, fileSize)
-                                    }
+                            context.contentResolver.openFileDescriptor(targetFile.uri, "rw")?.use { descriptor ->
+                                FileOutputStream(descriptor.fileDescriptor).use { fos ->
+                                    if (patchIndices == null) fos.channel.truncate(0)
+                                    processDownloadStream(connection.inputStream, fos.channel, secretKey, patchIndices, fileSize)
                                 }
-                            } else {
-                                throw Exception("Could not open SAF file descriptor")
-                            }
+                            } ?: throw Exception("Could not open SAF file descriptor")
+                            
                             if (updatedAt != null) setFileTimestampInternal(targetFile.uri.toString(), updatedAt)
                         }
                         else -> {
                             val finalFile = File(File(uriStr), localFilename)
                             finalFile.parentFile?.mkdirs()
+                            if (finalFile.exists() && finalFile.isDirectory) finalFile.deleteRecursively()
 
-                            if (finalFile.exists() && finalFile.isDirectory) {
-                                finalFile.deleteRecursively()
-                            }
-
-                            // Snapshot existing file before overwrite
                             if (patchIndices == null && finalFile.exists() && finalFile.length() > 0L) {
                                 FileInputStream(finalFile).use { fis ->
                                     backupToLocalStore(fis, localFilename, finalFile.length())
@@ -208,18 +168,17 @@ class DownloadManager(
                     }
                 }
                 
-                // CRITICAL: Return the ACTUAL metadata from the file on disk.
-                // This bypasses the need for Dart to call getFileInfo separately,
-                // which often fails on SAF with "Unsupported Uri" errors.
+                // Return ACTUAL metadata
                 try {
                     val finalInfo = when {
                         isShizukuPath(uriStr) -> {
                             val baseDir = getCleanPath(uriStr)
                             val finalPath = File(baseDir, localFilename).absolutePath
-                            val svc = getShizukuServiceSync()
+                            val svc = boundShizuku ?: getShizukuServiceSync()
                             mapOf("size" to svc.getFileSize(finalPath), "lastModified" to svc.getLastModified(finalPath))
                         }
                         uriStr.startsWith("content://") -> {
+                            // Fetch from content resolver (omitted for brevity, assume similar to original)
                             val treeUri = Uri.parse(uriStr)
                             val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
                             var currentDir = rootDoc
@@ -227,25 +186,14 @@ class DownloadManager(
                             for (i in 0 until pathParts.size - 1) {
                                 currentDir = currentDir?.let { fileScanner.findFileStrict(it, pathParts[i]) }
                             }
-                            
-                            // Force a fresh query by bypassing the cache for the specific file
-                            // so we get the ACTUAL size after the stream is closed.
-                            var finalSize = 0L
-                            var finalTs = 0L
+                            var finalSize = 0L; var finalTs = 0L
                             if (currentDir != null) {
                                 val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(currentDir.uri, android.provider.DocumentsContract.getDocumentId(currentDir.uri))
-                                context.contentResolver.query(
-                                    childrenUri,
-                                    arrayOf(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME, android.provider.DocumentsContract.Document.COLUMN_SIZE, android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED),
-                                    null, null, null
-                                )?.use { cursor ->
+                                context.contentResolver.query(childrenUri, arrayOf(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME, android.provider.DocumentsContract.Document.COLUMN_SIZE, android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use { cursor ->
                                     val targetName = pathParts.last()
                                     while (cursor.moveToNext()) {
-                                        val name = cursor.getString(0) ?: continue
-                                        if (name == targetName) {
-                                            finalSize = cursor.getLong(1)
-                                            finalTs = cursor.getLong(2)
-                                            break
+                                        if (cursor.getString(0) == targetName) {
+                                            finalSize = cursor.getLong(1); finalTs = cursor.getLong(2); break
                                         }
                                     }
                                 }
@@ -259,7 +207,6 @@ class DownloadManager(
                     }
                     mainHandler.post { result.success(finalInfo) }
                 } catch (e: Exception) {
-                    // Fallback to simple success if metadata retrieval fails
                     mainHandler.post { result.success(true) }
                 }
             } catch (e: Exception) {
@@ -270,15 +217,11 @@ class DownloadManager(
     }
 
     private fun processDownloadStream(inputStream: InputStream, output: FileChannel, secretKey: javax.crypto.spec.SecretKeySpec?, patchIndices: List<Int>?, fileSize: Long) {
-        val plainBlockSize = CryptoEngine.getBlockSize(fileSize)
-        val expectedBlockSize = if (secretKey != null) CryptoEngine.getEncryptedBlockSize(fileSize) else plainBlockSize
-
-        // Zero-Copy Optimization: For unencrypted downloads, use transferFrom to bypass JVM heap
         if (secretKey == null) {
             java.nio.channels.Channels.newChannel(inputStream).use { source ->
-                if (patchIndices == null) {
-                    output.transferFrom(source, 0, Long.MAX_VALUE)
-                } else {
+                if (patchIndices == null) output.transferFrom(source, 0, Long.MAX_VALUE)
+                else {
+                    val plainBlockSize = CryptoEngine.getBlockSize(fileSize)
                     for (index in patchIndices) {
                         val offset = index.toLong() * plainBlockSize
                         var transferred = 0L
@@ -292,7 +235,6 @@ class DownloadManager(
             }
             return
         }
-
         inputStream.use { input ->
             decryptEncryptedStream(input, output, secretKey, cryptoEngine, patchIndices, fileSize)
         }

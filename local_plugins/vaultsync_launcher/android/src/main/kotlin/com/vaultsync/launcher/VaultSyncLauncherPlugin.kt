@@ -74,12 +74,17 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         if (shizukuService != null || isBinding) return
         try {
             if (Shizuku.pingBinder()) {
-                if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                val hasPermission = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                if (hasPermission) {
                     val userServiceArgs = Shizuku.UserServiceArgs(ComponentName(ctx.packageName, ShizukuService::class.java.name))
                         .daemon(false).processNameSuffix("shizuku").debuggable(true).version(4)
                     isBinding = true
                     Shizuku.bindUserService(userServiceArgs, shizukuConnection)
+                } else {
+                    android.util.Log.w("VaultSync", "Shizuku pinged but PERMISSION_DENIED. User must authorize in Shizuku app.")
                 }
+            } else {
+                android.util.Log.w("VaultSync", "Shizuku service not running or not found (pingBinder failed)")
             }
         } catch (e: Exception) {
             isBinding = false
@@ -90,11 +95,22 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     private fun getShizukuServiceSync(): IShizukuService {
         val current = shizukuService
         if (current != null) return current
+        
+        // Reset future if it was completed or cancelled
+        if (shizukuServiceFuture.isDone) {
+            shizukuServiceFuture = java.util.concurrent.CompletableFuture<IShizukuService>()
+        }
+        
         if (!isBinding) bindShizukuService()
+        
         return try {
-            shizukuServiceFuture.get(3, java.util.concurrent.TimeUnit.SECONDS) ?: throw Exception("Shizuku connection null")
+            // Increase timeout to 10s for initial cold start
+            shizukuServiceFuture.get(10, java.util.concurrent.TimeUnit.SECONDS) ?: throw Exception("Shizuku connection null")
+        } catch (e: java.util.concurrent.TimeoutException) {
+            val status = if (Shizuku.pingBinder()) "Running, No Permission" else "Not Running"
+            throw Exception("Shizuku connection timeout (Status: $status)")
         } catch (e: Exception) {
-            throw Exception("Shizuku connection timeout: ${e.message}")
+            throw Exception("Shizuku connection error: ${e.message}")
         }
     }
 

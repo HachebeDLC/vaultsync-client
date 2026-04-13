@@ -37,6 +37,27 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       _log('📱 SDK Level: $sdk');
       _log(sdk <= 33 ? '✅ Mode: Legacy Handheld (POSIX)' : '✅ Mode: Modern Android (Bridge)');
 
+      // 1.5. Shizuku Status (Android only)
+      if (Platform.isAndroid) {
+        _log('🛡️ Testing Shizuku Engine...');
+        final shizukuStatus = await _platform.invokeMapMethod('checkShizukuStatus');
+        final bool running = shizukuStatus?['running'] == true;
+        final bool authorized = shizukuStatus?['authorized'] == true;
+        
+        if (running) {
+          _log('✅ Shizuku: Running');
+          if (authorized) {
+            _log('✅ Shizuku: Authorized');
+          } else {
+            _log('⚠️ Shizuku: NOT AUTHORIZED');
+            _log('ℹ️ Action: Open Shizuku app and allow VaultSync');
+          }
+        } else {
+          _log('❌ Shizuku: NOT RUNNING');
+          _log('ℹ️ Action: Ensure Shizuku is started via ADB/Wireless Debugging');
+        }
+      }
+
       // 2. Metadata Consistency
       _log('📁 Testing Metadata Parity...');
             final tempDir = await Directory.systemTemp.createTemp('vs_diag');
