@@ -29,6 +29,10 @@ class UploadManager(
         val deviceName = call.argument<String>("deviceName") ?: "Android"
         val updatedAt = (call.argument<Any>("updatedAt") as? Number)?.toLong() ?: 0L
         val dirtyIndices = call.argument<List<Int>>("dirtyIndices")
+        val rommUrl = call.argument<String>("rommUrl")
+        val rommApiKey = call.argument<String>("rommApiKey")
+        val rommKey = call.argument<String>("rommKey")
+        android.util.Log.d("VaultSync", "Native: Received rommKey=${rommKey != null}, rommUrl=${rommUrl != null}")
 
         syncExecutor.submit {
             try {
@@ -78,7 +82,7 @@ class UploadManager(
 
                 if (!openResult) throw Exception("Failed to open file for upload")
 
-                finalizeUpload(url, token, remotePath, hash, fileSize, updatedAt, deviceName)
+                finalizeUpload(url, token, remotePath, hash, fileSize, updatedAt, deviceName, rommKey, rommUrl, rommApiKey)
                 mainHandler.post { result.success(true) }
             } catch (e: Exception) {
                 android.util.Log.e("VaultSync", "Upload failed: ${e.message}", e)
@@ -149,7 +153,7 @@ class UploadManager(
         if (responseCode != 200) throw Exception("Block $index: HTTP $responseCode")
     }
 
-    private fun finalizeUpload(url: String, token: String?, path: String, hash: String, size: Long, updatedAt: Long, deviceName: String) {
+    private fun finalizeUpload(url: String, token: String?, path: String, hash: String, size: Long, updatedAt: Long, deviceName: String, rommKey: String?, rommUrl: String?, rommApiKey: String?) {
         val finalizeUrl = if (url.endsWith("/")) "${url}finalize" else "$url/finalize"
         val body = JSONObject().apply {
             put("path", path)
@@ -158,7 +162,19 @@ class UploadManager(
             put("updated_at", updatedAt)
             put("device_name", deviceName)
         }
-        val responseCode = networkClient.postJson(finalizeUrl, token, body)
+        
+        val headers = mutableMapOf<String, String>()
+        if (rommKey != null) {
+            headers["x-vaultsync-romm-key"] = rommKey
+        }
+        if (rommUrl != null && rommUrl.isNotEmpty()) {
+            headers["x-romm-url"] = rommUrl
+        }
+        if (rommApiKey != null && rommApiKey.isNotEmpty()) {
+            headers["x-romm-api-key"] = rommApiKey
+        }
+        
+        val responseCode = networkClient.postJson(finalizeUrl, token, body, headers)
         if (responseCode != 200) throw Exception("Finalization failed: HTTP $responseCode")
     }
 }

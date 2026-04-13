@@ -206,7 +206,7 @@ class SyncRepository {
       effectivePath: effectivePath,
       getCachedOrNewScan: _getCachedOrNewScan,
       isJournaledSynced: isJournaledSynced,
-      recordSyncSuccess: recordSyncSuccess, getMasterKey: () async => await _getMasterKey(),
+      recordSyncSuccess: recordSyncSuccess,
       ignoredFolders: ignoredFolders,
     );
 
@@ -396,8 +396,13 @@ class SyncRepository {
     final path = localPathOrFile is File ? localPathOrFile.path : localPathOrFile.toString();
     
     String? rommKey;
+    String? rommUrl;
+    String? rommApiKey;
     if (prefs.getBool('romm_sync_enabled') ?? false) {
       rommKey = await _getMasterKey();
+      rommUrl = prefs.getString('romm_url');
+      rommApiKey = prefs.getString('romm_api_key');
+      developer.log('SYNC: Attaching RomM Key for ${relPath}', name: 'VaultSync', level: 800);
     }
 
     await _networkService.uploadFile(
@@ -410,7 +415,10 @@ class SyncRepository {
       localBlockHashes: localBlockHashes, 
       force: force,
       rommKey: rommKey,
+      rommUrl: rommUrl,
+      rommApiKey: rommApiKey,
     );
+
   }
 
   Future<dynamic> downloadFile(String remotePath, String localBasePath, String relPath, {required String systemId, required SharedPreferences prefs, required int fileSize, String? remoteHash, int? updatedAt, dynamic serverBlocks, String? localUri}) async {

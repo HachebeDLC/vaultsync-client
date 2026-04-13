@@ -40,7 +40,7 @@ class NetworkClient {
     /**
      * Performs a POST request with a JSON body.
      */
-    fun postJson(url: String, token: String?, body: JSONObject): Int {
+    fun postJson(url: String, token: String?, body: JSONObject, headers: Map<String, String>? = null): Int {
         val mediaType = "application/json".toMediaType()
         val requestBody = body.toString().toRequestBody(mediaType)
         
@@ -49,6 +49,7 @@ class NetworkClient {
             .post(requestBody)
         
         token?.let { requestBuilder.addHeader("Authorization", "Bearer $it") }
+        headers?.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
         
         client.newCall(requestBuilder.build()).execute().use { response ->
             return response.code

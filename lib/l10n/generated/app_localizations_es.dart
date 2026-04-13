@@ -502,6 +502,28 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String deployFailed(String error) {
-    return 'Error en el despliegue: $error';
+    return 'Error al desplegar: $error';
   }
+
+  @override
+  String get sectionEcosystem => 'Integración del Ecosistema';
+
+  @override
+  String get rommSyncTitle => 'Integración con RomM';
+
+  @override
+  String get rommSyncSubtitle =>
+      'Sincroniza automáticamente partidas descifradas con tu servidor RomM';
+
+  @override
+  String get rommUrlLabel => 'URL del Servidor RomM';
+
+  @override
+  String get rommApiKeyLabel => 'Clave API de RomM';
+
+  @override
+  String get rommUrlHint => 'ej., https://romm.ejemplo.com';
+
+  @override
+  String get rommApiKeyHint => 'rmm_...';
 }

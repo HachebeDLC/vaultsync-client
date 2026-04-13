@@ -87,13 +87,28 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
 
   Widget _buildFileTile(Map<String, dynamic> file) {
     final String relPath = file['relPath'];
+    String displayName = relPath;
+    if (displayName.contains('/')) {
+       final parts = displayName.split('/');
+       if (parts.length > 1 && ['switch', 'retroarch', 'gc', 'psp', '3ds', 'wii', 'dolphin'].contains(parts.first.toLowerCase())) {
+          displayName = parts.sublist(1).join('/');
+       }
+    }
     final String status = file['status'];
     final String type = file['type'] ?? 'Save';
-    final String name = relPath.split('/').last;
+    final String name = displayName.split('/').last;
     final l10n = AppLocalizations.of(context)!;
 
     final isState = type == 'State';
-    final isRetroArch = _localPath?.toLowerCase().contains('retroarch') ?? false;
+    final isRetroArch = (widget.systemId.toLowerCase().contains('retroarch')) || (_localPath?.toLowerCase().contains('retroarch') ?? false);
+    
+    // Extract probed metadata if available
+    final localInfo = file['localInfo'] as Map?;
+    final probedMetadata = localInfo?['probedMetadata'] as Map?;
+    String? probedId;
+    if (probedMetadata != null) {
+      probedId = (probedMetadata['titleId'] ?? probedMetadata['gameId']) as String?;
+    }
     
     return Tooltip(
       message: l10n.clickToViewHistory,
@@ -107,7 +122,16 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
         ),
         title: Row(
           children: [
-            Expanded(child: Text(name, style: const TextStyle(fontSize: 14))),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: const TextStyle(fontSize: 14)),
+                  if (probedId != null)
+                    Text(probedId, style: TextStyle(fontSize: 10, color: Colors.grey[400], fontFamily: 'monospace')),
+                ],
+              ),
+            ),
             if (isState && isRetroArch)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -134,7 +158,7 @@ class _SystemDetailScreenState extends ConsumerState<SystemDetailScreen> {
                     backgroundColor: Colors.transparent,
                     builder: (context) => LocalVersionHistorySheet(
                       systemId: widget.systemId,
-                      filePath: file['localInfo']['uri'],
+                      filePath: file['localInfo']?['uri'] ?? '',
                       effectivePath: _localPath!,
                       fileName: name,
                     ),

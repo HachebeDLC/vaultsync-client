@@ -149,13 +149,20 @@
   "deployToDeckyButton": "Instalar en Decky",
   "deployToDeckySubtitle": "Instala los archivos del plugin en el Modo Juego",
   "pluginDeployedSuccess": "¡Plugin de Decky desplegado! Reinicia Decky o recarga los plugins para verlo.",
-  "deployFailed": "Error en el despliegue: {error}",
+  "deployFailed": "Error al desplegar: {error}",
   "@deployFailed": {
     "placeholders": {
       "error": {
         "type": "String"
       }
     }
-  }
-  }
+  },
+  "sectionEcosystem": "Integración del Ecosistema",
+  "rommSyncTitle": "Integración con RomM",
+  "rommSyncSubtitle": "Sincroniza automáticamente partidas descifradas con tu servidor RomM",
+  "rommUrlLabel": "URL del Servidor RomM",
+  "rommApiKeyLabel": "Clave API de RomM",
+  "rommUrlHint": "ej., https://romm.ejemplo.com",
+  "rommApiKeyHint": "rmm_..."
+}
 

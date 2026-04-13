@@ -775,6 +775,12 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         executor.execute {
             try {
                 var fileSize = 0L
+                val secretKey = masterKey?.let {
+                    val keyBytes = android.util.Base64.decode(it, android.util.Base64.URL_SAFE).sliceArray(0 until 32)
+                    javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
+                }
+                val fileDigest = java.security.MessageDigest.getInstance("SHA-256")
+                val blockHashes = JSONArray()
                 val resultObj = try {
                     if (path.startsWith("shizuku://")) {
                         getShizukuServiceSync().let { svc ->

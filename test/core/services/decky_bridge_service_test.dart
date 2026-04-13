@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mocktail/mocktail.dart';
@@ -8,27 +9,40 @@ import 'package:vaultsync_client/core/services/decky_bridge_service.dart';
 import 'package:vaultsync_client/features/sync/services/sync_service.dart';
 import 'package:vaultsync_client/features/sync/services/system_path_service.dart';
 import 'package:vaultsync_client/core/services/connectivity_provider.dart';
+import 'package:vaultsync_client/core/services/api_client_provider.dart';
+import 'package:vaultsync_client/core/services/api_client.dart';
+import 'package:vaultsync_client/features/sync/domain/notification_provider.dart';
+import 'package:vaultsync_client/features/sync/domain/notification_models.dart';
 
 class MockSyncService extends Mock implements SyncService {}
 class MockSystemPathService extends Mock implements SystemPathService {}
+class MockApiClient extends Mock implements ApiClient {}
+class MockNotificationLog extends Mock implements NotificationLogNotifier {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockSyncService mockSyncService;
   late MockSystemPathService mockPathService;
+  late MockApiClient mockApiClient;
+  late MockNotificationLog mockNotificationLog;
   late ProviderContainer container;
 
   setUp(() {
     HttpOverrides.global = null;
     mockSyncService = MockSyncService();
     mockPathService = MockSystemPathService();
+    mockApiClient = MockApiClient();
+    mockNotificationLog = MockNotificationLog();
 
-    // Register stubs up-front so they're available regardless of async handler timing.
+    // Register stubs up-front
+    when(() => mockApiClient.getBaseUrl()).thenAnswer((_) async => 'http://test.cloud');
+    
     when(() => mockPathService.getAllSystemPaths())
         .thenAnswer((_) async => {'ps2': '/path/to/ps2'});
     when(() => mockPathService.getEffectivePath(any()))
         .thenAnswer((_) async => '/path/to/system');
+        
     when(() => mockSyncService.runSync(
           onProgress: any(named: 'onProgress'),
           onError: any(named: 'onError'),
@@ -42,13 +56,13 @@ void main() {
       overrides: [
         syncServiceProvider.overrideWith((ref) => mockSyncService),
         systemPathServiceProvider.overrideWith((ref) => mockPathService),
+        apiClientProvider.overrideWithValue(mockApiClient),
+        notificationLogProvider.overrideWith((ref) => mockNotificationLog),
         isOnlineProvider.overrideWith((ref) => true),
       ],
     );
   });
 
-  // Async tearDown ensures in-flight handlers (drained by service.stop()) finish
-  // before the container is disposed, preventing _ref.read() on a dead container.
   tearDown(() async {
     container.dispose();
   });
@@ -89,12 +103,21 @@ void main() {
     await service.start(port: 0);
     final port = service.port;
 
+    final completer = Completer<void>();
+    when(() => mockSyncService.runSync(
+          onProgress: any(named: 'onProgress'),
+          ignoreConnectivity: any(named: 'ignoreConnectivity'),
+        )).thenAnswer((_) async {
+          completer.complete();
+        });
+
     try {
-      final response = await http.post(Uri.parse('http://127.0.0.1:$port/sync'));
+      final response = await http.post(Uri.parse('http://127.0.0.1:$port/sync?ignoreConnectivity=true'));
       expect(response.statusCode, 200);
+      
+      // Wait for the fire-and-forget sync to trigger
+      await completer.future.timeout(const Duration(seconds: 5));
     } finally {
-      // stop() drains _activeHandlers including the _triggerSync() task,
-      // so the sync is guaranteed to have run by the time we verify below.
       await service.stop();
     }
 

@@ -1009,6 +1009,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Deployment failed: {error}'**
   String deployFailed(String error);
+
+  /// No description provided for @sectionEcosystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Ecosystem Integration'**
+  String get sectionEcosystem;
+
+  /// No description provided for @rommSyncTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'RomM Integration'**
+  String get rommSyncTitle;
+
+  /// No description provided for @rommSyncSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically push decrypted saves to your RomM server'**
+  String get rommSyncSubtitle;
+
+  /// No description provided for @rommUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'RomM Server URL'**
+  String get rommUrlLabel;
+
+  /// No description provided for @rommApiKeyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'RomM API Key'**
+  String get rommApiKeyLabel;
+
+  /// No description provided for @rommUrlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g., https://romm.example.com'**
+  String get rommUrlHint;
+
+  /// No description provided for @rommApiKeyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'rmm_...'**
+  String get rommApiKeyHint;
 }
 
 class _AppLocalizationsDelegate

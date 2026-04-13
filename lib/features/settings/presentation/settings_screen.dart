@@ -29,6 +29,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
   bool _useShizuku = false;
   bool _autoSyncOnExit = false;
   bool _periodicSync = false;
+  bool _rommSyncEnabled = false;
+  final _rommUrlController = TextEditingController();
+  final _rommApiKeyController = TextEditingController();
   bool _hasUsagePermission = false;
   bool _isDeploying = false;
   String _serverUrl = '';
@@ -45,6 +48,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
 
   @override
   void dispose() {
+    _rommUrlController.dispose();
+    _rommApiKeyController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -85,7 +90,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
       setState(() {
         _useShizuku = prefs.getBool('use_shizuku') ?? false;
         _autoSyncOnExit = prefs.getBool('auto_sync_on_exit') ?? false;
+        _rommUrlController.text = prefs.getString('romm_url') ?? '';
+        _rommApiKeyController.text = prefs.getString('romm_api_key') ?? '';
         _periodicSync = prefs.getBool('periodic_sync') ?? false;
+        _rommSyncEnabled = prefs.getBool('romm_sync_enabled') ?? false;
         _serverUrl = url;
         _hasUsagePermission = usage;
         _conflictStrategy = prefs.getString('conflict_strategy') ?? 'ask';
@@ -150,6 +158,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
       }
     } else {
       developer.log('SCHEDULER: Background sync is not supported on this platform', name: 'VaultSync', level: 800);
+    }
+  }
+
+  Future<void> _toggleRommSync(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('romm_sync_enabled', value);
+    setState(() => _rommSyncEnabled = value);
+  }
+
+  Future<void> _saveRommSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('romm_url', _rommUrlController.text);
+    await prefs.setString('romm_api_key', _rommApiKeyController.text);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('RomM settings saved locally')),
+      );
     }
   }
 
@@ -286,6 +311,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
           ),
 
           if (Platform.isLinux) ..._buildDeckyBridgeSection(l10n),
+
+          _buildSection(l10n.sectionEcosystem),
+          SwitchListTile(
+            title: Text(l10n.rommSyncTitle),
+            subtitle: Text(l10n.rommSyncSubtitle),
+            value: _rommSyncEnabled,
+            onChanged: _toggleRommSync,
+            secondary: const Icon(Icons.hub_outlined),
+          ),
+          if (_rommSyncEnabled) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _rommUrlController,
+                decoration: InputDecoration(
+                  labelText: l10n.rommUrlLabel,
+                  hintText: l10n.rommUrlHint,
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.link),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _rommApiKeyController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: l10n.rommApiKeyLabel,
+                  hintText: l10n.rommApiKeyHint,
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.vpn_key),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ElevatedButton.icon(
+                onPressed: _saveRommSettings,
+                icon: const Icon(Icons.save),
+                label: const Text('Save RomM Settings'),
+              ),
+            ),
+          ],
 
           _buildSection(l10n.sectionAppearance),
           ListTile(

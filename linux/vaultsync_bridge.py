@@ -499,6 +499,66 @@ class BridgeDaemon:
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 
+    async def _handle_system_diff(self, request: web.Request) -> web.Response:
+        system_id: str = request.match_info["system_id"]
+        loop = asyncio.get_running_loop()
+        try:
+            self._client.reload()
+            prefs = read_prefs()
+            systems = get_systems(prefs)
+            if system_id not in systems:
+                return web.json_response({"error": f"System '{system_id}' not configured"}, status=404)
+            local_path = systems[system_id]
+            prefix = cloud_prefix_for(system_id, local_path)
+
+            def compute_diff():
+                remote_files = {f["path"]: f for f in self._client.get_remote_files(prefix)}
+                local_files: Dict[str, Dict] = {}
+                if os.path.isdir(local_path):
+                    for root, _, files in os.walk(local_path):
+                        for fname in files:
+                            if fname.endswith(".vstmp"):
+                                continue
+                            abs_path = os.path.join(root, fname)
+                            rel = os.path.relpath(abs_path, local_path).replace("\\", "/")
+                            cloud_rel = get_cloud_rel_path(system_id, rel)
+                            if not cloud_rel:
+                                continue
+                            local_files[f"{prefix}/{cloud_rel}"] = {
+                                "rel": cloud_rel,
+                                "size": os.path.getsize(abs_path),
+                                "mtime": int(os.path.getmtime(abs_path) * 1000),
+                            }
+
+                result = []
+                for key in sorted(set(local_files) | set(remote_files)):
+                    if not key.startswith(prefix + "/"):
+                        continue
+                    cloud_rel = key[len(prefix) + 1:]
+                    name = cloud_rel.split("/")[-1]
+                    lf = local_files.get(key)
+                    rf = remote_files.get(key)
+                    if lf and not rf:
+                        status = "local_only"
+                    elif rf and not lf:
+                        status = "remote_only"
+                    elif lf["size"] == rf["size"] and abs(lf["mtime"] - rf["updated_at"]) <= 2000:
+                        continue  # in sync — omit
+                    elif lf["mtime"] > rf["updated_at"]:
+                        status = "local_newer"
+                    else:
+                        status = "remote_newer"
+                    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+                    file_type = "state" if ext in ("state", "sta") else "save"
+                    result.append({"relPath": cloud_rel, "name": name, "status": status, "type": file_type})
+                return result
+
+            diff = await loop.run_in_executor(self._executor, compute_diff)
+            return web.json_response({"diff": diff})
+        except Exception as e:
+            log.error(f"system_diff error ({system_id}): {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
     async def _handle_sync(self, request: web.Request) -> web.Response:
         system_id: Optional[str] = request.match_info.get("system_id")
         if self._is_syncing:
@@ -553,6 +613,7 @@ class BridgeDaemon:
         app = web.Application()
         app.router.add_get("/status", self._handle_status)
         app.router.add_get("/systems", self._handle_systems)
+        app.router.add_get("/systems/{system_id}/diff", self._handle_system_diff)
         app.router.add_get("/conflicts", self._handle_conflicts)
         app.router.add_post("/sync", self._handle_sync)
         app.router.add_post("/sync/{system_id}", self._handle_sync)

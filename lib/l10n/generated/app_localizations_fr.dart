@@ -505,4 +505,26 @@ class AppLocalizationsFr extends AppLocalizations {
   String deployFailed(String error) {
     return 'Échec du déploiement : $error';
   }
+
+  @override
+  String get sectionEcosystem => 'Ecosystem Integration';
+
+  @override
+  String get rommSyncTitle => 'RomM Integration';
+
+  @override
+  String get rommSyncSubtitle =>
+      'Automatically push decrypted saves to your RomM server';
+
+  @override
+  String get rommUrlLabel => 'RomM Server URL';
+
+  @override
+  String get rommApiKeyLabel => 'RomM API Key';
+
+  @override
+  String get rommUrlHint => 'e.g., https://romm.example.com';
+
+  @override
+  String get rommApiKeyHint => 'rmm_...';
 }

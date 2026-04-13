@@ -59,6 +59,7 @@ class SyncDiffService {
           : (isRetroArch
               ? 'RetroArch'
               : (sid == 'gc' || sid == 'dolphin' ? 'GC' : systemId));
+      final actualPrefix = cloudPrefix.toLowerCase();
 
       List<dynamic> allRemoteFiles = [];
       try {
@@ -67,40 +68,36 @@ class SyncDiffService {
         // If we fail to fetch remote files, log it but proceed with empty remote files
         // so that local files can still be viewed and queued for upload.
       }
-
       final remoteFilesList = allRemoteFiles.where((f) {
         final path = f['path'] as String;
-        final parts = path.split('/');
-        if (parts.isEmpty) return false;
-        
-        final firstSegment = parts.first.toLowerCase();
-        final actualPrefix = cloudPrefix.toLowerCase();
-        
-        if (firstSegment != actualPrefix) return false;
-
-        final rel = path.startsWith('$cloudPrefix/') 
-            ? path.substring(cloudPrefix.length + 1) 
-            : path;
-        
         if (isSwitch) {
-          final relParts = rel.split('/');
-          if (relParts.isEmpty) return false;
-          final titleIdSegment = relParts.first;
+          final rel = path.startsWith('switch/') ? path.substring(7) : path;
+          final parts = rel.split('/');
+          if (parts.isEmpty) return false;
+          final titleIdSegment = parts.first;
           final isTitleId = RegExp(r'^[0-9A-Fa-f]{16}$').hasMatch(titleIdSegment);
-          final isSystemPath = ['nand', 'config', 'files', 'gpu_drivers']
-              .contains(titleIdSegment);
+          final isSystemPath = ['nand', 'config', 'files', 'gpu_drivers'].contains(titleIdSegment);
           return isTitleId && !isSystemPath;
         }
-        if (sid == '3ds' || sid == 'azahar') return rel.startsWith('saves/');
+        // For other systems, we trust the server's prefix filter was sufficient
+        // but we filter out obviously wrong things if necessary.
         return true;
       }).toList();
 
       final remoteFiles = <String, dynamic>{};
       for (var f in remoteFilesList) {
         final path = f['path'] as String;
-        final rel = path.startsWith('$cloudPrefix/') 
-            ? path.substring(cloudPrefix.length + 1) 
-            : path;
+        // Strip prefix if it exists (case-insensitive)
+        String rel = path;
+        if (path.toLowerCase().startsWith(actualPrefix + '/')) {
+          rel = path.substring(actualPrefix.length + 1);
+        } else {
+          // Check if it starts with systemId (in case it differs from cloudPrefix)
+          final sidPrefix = systemId.toLowerCase() + '/';
+          if (path.toLowerCase().startsWith(sidPrefix)) {
+            rel = path.substring(sidPrefix.length);
+          }
+        }
         remoteFiles[rel] = f;
       }
       final localList =
@@ -110,17 +107,27 @@ class SyncDiffService {
 
       final cloudRelPaths = <String>{
         ...localFiles.keys,
-        ...remoteFiles.keys.map((p) => p.startsWith('$cloudPrefix/') 
-            ? p.substring(cloudPrefix.length + 1) 
-            : p)
+        ...remoteFiles.keys
       };
       final results = <Map<String, dynamic>>[];
 
       for (final relPath in cloudRelPaths) {
         if (relPath.isEmpty) continue;
-        final remotePath = '$cloudPrefix/$relPath';
         final localInfo = localFiles[relPath];
-        final remoteInfo = remoteFiles[remotePath];
+        var remoteInfo = remoteFiles[relPath];
+        
+        // Secondary check: if we didn't find it by relPath, try looking up by full cloud path
+        // because some files might still be keyed by their absolute remote name in the server response.
+        if (remoteInfo == null) {
+           final fullCloudPath = '$cloudPrefix/$relPath';
+           remoteInfo = allRemoteFiles.firstWhere(
+             (f) => (f['path'] as String).toLowerCase() == fullCloudPath.toLowerCase(), 
+             orElse: () => null
+           );
+        }
+
+        final String remotePath = remoteInfo != null ? remoteInfo['path'] : '$cloudPrefix/$relPath';
+        
         String status = 'Synced';
         final type = (relPath.toLowerCase().contains('.state') ||
                 relPath.toLowerCase().endsWith('.png'))

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:meta/meta.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -7,6 +8,12 @@ import 'package:path_provider/path_provider.dart';
 class FileCache {
   static Database? _database;
   static Completer<Database>? _dbCompleter;
+
+  @visibleForTesting
+  static void setDatabase(Database db) {
+    _database = db;
+    _dbCompleter = Completer<Database>()..complete(db);
+  }
 
   Future<void> init() async {
     await database;

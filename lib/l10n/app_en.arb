@@ -235,5 +235,12 @@
         "type": "String"
       }
     }
-  }
+  },
+  "sectionEcosystem": "Ecosystem Integration",
+  "rommSyncTitle": "RomM Integration",
+  "rommSyncSubtitle": "Automatically push decrypted saves to your RomM server",
+  "rommUrlLabel": "RomM Server URL",
+  "rommApiKeyLabel": "RomM API Key",
+  "rommUrlHint": "e.g., https://romm.example.com",
+  "rommApiKeyHint": "rmm_..."
 }

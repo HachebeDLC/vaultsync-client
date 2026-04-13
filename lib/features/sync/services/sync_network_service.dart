@@ -15,6 +15,7 @@ class SyncNetworkService {
     final isDesktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
     
     Future<dynamic> run() async {
+      developer.log('SYNC NETWORK: Calling $methodName (RomM Key: ${args['rommKey'] != null})', name: 'VaultSync', level: 800);
       if (isDesktop) {
         if (methodName == 'uploadFileNative') {
           await DartNativeCrypto.uploadFileNative(args);
@@ -90,6 +91,9 @@ class SyncNetworkService {
     String? plainHash, 
     List<String>? localBlockHashes,
     bool force = false,
+    String? rommKey,
+    String? rommUrl,
+    String? rommApiKey,
   }) async {
     final Map? info = (Platform.isLinux || Platform.isWindows || Platform.isMacOS) 
         ? await DartNativeCrypto.getFileInfo(path)
@@ -133,7 +137,10 @@ class SyncNetworkService {
       'hash': hash, 
       'deviceName': deviceName, 
       'updatedAt': updatedAt, 
-      'dirtyIndices': dirtyIndices 
+      'dirtyIndices': dirtyIndices,
+      'rommKey': rommKey,
+      'rommUrl': rommUrl,
+      'rommApiKey': rommApiKey
     };
 
     await _executeNative('uploadFileNative', uploadArgs);

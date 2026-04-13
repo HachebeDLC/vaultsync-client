@@ -216,6 +216,31 @@ class DownloadManager(
         }
     }
 
+    fun listLocalBackups(relPath: String): List<Map<String, Any>> {
+        val safeName = relPath.replace("/", "_").replace("\\", "_")
+        val files = backupRoot.listFiles { f -> f.name.startsWith("${safeName}~") }
+            ?.sortedByDescending { it.lastModified() } ?: return emptyList()
+        return files.map { f ->
+            val timestamp = f.name.substringAfterLast("~").toLongOrNull() ?: f.lastModified()
+            mapOf("id" to f.name, "timestamp" to timestamp, "size" to f.length())
+        }
+    }
+
+    fun restoreLocalBackup(backupId: String, dest: File): Boolean {
+        // Guard against path traversal
+        if (backupId.contains("/") || backupId.contains("\\") || backupId.contains("..")) return false
+        val src = File(backupRoot, backupId)
+        if (!src.exists() || !src.isFile) return false
+        return try {
+            dest.parentFile?.mkdirs()
+            src.copyTo(dest, overwrite = true)
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("VaultSync", "restoreLocalBackup failed: ${e.message}", e)
+            false
+        }
+    }
+
     private fun processDownloadStream(inputStream: InputStream, output: FileChannel, secretKey: javax.crypto.spec.SecretKeySpec?, patchIndices: List<Int>?, fileSize: Long) {
         if (secretKey == null) {
             java.nio.channels.Channels.newChannel(inputStream).use { source ->

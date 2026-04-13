@@ -35,8 +35,13 @@ class SyncJobQueue {
     final prefs = await SharedPreferences.getInstance();
 
     String? rommKey;
+    String? rommUrl;
+    String? rommApiKey;
     if (prefs.getBool('romm_sync_enabled') ?? false) {
       rommKey = await getMasterKey();
+      rommUrl = prefs.getString('romm_url');
+      rommApiKey = prefs.getString('romm_api_key');
+      developer.log('QUEUE: Attaching RomM Key for background sync', name: 'VaultSync', level: 800);
     }
 
     for (final job in jobs) {
@@ -64,7 +69,10 @@ class SyncJobQueue {
             plainHash: job['hash'],
             localBlockHashes: blockHashes,
             rommKey: rommKey,
+            rommUrl: rommUrl,
+            rommApiKey: rommApiKey,
           );
+
         } else if (status == 'pending_download') {
 
           onProgress?.call(
