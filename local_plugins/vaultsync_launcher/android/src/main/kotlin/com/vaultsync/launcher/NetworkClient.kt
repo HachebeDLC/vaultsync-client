@@ -33,10 +33,13 @@ class NetworkClient {
         headers.forEach { (k, v) -> requestBuilder.addHeader(k, v) }
         
         client.newCall(requestBuilder.build()).execute().use { response ->
+            if (!response.isSuccessful) {
+                val errorBody = response.body?.string() ?: "No body"
+                android.util.Log.e("VaultSync", "HTTP ${response.code} Error Body: $errorBody")
+            }
             return response.code
         }
     }
-
     /**
      * Performs a POST request with a JSON body.
      */
