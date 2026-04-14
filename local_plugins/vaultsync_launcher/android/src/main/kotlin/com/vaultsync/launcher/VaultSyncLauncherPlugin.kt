@@ -50,7 +50,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     private var pendingResult: MethodChannel.Result? = null
 
     private val executor: ExecutorService = Executors.newCachedThreadPool()
-    private val syncExecutor: ExecutorService = Executors.newFixedThreadPool(4)
+    private val syncExecutor: ExecutorService = Executors.newFixedThreadPool(2)
 
     private var shizukuService: IShizukuService? = null
     private var shizukuServiceFuture = java.util.concurrent.CompletableFuture<IShizukuService>()
