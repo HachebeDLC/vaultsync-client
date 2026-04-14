@@ -144,8 +144,9 @@ class UploadManager(
 
     private fun postBlock(baseUrl: String, token: String?, remotePath: String, index: Int, data: ByteArray, offset: Int, length: Int, currentBlockSize: Int) {
         val encryptedOffset = index.toLong() * currentBlockSize
+        val encodedPath = java.net.URLEncoder.encode(remotePath, "UTF-8").replace("+", "%20")
         val headers = mapOf(
-            "x-vaultsync-path" to remotePath,
+            "x-vaultsync-path" to encodedPath,
             "x-vaultsync-index" to index.toString(),
             "x-vaultsync-offset" to encryptedOffset.toString()
         )
@@ -155,8 +156,9 @@ class UploadManager(
 
     private fun finalizeUpload(url: String, token: String?, path: String, hash: String, size: Long, updatedAt: Long, deviceName: String, rommKey: String?, rommUrl: String?, rommApiKey: String?) {
         val finalizeUrl = if (url.endsWith("/")) "${url}finalize" else "$url/finalize"
+        val encodedPath = java.net.URLEncoder.encode(path, "UTF-8").replace("+", "%20")
         val body = JSONObject().apply {
-            put("path", path)
+            put("path", encodedPath)
             put("hash", hash)
             put("size", size)
             put("updated_at", updatedAt)
