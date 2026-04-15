@@ -24,7 +24,9 @@ const SystemDetail: VFC<{ systemId: string; onBack: () => void }> = ({ systemId,
     try {
       const res = await getSystemDiff({ system_id: systemId });
       if (res?.diff) setDiff(res.diff);
-    } catch (_) {}
+    } catch (e) {
+      console.error("[VaultSync] fetchDiff failed:", e);
+    }
     setLoading(false);
   };
 
@@ -73,21 +75,27 @@ const Content: VFC<{}> = () => {
     try {
       const res = await getStatus();
       setStatus(res);
-    } catch (_) {}
+    } catch (e) {
+      console.error("[VaultSync] fetchStatus failed:", e);
+    }
   };
 
   const fetchSystems = async () => {
     try {
       const res = await getSystems();
       if (res?.systems) setSystems(res.systems);
-    } catch (_) {}
+    } catch (e) {
+      console.error("[VaultSync] fetchSystems failed:", e);
+    }
   };
 
   const fetchConflicts = async () => {
     try {
       const res = await getConflicts();
       if (res?.conflicts) setConflicts(res.conflicts);
-    } catch (_) {}
+    } catch (e) {
+      console.error("[VaultSync] fetchConflicts failed:", e);
+    }
   };
 
   useEffect(() => {
@@ -105,11 +113,12 @@ const Content: VFC<{}> = () => {
     setLoading(true);
     try {
       await triggerSyncCall({ system_id: systemId });
-    } catch (_) {}
-    setTimeout(() => {
-      fetchStatus();
-      setLoading(false);
-    }, 1000);
+    } catch (e) {
+      console.error("[VaultSync] triggerSync failed:", e);
+    }
+    await new Promise<void>(resolve => setTimeout(resolve, 1000));
+    fetchStatus();
+    setLoading(false);
   };
 
   if (status?.bridge_not_found) {

@@ -129,65 +129,87 @@ def decrypt_block(data: bytes, key: bytes) -> bytes:
 # Path resolver  (mirrors sync_path_resolver.dart)
 # ---------------------------------------------------------------------------
 
+def _cloud_rel_switch(parts: List[str]) -> str:
+    title_idx = next(
+        (i for i, p in enumerate(parts) if re.match(r"^0100[0-9A-Fa-f]{12}$", p)), -1
+    )
+    if title_idx == -1:
+        return ""
+    profile_re = re.compile(r"^[0-9A-Fa-f]{32}$")
+    if not any(profile_re.match(parts[i]) for i in range(title_idx)):
+        return ""
+    return "/".join(parts[title_idx:])
+
+
+def _cloud_rel_ps2(parts: List[str], local_rel: str) -> str:
+    anchors = {"memcards", "memcard", "sstates", "gamesettings"}
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i].lower() in anchors:
+            return "/".join(parts[i:])
+    return local_rel
+
+
+def _cloud_rel_wii(parts: List[str]) -> str:
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i].lower() == "title" and i < len(parts) - 1:
+            return "/".join(parts[i + 1:])
+    return ""
+
+
+def _cloud_rel_gc(parts: List[str], local_rel: str) -> str:
+    for i, p in enumerate(parts):
+        if p.lower() == "gc":
+            return "/".join(parts[i:])
+    return "GC/" + local_rel
+
+
+def _cloud_rel_dolphin(parts: List[str], local_rel: str) -> str:
+    if "/wii/title/" in local_rel.lower():
+        for i, p in enumerate(parts):
+            if p.lower() == "title" and i < len(parts) - 1:
+                return "/".join(parts[i + 1:])
+    for i, p in enumerate(parts):
+        if p.lower() == "gc":
+            return "/".join(parts[i:])
+    return local_rel
+
+
+def _cloud_rel_3ds(parts: List[str], local_rel: str) -> str:
+    try:
+        ti = parts.index("00040000")
+        if ti < len(parts) - 1:
+            return "saves/" + "/".join(parts[ti + 1:])
+    except ValueError:
+        pass
+    return "saves/" + local_rel
+
+
+def _cloud_rel_psp(parts: List[str], local_rel: str) -> str:
+    anchors = {"savedata", "ppsspp_state"}
+    for i, p in enumerate(parts):
+        if p.lower() in anchors:
+            return "/".join(parts[i:])
+    return local_rel
+
+
 def get_cloud_rel_path(system_id: str, local_rel: str) -> str:
     sid = system_id.lower()
     parts = local_rel.replace("\\", "/").split("/")
 
     if sid in ("switch", "eden"):
-        title_idx = next(
-            (i for i, p in enumerate(parts) if re.match(r"^0100[0-9A-Fa-f]{12}$", p)), -1
-        )
-        if title_idx == -1:
-            return ""
-        profile_re = re.compile(r"^[0-9A-Fa-f]{32}$")
-        if not any(profile_re.match(parts[i]) for i in range(title_idx)):
-            return ""
-        return "/".join(parts[title_idx:])
-
+        return _cloud_rel_switch(parts)
     if sid in ("ps2", "aethersx2", "nethersx2", "pcsx2", "duckstation"):
-        anchors = {"memcards", "memcard", "sstates", "gamesettings"}
-        for i in range(len(parts) - 1, -1, -1):
-            if parts[i].lower() in anchors:
-                return "/".join(parts[i:])
-        return local_rel  # no anchor — root-level file, sync as-is
-
+        return _cloud_rel_ps2(parts, local_rel)
     if sid == "wii":
-        for i in range(len(parts) - 1, -1, -1):
-            if parts[i].lower() == "title" and i < len(parts) - 1:
-                return "/".join(parts[i + 1:])
-        return ""
-
+        return _cloud_rel_wii(parts)
     if sid == "gc":
-        for i, p in enumerate(parts):
-            if p.lower() == "gc":
-                return "/".join(parts[i:])
-        return "GC/" + local_rel  # EmuDeck: root already at GC/ level
-
+        return _cloud_rel_gc(parts, local_rel)
     if sid == "dolphin":
-        if "/wii/title/" in local_rel.lower():
-            for i, p in enumerate(parts):
-                if p.lower() == "title" and i < len(parts) - 1:
-                    return "/".join(parts[i + 1:])
-        for i, p in enumerate(parts):
-            if p.lower() == "gc":
-                return "/".join(parts[i:])
-        return local_rel
-
+        return _cloud_rel_dolphin(parts, local_rel)
     if sid in ("3ds", "citra", "azahar"):
-        try:
-            ti = parts.index("00040000")
-            if ti < len(parts) - 1:
-                return "saves/" + "/".join(parts[ti + 1:])
-        except ValueError:
-            pass
-        return "saves/" + local_rel
-
+        return _cloud_rel_3ds(parts, local_rel)
     if sid in ("psp", "ppsspp"):
-        anchors = {"savedata", "ppsspp_state"}
-        for i, p in enumerate(parts):
-            if p.lower() in anchors:
-                return "/".join(parts[i:])
-
+        return _cloud_rel_psp(parts, local_rel)
     return local_rel
 
 
@@ -396,24 +418,59 @@ class SyncClient:
                 os.remove(tmp)
             raise
 
-    def sync_system(self, system_id: str, local_path: str, progress_cb=None) -> str:
-        def prog(msg):
-            if progress_cb:
-                progress_cb(msg)
-            log.info(f"[{system_id}] {msg}")
+    def _classify_file(
+        self, key: str, prefix: str, local_files: Dict[str, Dict], remote_files: Dict[str, Dict]
+    ) -> Optional[Dict]:
+        cloud_rel = key[len(prefix) + 1:]
+        name = cloud_rel.split("/")[-1]
+        lf = local_files.get(key)
+        rf = remote_files.get(key)
+        if lf and not rf:
+            status = "local_only"
+        elif rf and not lf:
+            status = "remote_only"
+        elif lf["size"] == rf["size"] and abs(lf["mtime"] - rf["updated_at"]) <= 2000:
+            return None  # in sync — omit
+        elif lf["mtime"] > rf["updated_at"]:
+            status = "local_newer"
+        else:
+            status = "remote_newer"
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        file_type = "state" if ext in ("state", "sta") else "save"
+        return {"relPath": cloud_rel, "name": name, "status": status, "type": file_type}
 
-        if not os.path.isdir(local_path):
-            return f"Path not found: {local_path}"
+    def compute_diff(
+        self, system_id: str, local_path: str, prefix: str
+    ) -> List[Dict]:
+        remote_files = {f["path"]: f for f in self.get_remote_files(prefix)}
+        local_files: Dict[str, Dict] = {}
+        if os.path.isdir(local_path):
+            for root, _, files in os.walk(local_path):
+                for fname in files:
+                    if fname.endswith(".vstmp"):
+                        continue
+                    abs_path = os.path.join(root, fname)
+                    rel = os.path.relpath(abs_path, local_path).replace("\\", "/")
+                    cloud_rel = get_cloud_rel_path(system_id, rel)
+                    if not cloud_rel:
+                        continue
+                    local_files[f"{prefix}/{cloud_rel}"] = {
+                        "rel": cloud_rel,
+                        "size": os.path.getsize(abs_path),
+                        "mtime": int(os.path.getmtime(abs_path) * 1000),
+                    }
+        result = []
+        for key in sorted(set(local_files) | set(remote_files)):
+            if not key.startswith(prefix + "/"):
+                continue
+            entry = self._classify_file(key, prefix, local_files, remote_files)
+            if entry is not None:
+                result.append(entry)
+        return result
 
-        prefix = cloud_prefix_for(system_id, local_path)
-        prog(f"Fetching remote files...")
-
-        try:
-            remote_files = {f["path"]: f for f in self.get_remote_files(prefix)}
-        except Exception as e:
-            return f"Failed to fetch remote files: {e}"
-
-        # Build local file map
+    def _scan_local_files(
+        self, system_id: str, local_path: str, prefix: str
+    ) -> Dict[str, Dict]:
         local_files: Dict[str, Dict] = {}
         for root, _, files in os.walk(local_path):
             for fname in files:
@@ -429,10 +486,15 @@ class SyncClient:
                     "size": os.path.getsize(abs_path),
                     "mtime": int(os.path.getmtime(abs_path) * 1000),
                 }
+        return local_files
 
-        errors = []
-
-        # Upload new / changed local files
+    def _upload_changed(
+        self,
+        local_files: Dict[str, Dict],
+        remote_files: Dict[str, Dict],
+        prog,
+    ) -> List[str]:
+        errors: List[str] = []
         for rkey, lf in local_files.items():
             rf = remote_files.get(rkey)
             if rf is None or lf["size"] != rf["size"] or abs(lf["mtime"] - rf["updated_at"]) > 2000:
@@ -442,8 +504,17 @@ class SyncClient:
                 except Exception as e:
                     errors.append(f"Upload {rkey}: {e}")
                     log.error(errors[-1])
+        return errors
 
-        # Download missing / changed remote files
+    def _download_missing(
+        self,
+        local_files: Dict[str, Dict],
+        remote_files: Dict[str, Dict],
+        prefix: str,
+        local_path: str,
+        prog,
+    ) -> List[str]:
+        errors: List[str] = []
         for rkey, rf in remote_files.items():
             if not rkey.startswith(prefix + "/"):
                 continue
@@ -458,6 +529,28 @@ class SyncClient:
             except Exception as e:
                 errors.append(f"Download {rkey}: {e}")
                 log.error(errors[-1])
+        return errors
+
+    def sync_system(self, system_id: str, local_path: str, progress_cb=None) -> str:
+        def prog(msg):
+            if progress_cb:
+                progress_cb(msg)
+            log.info(f"[{system_id}] {msg}")
+
+        if not os.path.isdir(local_path):
+            return f"Path not found: {local_path}"
+
+        prefix = cloud_prefix_for(system_id, local_path)
+        prog("Fetching remote files...")
+
+        try:
+            remote_files = {f["path"]: f for f in self.get_remote_files(prefix)}
+        except Exception as e:
+            return f"Failed to fetch remote files: {e}"
+
+        local_files = self._scan_local_files(system_id, local_path, prefix)
+        errors = self._upload_changed(local_files, remote_files, prog)
+        errors += self._download_missing(local_files, remote_files, prefix, local_path, prog)
 
         return "Sync complete" if not errors else f"Sync finished with {len(errors)} error(s)"
 
@@ -510,50 +603,10 @@ class BridgeDaemon:
                 return web.json_response({"error": f"System '{system_id}' not configured"}, status=404)
             local_path = systems[system_id]
             prefix = cloud_prefix_for(system_id, local_path)
-
-            def compute_diff():
-                remote_files = {f["path"]: f for f in self._client.get_remote_files(prefix)}
-                local_files: Dict[str, Dict] = {}
-                if os.path.isdir(local_path):
-                    for root, _, files in os.walk(local_path):
-                        for fname in files:
-                            if fname.endswith(".vstmp"):
-                                continue
-                            abs_path = os.path.join(root, fname)
-                            rel = os.path.relpath(abs_path, local_path).replace("\\", "/")
-                            cloud_rel = get_cloud_rel_path(system_id, rel)
-                            if not cloud_rel:
-                                continue
-                            local_files[f"{prefix}/{cloud_rel}"] = {
-                                "rel": cloud_rel,
-                                "size": os.path.getsize(abs_path),
-                                "mtime": int(os.path.getmtime(abs_path) * 1000),
-                            }
-
-                result = []
-                for key in sorted(set(local_files) | set(remote_files)):
-                    if not key.startswith(prefix + "/"):
-                        continue
-                    cloud_rel = key[len(prefix) + 1:]
-                    name = cloud_rel.split("/")[-1]
-                    lf = local_files.get(key)
-                    rf = remote_files.get(key)
-                    if lf and not rf:
-                        status = "local_only"
-                    elif rf and not lf:
-                        status = "remote_only"
-                    elif lf["size"] == rf["size"] and abs(lf["mtime"] - rf["updated_at"]) <= 2000:
-                        continue  # in sync — omit
-                    elif lf["mtime"] > rf["updated_at"]:
-                        status = "local_newer"
-                    else:
-                        status = "remote_newer"
-                    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-                    file_type = "state" if ext in ("state", "sta") else "save"
-                    result.append({"relPath": cloud_rel, "name": name, "status": status, "type": file_type})
-                return result
-
-            diff = await loop.run_in_executor(self._executor, compute_diff)
+            diff = await loop.run_in_executor(
+                self._executor,
+                lambda: self._client.compute_diff(system_id, local_path, prefix),
+            )
             return web.json_response({"diff": diff})
         except Exception as e:
             log.error(f"system_diff error ({system_id}): {e}")

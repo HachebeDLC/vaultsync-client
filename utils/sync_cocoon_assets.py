@@ -170,6 +170,35 @@ def build_new_system(cocoon_data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _build_vs_map(vs_dir: str) -> dict[str, Path]:
+    """Return a mapping of lower-cased system ID → VS JSON path for all files in *vs_dir*."""
+    vs_map: dict[str, Path] = {}
+    for f in Path(vs_dir).glob('*.json'):
+        try:
+            data = json.loads(f.read_text(encoding='utf-8'))
+            sid = data.get('system', {}).get('id', f.stem)
+            vs_map[sid.lower()] = f
+        except Exception:
+            pass
+    return vs_map
+
+
+def _match_vs_entry(
+    cocoon_data: dict[str, Any], vs_map: dict[str, Path]
+) -> tuple[Path | None, dict | None]:
+    """Return the matching VS (path, data) for a CocoonFE platform, or (None, None)."""
+    platform = cocoon_data.get('platform', {})
+    uid = (platform.get('uniqueId') or '').lower()
+    shortname = (platform.get('shortname') or '').lower()
+    match_path: Path | None = vs_map.get(uid) or vs_map.get(shortname)
+    if not match_path:
+        return None, None
+    try:
+        return match_path, json.loads(match_path.read_text(encoding='utf-8'))
+    except Exception:
+        return match_path, None
+
+
 def discover_platforms(
     cocoon_dir: str,
     vs_dir: str,
@@ -182,17 +211,7 @@ def discover_platforms(
         ``vs_data``   – parsed VS system dict (or None)
     """
     cocoon_path = Path(cocoon_dir)
-    vs_path = Path(vs_dir)
-
-    # Build a lookup: system_id → vs file path
-    vs_map: dict[str, Path] = {}
-    for f in vs_path.glob('*.json'):
-        try:
-            data = json.loads(f.read_text(encoding='utf-8'))
-            sid = data.get('system', {}).get('id', f.stem)
-            vs_map[sid.lower()] = f
-        except Exception:
-            pass
+    vs_map = _build_vs_map(vs_dir)
 
     results: list[dict[str, Any]] = []
     for cocoon_file in sorted(cocoon_path.glob('*.json')):
@@ -204,20 +223,11 @@ def discover_platforms(
 
         platform = cocoon_data.get('platform', {})
         uid = (platform.get('uniqueId') or '').lower()
-        shortname = (platform.get('shortname') or '').lower()
-
         if not uid:
             log.debug("Skipping non-platform file: %s", cocoon_file)
             continue
 
-        match_path: Path | None = vs_map.get(uid) or vs_map.get(shortname)
-        match_data: dict | None = None
-        if match_path:
-            try:
-                match_data = json.loads(match_path.read_text(encoding='utf-8'))
-            except Exception:
-                pass
-
+        match_path, match_data = _match_vs_entry(cocoon_data, vs_map)
         results.append({
             'cocoon': cocoon_data,
             'vs_path': str(match_path) if match_path else None,
