@@ -44,3 +44,7 @@ app.*.map.json
 .dart_tool/
 .gradle
 /out/
+.agents
+.claude
+.github
+CLAUDE.md 

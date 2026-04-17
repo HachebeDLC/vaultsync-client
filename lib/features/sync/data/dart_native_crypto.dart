@@ -296,6 +296,12 @@ class DartNativeCrypto {
     final response = await request.send().timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) throw Exception('Download failed: HTTP ${response.statusCode}');
 
+    // Auto-detect if server returned a plaintext file (e.g. ingested from RomM)
+    final isEncryptedHeader = response.headers['x-vaultsync-encrypted'] == 'true';
+    if (!isEncryptedHeader) {
+      keyBytes = null; // Do not attempt to decrypt
+    }
+
     final targetPath = localFilename.startsWith('/') ? localFilename : '$uriStr/$localFilename';
     final file = File(targetPath);
 
