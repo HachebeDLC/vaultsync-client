@@ -56,9 +56,7 @@ void main() {
           
       // Mock requeueJob so if it fails, it doesn't crash on unmocked method
       when(() => mockDb.requeueJob(any(), any(), any(), error: any(named: 'error')))
-          .thenAnswer((_) async {
-             print("Job was requeued. This means it threw an error!");
-          });
+          .thenAnswer((_) async {});
 
       // 3. Mock NetworkService uploadFile to succeed
       when(() => mockNetworkService.uploadFile(
@@ -100,31 +98,77 @@ void main() {
         rommApiKey: 'rmm_test123',
       )).called(1);
     });
-  });
-}
 
-  group('RomM Bidirectional Sync Download Trigger', () {
-    test('Client correctly identifies server-pulled RomM file and enqueues download', () async {
-      // Create DiffService with mocks
-      final mockApiClient = MockApiClient();
-      final mockConflictResolver = MockConflictResolver();
-      final mockPathResolver = MockSyncPathResolver();
-      final mockFileHashService = MockFileHashService();
-      final mockFileCache = MockFileCache();
-      final mockSwitchResolver = MockSwitchProfileResolver();
-      final testJobQueue = TestSyncJobQueue();
+    test('JobQueue executes download process for pending download job', () async {
+      SharedPreferences.setMockInitialValues({});
+      
+      // Setup mock DB returning a pending download job
+      when(() => mockDb.getPendingJobs()).thenAnswer((_) async => [
+        {
+          'id': 2,
+          'system_id': 'ps2',
+          'path': '/local/save.ps2',
+          'remote_path': 'ps2/save.ps2',
+          'rel_path': 'save.ps2',
+          'status': 'pending_download',
+          'hash': 'mock_hash_romm_pulled',
+          'size': 2048,
+          'last_modified': 2000000,
+        }
+      ]);
+      
+      when(() => mockDb.updateStatus(any(), any(), error: any(named: 'error')))
+          .thenAnswer((_) async {});
+          
+      when(() => mockDb.upsertState(
+          any(), any(), any(), any(), any(),
+          systemId: any(named: 'systemId'),
+          remotePath: any(named: 'remotePath'),
+          relPath: any(named: 'relPath'),
+        )).thenAnswer((_) async {});
 
-      final diffService = SyncDiffService(
-        mockApiClient,
-        mockConflictResolver,
-        mockDb,
-        mockPathResolver,
-        null,
+      // Mock NetworkService downloadFileNative to succeed
+      when(() => mockNetworkService.downloadFile(
+        any(), any(), any(),
+        systemId: any(named: 'systemId'),
+        fileSize: any(named: 'fileSize'),
+        onRecordSuccess: any(named: 'onRecordSuccess'),
+        remoteHash: any(named: 'remoteHash'),
+        updatedAt: any(named: 'updatedAt'),
+        localUri: any(named: 'localUri'),
+      )).thenAnswer((_) async {
+        return {
+          'size': 2048,
+          'lastModified': 2000000,
+        };
+      });
+
+      // Execute the job queue
+      await jobQueue.process(
+        'ps2',
+        '/local',
+        (msg) {},
+        getDeviceName: () async => 'TestDevice',
+        recordSyncSuccess: (p, sys, rel, h, ts) {},
+        getMasterKey: () async => 'mock_master_key_123',
       );
 
-      // Let's replace the diffService entirely with a mocked NetworkService call or the correct dependencies
-      // It looks like SyncDiffService takes 5 params based on the compilation error earlier:
-      // SyncDiffService(this._apiClient, this._conflictResolver, this._syncStateDb, this._pathResolver, [this._ref])
-      // Wait, let's confirm the exact signature.
+      // Verify the network service downloaded the file correctly
+      verify(() => mockNetworkService.downloadFile(
+        'ps2/save.ps2', '/local', 'save.ps2',
+        systemId: 'ps2',
+        fileSize: 2048,
+        onRecordSuccess: any(named: 'onRecordSuccess'),
+        remoteHash: 'mock_hash_romm_pulled',
+        updatedAt: 2000000,
+        localUri: '/local/save.ps2',
+      )).called(1);
+      
+      // Verify upsertState was called to set the status to synced
+      verify(() => mockDb.upsertState(
+        '/local/save.ps2', 2048, 2000000, 'mock_hash_romm_pulled', 'synced',
+        systemId: 'ps2', remotePath: 'ps2/save.ps2', relPath: 'save.ps2'
+      )).called(1);
     });
   });
+}

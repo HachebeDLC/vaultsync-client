@@ -74,7 +74,7 @@ class DownloadManager(
                     return@execute
                 }
                 
-                val secretKey = masterKey?.let {
+                var secretKey = masterKey?.let {
                     val keyBytes = android.util.Base64.decode(it, android.util.Base64.URL_SAFE).sliceArray(0 until 32)
                     javax.crypto.spec.SecretKeySpec(keyBytes, "AES")
                 }
@@ -88,6 +88,11 @@ class DownloadManager(
 
                 networkClient.openDownloadConnection(url, token, reqBody).use { connection ->
                     if (connection.responseCode != 200) throw Exception("Download failed: HTTP ${connection.responseCode}")
+
+                    val isEncryptedHeader = connection.getHeaderField("x-vaultsync-encrypted")
+                    if (isEncryptedHeader == "false") {
+                        secretKey = null
+                    }
 
                     when {
                         isShizukuPath(uriStr) -> {
