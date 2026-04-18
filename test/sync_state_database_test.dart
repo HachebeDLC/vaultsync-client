@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:vaultsync_client/features/sync/data/sync_state_database.dart';
-import 'dart:io';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

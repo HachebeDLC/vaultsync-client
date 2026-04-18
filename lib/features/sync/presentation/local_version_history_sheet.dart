@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../services/local_versioning_service.dart';
-import '../domain/sync_provider.dart';
 
 class LocalVersionHistorySheet extends ConsumerStatefulWidget {
   final String systemId;

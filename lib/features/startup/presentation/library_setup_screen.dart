@@ -102,7 +102,7 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
           bool shouldOverride = currentPath == null;
           final isEmuDeckRoute = mappedEmuId != null && p != null && p.toLowerCase().contains('emulation/saves');
 
-          if (!shouldOverride && isEmuDeckRoute && !(currentPath?.toLowerCase().contains('emulation/saves') ?? false)) {
+          if (!shouldOverride && isEmuDeckRoute && !(currentPath.toLowerCase().contains('emulation/saves') ?? false)) {
             shouldOverride = true;
           }
           
@@ -124,9 +124,7 @@ class _LibrarySetupScreenState extends ConsumerState<LibrarySetupScreen> {
               selectedEmu = supportedEmus.where((e) => e.uniqueId == mappedEmuId).firstOrNull;
             }
             
-            if (selectedEmu == null) {
-              selectedEmu = supportedEmus.firstWhere((e) => e.defaultEmulator, orElse: () => supportedEmus.isNotEmpty ? supportedEmus.first : sysConf.emulators.first);
-            }
+            selectedEmu ??= supportedEmus.firstWhere((e) => e.defaultEmulator, orElse: () => supportedEmus.isNotEmpty ? supportedEmus.first : sysConf.emulators.first);
             
             await service.setSystemEmulator(sid, selectedEmu.uniqueId);
             

@@ -226,6 +226,23 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 val packages = call.argument<List<String>>("packages") ?: emptyList()
                 result.success(automationEngine.getRecentlyClosedEmulator(packages))
             }
+            "listLibraryNative" -> {
+                val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
+                executor.execute {
+                    try {
+                        android.util.Log.d("VaultSync", "listLibraryNative called for $uriStr")
+                        val svc = if (isShizukuPath(uriStr)) {
+                            try { getShizukuServiceSync() } catch (_: Exception) { null }
+                        } else null
+                        val list = fileScanner.listLibraryNative(Uri.parse(uriStr), svc)
+                        android.util.Log.d("VaultSync", "listLibraryNative returning ${list.length()} items for $uriStr")
+                        mainHandler.post { result.success(list.toString()) }
+                    } catch (e: Exception) {
+                        android.util.Log.e("VaultSync", "listLibraryNative error: ${e.message}")
+                        mainHandler.post { result.error("LIST_ERROR", e.message, null) }
+                    }
+                }
+            }
             "checkShizukuStatus" -> {
                 try {
                     val running = Shizuku.pingBinder()
@@ -266,13 +283,23 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                         val exists = when {
                             uriStr.startsWith("shizuku://") -> getShizukuServiceSync().getFileSize(getCleanPath(uriStr)) != -1L
                             uriStr.startsWith("content://") -> {
-                                val df = DocumentFile.fromSingleUri(ctx, Uri.parse(uriStr))
-                                df?.exists() == true
+                                val uri = Uri.parse(uriStr)
+                                // Attempt to parse as tree URI first, fallback to single URI
+                                val df = try {
+                                    DocumentFile.fromTreeUri(ctx, uri) ?: DocumentFile.fromSingleUri(ctx, uri)
+                                } catch (e: Exception) {
+                                    DocumentFile.fromSingleUri(ctx, uri)
+                                }
+                                val res = df?.exists() == true
+                                android.util.Log.d("VaultSync", "checkPathExists SAF df.exists() = $res for uri=$uriStr")
+                                res
                             }
                             else -> File(uriStr).exists()
                         }
+                        android.util.Log.d("VaultSync", "checkPathExists returning $exists for $uriStr")
                         mainHandler.post { result.success(exists) }
                     } catch (e: Exception) {
+                        android.util.Log.e("VaultSync", "checkPathExists error: ${e.message}")
                         mainHandler.post { result.success(false) }
                     }
                 }
@@ -282,9 +309,21 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 val extensions = call.argument<List<String>>("extensions") ?: emptyList()
                 executor.execute {
                     try {
-                        val uri = Uri.parse(uriStr)
-                        val docId = DocumentsContract.getDocumentId(uri)
-                        val hasExt = fileScanner.checkSafExtensionsRecursive(uri, docId, extensions, 0)
+                        val hasExt = when {
+                            uriStr.startsWith("shizuku://") -> {
+                                val svc = getShizukuServiceSync()
+                                val cleanPath = getCleanPath(uriStr)
+                                // We can implement a more efficient recursive check if needed,
+                                // but for now a simple depth-limited one is enough.
+                                checkShizukuExtensionsRecursive(svc, cleanPath, extensions, 0)
+                            }
+                            uriStr.startsWith("content://") -> {
+                                val uri = Uri.parse(uriStr)
+                                val docId = fileScanner.getDocIdSafely(uri)
+                                fileScanner.checkSafExtensionsRecursive(uri, docId, extensions, 0)
+                            }
+                            else -> checkLocalExtensionsRecursive(File(uriStr), extensions, 0)
+                        }
                         mainHandler.post { result.success(hasExt) }
                     } catch (e: Exception) {
                         mainHandler.post { result.success(false) }
@@ -707,6 +746,39 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     private fun getCleanPath(path: String): String = path.replace("shizuku://", "")
+
+    private fun checkShizukuExtensionsRecursive(svc: IShizukuService, path: String, extensions: List<String>, depth: Int): Boolean {
+        if (depth > FileScanner.MAX_EXTENSION_SCAN_DEPTH) return false
+        try {
+            val files = JSONArray(svc.listFileInfo(path))
+            for (i in 0 until files.length()) {
+                val f = files.getJSONObject(i)
+                val name = f.getString("name").lowercase()
+                if (f.getBoolean("isDirectory")) {
+                    val subPath = if (path.endsWith("/")) "$path$name" else "$path/$name"
+                    if (checkShizukuExtensionsRecursive(svc, subPath, extensions, depth + 1)) return true
+                } else {
+                    if (extensions.any { name.endsWith(".$it") }) return true
+                }
+            }
+        } catch (_: Exception) {}
+        return false
+    }
+
+    private fun checkLocalExtensionsRecursive(dir: File, extensions: List<String>, depth: Int): Boolean {
+        if (depth > FileScanner.MAX_EXTENSION_SCAN_DEPTH) return false
+        try {
+            dir.listFiles()?.forEach { file ->
+                val name = file.name.lowercase()
+                if (file.isDirectory) {
+                    if (checkLocalExtensionsRecursive(file, extensions, depth + 1)) return true
+                } else {
+                    if (extensions.any { name.endsWith(".$it") }) return true
+                }
+            }
+        } catch (_: Exception) {}
+        return false
+    }
 
     private fun handleCalculateBlockHashes(call: MethodCall, result: MethodChannel.Result) {
         val path = call.argument<String>("path") ?: return result.error("ARG_MISSING", "path missing", null)

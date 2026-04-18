@@ -72,6 +72,18 @@ class FileScanner(private val context: Context) {
             // DSi saves
             "dsx"
         )
+
+        /**
+         * Picks the candidate with the greatest mtime from a list of
+         * (name, mtime) pairs. Returns null if the list is empty. On ties,
+         * first-encountered wins (stable).
+         *
+         * Extracted as a pure helper from `findSwitchProfileId` so the
+         * selection rule can be unit-tested without SAF / DocumentFile.
+         */
+        fun pickBestProfileByMtime(candidates: List<Pair<String, Long>>): String? {
+            return candidates.maxByOrNull { it.second }?.first
+        }
     }
 
     private val safLock = Any()
@@ -93,7 +105,7 @@ class FileScanner(private val context: Context) {
         }
     }
 
-    private fun getDocIdSafely(uri: Uri): String {
+    fun getDocIdSafely(uri: Uri): String {
         return try {
             if (DocumentsContract.isDocumentUri(context, uri)) {
                 DocumentsContract.getDocumentId(uri)
@@ -179,13 +191,34 @@ class FileScanner(private val context: Context) {
         }
 
         // 'current' is now 0000000000000000; its direct children are the profile ID folders
+        val candidates = mutableListOf<DocumentFile>()
         current.listFiles().forEach { child ->
             if (child.isDirectory) {
                 val name = child.name ?: return@forEach
-                if (profileRegex.matches(name) && name != "00000000000000000000000000000000") return name
+                if (profileRegex.matches(name) && name != "00000000000000000000000000000000") {
+                    candidates.add(child)
+                }
             }
         }
-        return null
+        if (candidates.isEmpty()) return null
+        if (candidates.size == 1) return candidates[0].name
+
+        // Multiple non-zero profiles — pick the one whose subtree was most
+        // recently touched (mirrors Argosy's SwitchSaveHandler.findActiveProfileFolder).
+        val scored = candidates.mapNotNull { c ->
+            val name = c.name ?: return@mapNotNull null
+            name to newestMtimeUnder(c)
+        }
+        return pickBestProfileByMtime(scored)
+    }
+
+    private fun newestMtimeUnder(dir: DocumentFile): Long {
+        var newest = dir.lastModified()
+        for (child in dir.listFiles()) {
+            val m = if (child.isDirectory) newestMtimeUnder(child) else child.lastModified()
+            if (m > newest) newest = m
+        }
+        return newest
     }
 
     fun getOrCreateDirectory(parent: DocumentFile, name: String): DocumentFile {
@@ -626,6 +659,63 @@ class FileScanner(private val context: Context) {
                 put("isDirectory", file.isDirectory)
             })
         }
+        return results
+    }
+
+    fun listLibraryNative(
+        uri: Uri,
+        shizukuService: IShizukuService?
+    ): JSONArray {
+        val results = JSONArray()
+        val uriStr = uri.toString()
+
+        try {
+            when {
+                uriStr.startsWith("shizuku://") -> {
+                    val svc = shizukuService ?: return results
+                    val cleanPath = uriStr.replace("shizuku://", "")
+                    val files = JSONArray(svc.listFileInfo(cleanPath))
+                    for (i in 0 until files.length()) {
+                        val f = files.getJSONObject(i)
+                        results.put(JSONObject().apply {
+                            put("name", f.getString("name"))
+                            put("isDirectory", f.getBoolean("isDirectory"))
+                            put("uri", "shizuku://${if (cleanPath.endsWith("/")) cleanPath else "$cleanPath/"}${f.getString("name")}")
+                        })
+                    }
+                }
+                uriStr.startsWith("content://") -> {
+                    android.util.Log.d("VaultSync", "listLibraryNative: using SAF for $uriStr")
+                    val rootDoc = DocumentFile.fromTreeUri(context, uri)
+                    if (rootDoc == null) {
+                        android.util.Log.w("VaultSync", "listLibraryNative: fromTreeUri returned null")
+                        return results
+                    }
+                    val files = rootDoc.listFiles()
+                    android.util.Log.d("VaultSync", "listLibraryNative: found ${files.size} files in SAF root")
+                    files.forEach { file ->
+                        results.put(JSONObject().apply {
+                            put("name", file.name ?: "unknown")
+                            put("isDirectory", file.isDirectory)
+                            put("uri", file.uri.toString())
+                        })
+                    }
+                }
+                else -> {
+                    val dir = File(uriStr)
+                    dir.listFiles()?.forEach { file ->
+                        results.put(JSONObject().apply {
+                            put("name", file.name)
+                            put("isDirectory", file.isDirectory)
+                            put("uri", file.absolutePath)
+                        })
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("VaultSync", "listLibraryNative failed for $uri: ${e.message}")
+        }
+
         return results
     }
 

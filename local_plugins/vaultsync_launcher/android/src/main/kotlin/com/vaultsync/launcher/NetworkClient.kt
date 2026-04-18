@@ -63,6 +63,8 @@ class NetworkClient {
      * Wrapper for a download response to maintain API compatibility.
      */
     class DownloadConnection(val responseCode: Int, val inputStream: InputStream, private val response: Response) : AutoCloseable {
+        fun getHeaderField(name: String): String? = response.header(name)
+
         override fun close() {
             response.close()
         }

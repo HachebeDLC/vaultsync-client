@@ -5,7 +5,6 @@ import '../services/conflict_resolver.dart';
 import '../services/sync_path_resolver.dart';
 import '../domain/notification_provider.dart';
 import '../../../core/services/api_client.dart';
-import '../../../core/services/api_client_provider.dart';
 
 // Providers are wired in sync_repository.dart to avoid circular imports.
 // Use syncDiffServiceProvider defined there.
@@ -89,11 +88,11 @@ class SyncDiffService {
         final path = f['path'] as String;
         // Strip prefix if it exists (case-insensitive)
         String rel = path;
-        if (path.toLowerCase().startsWith(actualPrefix + '/')) {
+        if (path.toLowerCase().startsWith('$actualPrefix/')) {
           rel = path.substring(actualPrefix.length + 1);
         } else {
           // Check if it starts with systemId (in case it differs from cloudPrefix)
-          final sidPrefix = systemId.toLowerCase() + '/';
+          final sidPrefix = '${systemId.toLowerCase()}/';
           if (path.toLowerCase().startsWith(sidPrefix)) {
             rel = path.substring(sidPrefix.length);
           }

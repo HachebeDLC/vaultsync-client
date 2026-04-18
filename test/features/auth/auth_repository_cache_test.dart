@@ -1,10 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vaultsync_client/features/auth/data/auth_repository.dart';
 import 'package:vaultsync_client/core/services/api_client.dart';
-import 'dart:convert';
-import 'package:flutter/services.dart';
 
 class MockApiClient extends Mock implements ApiClient {}
 

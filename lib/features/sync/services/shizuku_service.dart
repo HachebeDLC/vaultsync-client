@@ -2,7 +2,6 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:meta/meta.dart';
 
 final shizukuServiceProvider = Provider<ShizukuService>((ref) {
   return ShizukuService();

@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vaultsync_client/features/settings/presentation/settings_screen.dart';
-import 'package:vaultsync_client/core/localization/locale_provider.dart';
 import 'package:vaultsync_client/core/services/vaultsync_launcher.dart';
 import 'package:vaultsync_client/l10n/generated/app_localizations.dart';
 import 'package:mocktail/mocktail.dart';

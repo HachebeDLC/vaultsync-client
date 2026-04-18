@@ -12,7 +12,6 @@ import 'package:vaultsync_client/core/services/connectivity_provider.dart';
 import 'package:vaultsync_client/core/services/api_client_provider.dart';
 import 'package:vaultsync_client/core/services/api_client.dart';
 import 'package:vaultsync_client/features/sync/domain/notification_provider.dart';
-import 'package:vaultsync_client/features/sync/domain/notification_models.dart';
 
 class MockSyncService extends Mock implements SyncService {}
 class MockSystemPathService extends Mock implements SystemPathService {}

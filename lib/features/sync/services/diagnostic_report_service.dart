@@ -4,7 +4,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/services/api_client_provider.dart';
-import '../domain/notification_models.dart';
 import '../domain/notification_provider.dart';
 import 'system_path_service.dart';
 import 'shizuku_service.dart';

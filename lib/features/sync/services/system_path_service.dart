@@ -134,6 +134,42 @@ class SystemPathService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> _listEntities(String path) async {
+    if (Platform.isAndroid) {
+      try {
+        final String? jsonStr = await _platform.invokeMethod('listLibraryNative', {'uri': path});
+        if (jsonStr != null) {
+          final List<dynamic> list = json.decode(jsonStr);
+          return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      } catch (e) {
+        developer.log('PATH: Native list failed for $path', name: 'VaultSync', level: 900, error: e);
+      }
+      return [];
+    }
+    
+    final dir = Directory(path);
+    if (!dir.existsSync()) return [];
+    
+    return dir.listSync().map((e) => {
+      'name': p.basename(e.path),
+      'isDirectory': e is Directory,
+      'uri': e.path
+    }).toList();
+  }
+
+  Future<bool> _checkExists(String path, {bool isDirectory = true}) async {
+    if (Platform.isAndroid) {
+      try {
+        return await _platform.invokeMethod<bool>('checkPathExists', {'uri': path}) ?? false;
+      } catch (_) {
+        return false;
+      }
+    }
+    if (isDirectory) return Directory(path).existsSync();
+    return File(path).existsSync();
+  }
+
   /// Returns the configured path for a specific `systemId`.
   Future<String?> getSystemPath(String systemId) async {
     final prefs = await SharedPreferences.getInstance();
@@ -172,6 +208,15 @@ class SystemPathService {
            path = path.split('nand%2Fuser%2Fsave').first;
            if (path.endsWith('%2F')) path = path.substring(0, path.length - 3);
            await setSystemPath(systemId, path);
+        } else if (!path.startsWith('content://')) {
+          // Walk DOWN into /files if the user pointed at the emulator package
+          // dir. Mirrors Argosy's SwitchSaveHandler.resolveOverrideSaveBase.
+          final walked = await resolveSwitchPackageRootPosix(path);
+          if (walked != path) {
+            developer.log('PATH: Auto-walking Switch path into /files: $path → $walked', name: 'VaultSync', level: 800);
+            path = walked;
+            await setSystemPath(systemId, path);
+          }
         }
       }
     }
@@ -268,13 +313,34 @@ class SystemPathService {
   Future<void> setLibraryPath(String rawPath) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('rom_library_path', rawPath);
-    final path = rawPath.endsWith('/') ? rawPath.substring(0, rawPath.length - 1) : rawPath;
+    
     String? emuDeckSaves;
-    if (await Directory('$path/roms').exists() && await Directory('$path/saves').exists()) {
-      emuDeckSaves = '$path/saves';
-    } else if (path.toLowerCase().endsWith('/roms') && await Directory('${Directory(path).parent.path}/saves').exists()) {
-      emuDeckSaves = '${Directory(path).parent.path}/saves';
+    
+    final entities = await _listEntities(rawPath);
+    final hasRoms = entities.any((e) => e['isDirectory'] == true && e['name'].toString().toLowerCase() == 'roms');
+    final hasSaves = entities.any((e) => e['isDirectory'] == true && e['name'].toString().toLowerCase() == 'saves');
+    
+    if (hasRoms && hasSaves) {
+      emuDeckSaves = entities.firstWhere((e) => e['isDirectory'] == true && e['name'].toString().toLowerCase() == 'saves')['uri'];
+    } else {
+      // Check if the current path IS the 'roms' folder
+      final name = rawPath.endsWith('/') 
+          ? rawPath.substring(0, rawPath.length - 1).split(RegExp(r'[/\\]')).last 
+          : rawPath.split(RegExp(r'[/\\]')).last;
+          
+      if (name.toLowerCase() == 'roms') {
+        // We'd need to find the parent's 'saves' folder.
+        // It's much simpler to just convert to POSIX to do string manipulation for parent lookup.
+        final posix = _convertToPosix(rawPath);
+        final parent = p.dirname(posix);
+        final parentSaves = p.join(parent, 'saves');
+        if (await _checkExists(parentSaves)) {
+          // If we have a content URI, returning the POSIX parentSaves is okay as a fallback
+          emuDeckSaves = parentSaves; 
+        }
+      }
     }
+
     if (emuDeckSaves != null) {
       await prefs.setString('emudeck_saves_path', emuDeckSaves);
     } else {
@@ -365,23 +431,35 @@ class SystemPathService {
     return path;
   }
 
-  Future<bool> _hasValidRoms(Directory dir, List<String> validExtensions) async {
+  Future<bool> _hasValidRoms(String path, List<String> validExtensions) async {
     if (validExtensions.isEmpty) return false;
+    
+    if (Platform.isAndroid) {
+      try {
+        return await _platform.invokeMethod<bool>('hasFilesWithExtensions', {
+          'uri': path,
+          'extensions': validExtensions
+        }) ?? false;
+      } catch (e) {
+        developer.log('SCAN: Native extension check failed for $path', name: 'VaultSync', level: 900, error: e);
+      }
+    }
+
+    // Fallback for non-Android or if native fails
     final extSet = validExtensions.map((e) => e.toLowerCase()).toSet();
     try {
-      await for (final entity in dir.list(recursive: true)) {
-        if (entity is File) {
-          final fileName = entity.uri.pathSegments.where((s) => s.isNotEmpty).last.toLowerCase();
-          if (fileName.startsWith('.')) continue;
-          final ext = fileName.contains('.') ? fileName.split('.').last : '';
-          if (ext.isNotEmpty && extSet.contains(ext)) {
-            developer.log('SCAN: Found valid ROM: $fileName', name: 'VaultSync', level: 800);
-            return true;
-          }
+      final entities = await _listEntities(path);
+      for (final entity in entities) {
+        final name = entity['name'].toString().toLowerCase();
+        if (entity['isDirectory']) {
+          if (await _hasValidRoms(entity['uri'], validExtensions)) return true;
+        } else {
+          final ext = name.contains('.') ? name.split('.').last : '';
+          if (ext.isNotEmpty && extSet.contains(ext)) return true;
         }
       }
     } catch (e) {
-      developer.log('SCAN: Error checking ROMs in ${dir.path}', name: 'VaultSync', level: 900, error: e);
+      developer.log('SCAN: Error checking ROMs in $path', name: 'VaultSync', level: 900, error: e);
     }
     return false;
   }
@@ -391,27 +469,24 @@ class SystemPathService {
     final base = emuDeckSaves;
     final sid = systemId.toLowerCase();
     
-    String findFolder(String parent, String target) {
+    Future<String> findFolderAsync(String parent, String target) async {
       try {
-        final dir = Directory(parent);
-        if (!dir.existsSync()) return "$parent/$target";
-        
-        // True case-insensitive lookup: list entities and compare names
-        for (final entity in dir.listSync()) {
-          final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
-          if (name.toLowerCase() == target.toLowerCase()) return entity.path;
+        final entities = await _listEntities(parent);
+        for (final entity in entities) {
+          if (entity['name'].toString().toLowerCase() == target.toLowerCase()) {
+            return entity['uri'];
+          }
         }
       } catch (e) {
         developer.log('EMUDECK: Error finding folder $target in $parent', name: 'VaultSync', level: 900, error: e);
       }
-      // Fallback: return fabricated path if not found, preserving the requested casing
-      return "$parent/$target";
+      return p.join(parent, target);
     }
 
-    String wikiPath(String emulator, {String sub = "saves"}) {
-       final root = findFolder(base, emulator);
+    Future<String> wikiPath(String emulator, {String sub = "saves"}) async {
+       final root = await findFolderAsync(base, emulator);
        if (sub.isEmpty) return root;
-       return "$root/$sub";
+       return p.join(root, sub);
     }
 
     final Map? emuMap = _config?['emuMap'];
@@ -422,21 +497,20 @@ class SystemPathService {
       final sub = config['sub'] ?? "saves";
       
       if (sid == "switch" || sid == "eden") {
-        // EmuDeck Switch saves are usually at saves/yuzu/ (no extra 'saves' subfolder)
-        final yuzuRoot = wikiPath("yuzu", sub: "");
-        if (Directory(yuzuRoot).existsSync()) return { "path": yuzuRoot, "emulatorId": "switch.yuzu.desktop" };
-        return { "path": wikiPath("ryujinx", sub: ""), "emulatorId": "switch.ryujinx.desktop" };
+        final yuzuRoot = await wikiPath("yuzu", sub: "");
+        if (await _checkExists(yuzuRoot)) return { "path": yuzuRoot, "emulatorId": "switch.yuzu.desktop" };
+        return { "path": await wikiPath("ryujinx", sub: ""), "emulatorId": "switch.ryujinx.desktop" };
       }
       
-      final mainPath = wikiPath(emulator, sub: sub);
-      if (Directory(mainPath).existsSync() || (config['retroArchId'] ?? "").isEmpty) {
+      final mainPath = await wikiPath(emulator, sub: sub);
+      if (await _checkExists(mainPath) || (config['retroArchId'] ?? "").isEmpty) {
         return { "path": mainPath, "emulatorId": config['desktopId'] };
       }
-      return { "path": wikiPath("retroarch"), "emulatorId": config['retroArchId'] };
+      return { "path": await wikiPath("retroarch"), "emulatorId": config['retroArchId'] };
     }
 
     final Map? retroArchCores = _config?['retroArchCores'];
-    return { 'path': wikiPath('retroarch'), 'emulatorId': retroArchCores?[sid] ?? '' };
+    return { 'path': await wikiPath('retroarch'), 'emulatorId': retroArchCores?[sid] ?? '' };
   }
 
   /// Resolves the 'effective' path for Android, handling POSIX, SAF, and Shizuku abstraction.
@@ -491,45 +565,67 @@ class SystemPathService {
   Future<List<Map<String, String>>> scanLibrary(String inputPath) async {
     final results = <Map<String, String>>[];
     try {
-      String rawPath = _convertToPosix(inputPath);
-      final path = rawPath.endsWith('/') ? rawPath.substring(0, rawPath.length - 1) : rawPath;
-      final dir = Directory(path);
-      if (!await dir.exists()) {
+      final String path = inputPath;
+      developer.log('SCAN: Starting library scan for path: $path', name: 'VaultSync', level: 800);
+      final exists = await _checkExists(path);
+      developer.log('SCAN: Path exists: $exists', name: 'VaultSync', level: 800);
+      
+      if (!exists) {
         return [];
       }
-      Directory romsDir = dir;
-      Directory? emuDeckSaves;
-      if (await Directory('$path/roms').exists() && await Directory('$path/saves').exists()) {
-        romsDir = Directory('$path/roms');
-        emuDeckSaves = Directory('$path/saves');
-      } else if (path.toLowerCase().endsWith('/roms') && await Directory("${Directory(path).parent.path}/saves").exists()) {
-        emuDeckSaves = Directory("${Directory(path).parent.path}/saves");
+      
+      String romsDir = path;
+      String? emuDeckSaves;
+
+      final entities = await _listEntities(path);
+      developer.log('SCAN: Found ${entities.length} entities in root folder.', name: 'VaultSync', level: 800);
+      
+      final hasRoms = entities.any((e) => e['isDirectory'] == true && e['name'].toString().toLowerCase() == 'roms');
+      final hasSaves = entities.any((e) => e['isDirectory'] == true && e['name'].toString().toLowerCase() == 'saves');
+
+      if (hasRoms && hasSaves) {
+        romsDir = entities.firstWhere((e) => e['isDirectory'] == true && e['name'].toString().toLowerCase() == 'roms')['uri'];
+        emuDeckSaves = entities.firstWhere((e) => e['isDirectory'] == true && e['name'].toString().toLowerCase() == 'saves')['uri'];
+      } else {
+        final name = path.endsWith('/') 
+            ? path.substring(0, path.length - 1).split(RegExp(r'[/\\]')).last 
+            : path.split(RegExp(r'[/\\]')).last;
+            
+        if (name.toLowerCase() == 'roms') {
+          final posix = _convertToPosix(path);
+          final parent = p.dirname(posix);
+          final parentSaves = p.join(parent, 'saves');
+          if (await _checkExists(parentSaves)) {
+            emuDeckSaves = parentSaves;
+          }
+        }
       }
+
+      developer.log('SCAN: Resolved romsDir: $romsDir, emuDeckSaves: $emuDeckSaves', name: 'VaultSync', level: 800);
+
       final systems = await _emulatorRepository.loadSystems();
-      final List<FileSystemEntity> list = await romsDir.list().toList();
+      final list = await _listEntities(romsDir);
+      developer.log('SCAN: Found ${list.length} entities in romsDir.', name: 'VaultSync', level: 800);
       
       for (final system in systems) {
-        final matchingDirs = list.whereType<Directory>().where((d) {
-          final name = d.uri.pathSegments.where((s) => s.isNotEmpty).lastOrNull?.toLowerCase() ?? 
-                       d.path.split("/").last.toLowerCase();
-          
+        final matchingDirs = list.where((e) => e['isDirectory'] == true).where((e) {
+          final name = e['name'].toString().toLowerCase();
           return name == system.system.id.toLowerCase() || 
                  name == system.system.name.toLowerCase() || 
                  system.system.folders.map((f) => f.toLowerCase()).contains(name);
         });
+
         for (final d in matchingDirs) {
-          if (await _hasValidRoms(d, system.system.extensions)) {
+          final dirPath = d['uri'];
+          if (await _hasValidRoms(dirPath, system.system.extensions)) {
             if (emuDeckSaves != null) {
-              final config = await _getEmuDeckConfig(emuDeckSaves.path, system.system.id);
+              final config = await _getEmuDeckConfig(emuDeckSaves, system.system.id);
               results.add({
                 'systemId': system.system.id,
                 'path': config['path']!,
                 'emulatorId': config['emulatorId']!
               });
             } else {
-              // If not EmuDeck, we don't know where the saves are.
-              // We report the system is found but don't provide a path,
-              // allowing suggestSavePath() to handle it later.
               results.add({'systemId': system.system.id});
             }
           }
@@ -595,21 +691,92 @@ class SystemPathService {
     if (basePath.contains('nand/user/save')) {
       basePath = basePath.substring(0, basePath.indexOf('nand/user/save'));
     }
-    
-    final profileRegex = RegExp(r'^[0-9A-Fa-f]{32}$');
-    for (final base in ['$basePath/nand/user/save/0000000000000000', '$basePath/files/nand/user/save/0000000000000000']) {
-      final saveDir = Directory(base);
-      if (!await saveDir.exists()) continue;
-      try {
-        await for (final entity in saveDir.list()) {
-          if (entity is Directory) {
-            final name = entity.path.split('/').last;
-            if (profileRegex.hasMatch(name) && name != '00000000000000000000000000000000') return name;
-          }
-        }
-      } catch (_) {}
+
+    for (final base in [
+      '$basePath/nand/user/save/0000000000000000',
+      '$basePath/files/nand/user/save/0000000000000000'
+    ]) {
+      final picked = await pickActiveProfileFromZeroUserDir(Directory(base));
+      if (picked != null) return picked;
     }
     return null;
+  }
+
+  /// Walks DOWN a user-supplied Switch/Eden POSIX path to find the "files
+  /// root" (the directory one level above `nand/user/save`). Returns the
+  /// original path unchanged if no walk is needed or nothing matches.
+  ///
+  /// Mirrors the walk-down half of Argosy's
+  /// `SwitchSaveHandler.resolveOverrideSaveBase`.
+  static Future<String> resolveSwitchPackageRootPosix(String path) async {
+    final normalized =
+        path.endsWith('/') ? path.substring(0, path.length - 1) : path;
+
+    // If the path already is the files root, leave it alone.
+    if (await Directory('$normalized/nand/user/save').exists()) {
+      return normalized;
+    }
+    // If the path is the package dir (one above files root), walk down.
+    if (await Directory('$normalized/files/nand/user/save').exists()) {
+      return '$normalized/files';
+    }
+    return normalized;
+  }
+
+  /// Picks the active Switch profile ID from a `0000000000000000` directory.
+  ///
+  /// Mirrors Argosy's `SwitchSaveHandler.findActiveProfileFolder` mtime
+  /// fallback: if exactly one non-zero profile exists, it wins; otherwise the
+  /// one with the most-recently-touched subtree is picked. Exposed at
+  /// library-level for unit testing.
+  static Future<String?> pickActiveProfileFromZeroUserDir(
+      Directory zeroUserDir) async {
+    if (!await zeroUserDir.exists()) return null;
+
+    final profileRegex = RegExp(r'^[0-9A-Fa-f]{32}$');
+    final candidates = <Directory>[];
+    try {
+      await for (final entity in zeroUserDir.list()) {
+        if (entity is Directory) {
+          final name = entity.path.split('/').last;
+          if (profileRegex.hasMatch(name) &&
+              name != '00000000000000000000000000000000') {
+            candidates.add(entity);
+          }
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+    if (candidates.isEmpty) return null;
+    if (candidates.length == 1) return candidates.first.path.split('/').last;
+
+    var best = candidates.first;
+    var bestMtime = await _newestMtimeUnder(best);
+    for (var i = 1; i < candidates.length; i++) {
+      final m = await _newestMtimeUnder(candidates[i]);
+      if (m > bestMtime) {
+        bestMtime = m;
+        best = candidates[i];
+      }
+    }
+    return best.path.split('/').last;
+  }
+
+  static Future<int> _newestMtimeUnder(Directory dir) async {
+    var newest = 0;
+    try {
+      newest = (await dir.stat()).modified.millisecondsSinceEpoch;
+    } catch (_) {}
+    try {
+      await for (final e in dir.list(recursive: true)) {
+        try {
+          final m = (await e.stat()).modified.millisecondsSinceEpoch;
+          if (m > newest) newest = m;
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return newest;
   }
 
   Future<Map<String, String>> getRetroArchPaths() async {

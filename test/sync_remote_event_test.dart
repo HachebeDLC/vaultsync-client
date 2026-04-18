@@ -13,8 +13,6 @@ import 'package:vaultsync_client/features/sync/services/sync_path_resolver.dart'
 import 'package:vaultsync_client/features/sync/data/sync_state_database.dart';
 import 'package:vaultsync_client/features/sync/services/file_hash_service.dart';
 import 'package:vaultsync_client/features/sync/services/conflict_resolver.dart';
-import 'package:flutter/services.dart';
-import 'dart:io';
 
 class MockApiClient extends Mock implements ApiClient {}
 class MockSystemPathService extends Mock implements SystemPathService {}

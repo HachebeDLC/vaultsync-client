@@ -17,7 +17,7 @@ final lifecycleSyncServiceProvider = Provider<LifecycleSyncService>((ref) {
 class LifecycleSyncService with WidgetsBindingObserver {
   final Ref _ref;
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
-  bool _wasOffline = false;
+  final bool _wasOffline = false;
 
   LifecycleSyncService(this._ref) {
     WidgetsBinding.instance.addObserver(this);

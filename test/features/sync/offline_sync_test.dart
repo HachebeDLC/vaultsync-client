@@ -4,13 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vaultsync_client/features/sync/data/sync_repository.dart';
 import 'package:vaultsync_client/features/sync/data/sync_state_database.dart';
-import 'package:vaultsync_client/features/sync/services/sync_service.dart';
 import 'package:vaultsync_client/features/sync/services/sync_network_service.dart';
 import 'package:vaultsync_client/core/services/connectivity_provider.dart';
 import 'package:vaultsync_client/core/services/api_client.dart';
 import 'package:vaultsync_client/core/services/api_client_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'dart:io';
 
 class MockApiClient extends Mock implements ApiClient {}
 class MockSyncNetworkService extends Mock implements SyncNetworkService {}

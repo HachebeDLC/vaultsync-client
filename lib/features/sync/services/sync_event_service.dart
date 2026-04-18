@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:io';
 import 'package:flutter_client_sse/constants/sse_request_type_enum.dart';
 import 'package:flutter_client_sse/flutter_client_sse.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

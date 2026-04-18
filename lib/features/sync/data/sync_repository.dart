@@ -10,7 +10,6 @@ import 'package:path/path.dart' as p;
 import 'package:meta/meta.dart';
 import 'file_cache.dart';
 import 'dart_file_scanner.dart';
-import 'dart_native_crypto.dart';
 import 'sync_state_database.dart';
 import 'switch_profile_resolver.dart';
 import 'sync_diff_service.dart';
@@ -271,10 +270,10 @@ class SyncRepository {
         for (var f in fileList) {
           final path = f['path'] as String;
           String rel = path;
-          if (path.toLowerCase().startsWith(actualPrefix + '/')) {
+          if (path.toLowerCase().startsWith('$actualPrefix/')) {
             rel = path.substring(actualPrefix.length + 1);
           } else {
-            final sidPrefix = systemId.toLowerCase() + '/';
+            final sidPrefix = '${systemId.toLowerCase()}/';
             if (path.toLowerCase().startsWith(sidPrefix)) {
               rel = path.substring(sidPrefix.length);
             }
