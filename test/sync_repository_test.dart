@@ -29,6 +29,13 @@ class MockSyncJobQueue extends Mock implements SyncJobQueue {}
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   SharedPreferences.setMockInitialValues({});
+
+  setUpAll(() {
+    registerFallbackValue((SharedPreferences p, String s1, String s2, String s3, {int? localTs}) => false);
+    registerFallbackValue((SharedPreferences p, String s1, String s2, String s3, [int? ts]) {});
+    registerFallbackValue((String s1, String s2, List<String>? l) async => []);
+  });
+
   late SyncRepository repository;
   late MockApiClient mockApiClient;
   late MockSystemPathService mockPathService;

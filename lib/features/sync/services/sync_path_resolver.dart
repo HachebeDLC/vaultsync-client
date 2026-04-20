@@ -114,8 +114,16 @@ class SyncPathResolver {
         return parts.sublist(anchorIdx).join('/');
       }
       
-      // If we are in a package root (no folders yet) and it's not a known save folder, 
-      // ignore it to prevent syncing internal app files.
+      // Fallback: Route based on extension if we are syncing a subfolder directly (e.g. per-core)
+      final fileName = parts.last.toLowerCase();
+      if (fileName.endsWith('.state') || fileName.contains('.state') || fileName.endsWith('.s00') || RegExp(r'\.s\d+$').hasMatch(fileName)) {
+        return 'states/$localRelPath';
+      }
+      if (fileName.endsWith('.srm') || fileName.endsWith('.sav') || fileName.endsWith('.save')) {
+        return 'saves/$localRelPath';
+      }
+
+      // If we can't identify it, return empty to prevent syncing junk from RA root
       return '';
     }
 
@@ -143,13 +151,22 @@ class SyncPathResolver {
 
     // 1. RetroArch (Core-aware mapping)
     if (sid.contains('retroarch') || cloudRelPath.toLowerCase().startsWith('retroarch/')) {
-       final suffix = relPath;
+       var suffix = relPath;
+       
        final hasExplicitAnchor = lastScanList.any((f) {
           final p = (f['relPath'] as String).toLowerCase();
           return p.startsWith('saves/') || p.startsWith('states/');
        });
 
-       if (hasExplicitAnchor) return suffix;
+       // If the local scan list does NOT have anchors, but the cloud path DOES,
+       // it means we are syncing a subfolder directly. Strip the anchor to match local.
+       if (!hasExplicitAnchor) {
+         if (suffix.toLowerCase().startsWith('saves/')) {
+           suffix = suffix.substring(6);
+         } else if (suffix.toLowerCase().startsWith('states/')) {
+           suffix = suffix.substring(7);
+         }
+       }
 
        final hasFilesDir = lastScanList.any((f) => (f['relPath'] as String).startsWith('files/'));
        return hasFilesDir ? 'files/$suffix' : suffix;

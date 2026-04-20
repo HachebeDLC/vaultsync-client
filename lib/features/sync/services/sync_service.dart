@@ -274,13 +274,26 @@ class SyncService {
     }
 
     if (localRoot == null && originalPath.toLowerCase().startsWith('retroarch/')) {
-      systemId = 'RetroArch'; 
+      systemId = 'RetroArch';
       final rel = originalPath.substring(10);
       final raPaths = await _pathService.getRetroArchPaths();
-      localRoot = (rel.toLowerCase().contains('.state') || rel.toLowerCase().endsWith('.png')) 
-          ? raPaths['states'] 
-          : raPaths['saves'];
-      localRelPath = rel;
+      
+      // Determine if it should go to states or saves based on the new explicit path segments
+      // or fall back to extension-based routing.
+      if (rel.toLowerCase().startsWith('states/')) {
+        localRoot = raPaths['states'];
+        localRelPath = rel.substring(7);
+      } else if (rel.toLowerCase().startsWith('saves/')) {
+        localRoot = raPaths['saves'];
+        localRelPath = rel.substring(6);
+      } else {
+        // Fallback for legacy flat paths
+        final isState = rel.toLowerCase().contains('.state') || 
+                        rel.toLowerCase().endsWith('.png') ||
+                        RegExp(r'\.s\d+$').hasMatch(rel.toLowerCase());
+        localRoot = isState ? raPaths['states'] : raPaths['saves'];
+        localRelPath = rel;
+      }
     }
 
     if (systemId == null || localRoot == null || localRelPath == null) return null;
