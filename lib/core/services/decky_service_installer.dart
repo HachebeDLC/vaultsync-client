@@ -225,21 +225,25 @@ class DeckyServiceInstaller extends AsyncNotifier<DeckyBridgeStatus> {
     if (!Platform.isLinux) return 'Deployment only supported on Linux';
     try {
       final exeDir = File(Platform.resolvedExecutable).parent.path;
-      final pluginSrc = '$_isInsideFlatpak' == 'true' 
+      var pluginSrc = _isInsideFlatpak
           ? '/app/lib/vaultsync/decky_plugin'
           : '$exeDir/decky_plugin';
-      
+
       if (!Directory(pluginSrc).existsSync()) {
-        // Fallback for dev environment
         final devPath = '$exeDir/../../../vaultsync_decky';
         if (!Directory(devPath).existsSync()) {
           return 'Plugin source not found at $pluginSrc';
         }
+        pluginSrc = devPath;
       }
 
       final destDir = '$_home/homebrew/plugins/VaultSync';
-      
-      // 1. Ensure destination exists
+
+      // 1. Wipe any previous install before copying. Decky's plugin dir is
+      //    owned by the running plugin_loader user, and a half-written
+      //    previous deploy produces "plugin.json: File exists" on the next
+      //    cp/tar overlay because type/ownership can't be replaced in place.
+      await _run('rm', ['-rf', destDir]);
       await _run('mkdir', ['-p', destDir]);
 
       // 2. Copy files (recursive)
