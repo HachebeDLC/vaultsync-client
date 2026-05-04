@@ -70,7 +70,9 @@ class FileScanner(private val context: Context) {
             // Alternative PS1 memory cards (DuckStation/ePSXe)
             "mcx", "mc",
             // DSi saves
-            "dsx"
+            "dsx",
+            // PS2 Export format
+            "psu"
         )
 
         /**
@@ -323,6 +325,24 @@ class FileScanner(private val context: Context) {
         }
         if (sid == "wii") {
             return lowerRel.contains("title/0001000")
+        }
+
+        if (sid == "ps2" || sid == "aethersx2" || sid == "nethersx2" || sid == "pcsx2") {
+            if (fileName == "_pcsx2_index" || fileName == "_pcsx2_superblock") return true
+            if (lowerRel.contains(".ps2/")) {
+                // Inside a folder card
+                val ext = fileName.substringAfterLast('.', "").lowercase()
+                // Whitelist known PS2 folder card files and bin/psu
+                val allowedExtensions = setOf("bin", "psu", "sys", "ico")
+                if (allowedExtensions.contains(ext)) return true
+
+                // If it matches the directory name, it's likely the main save file
+                val parts = relPath.split("/")
+                if (parts.size >= 2) {
+                    val folderName = parts[parts.size - 2]
+                    if (fileName == folderName) return true
+                }
+            }
         }
 
         val ext = fileName.substringAfterLast('.', "").lowercase()
