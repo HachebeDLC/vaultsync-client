@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
+import 'package:meta/meta.dart';
 import 'package:pointycastle/export.dart' hide Digest;
 
 /// High-performance cryptographic engine providing hardware-accelerated
@@ -505,10 +506,30 @@ class DartNativeCrypto {
     }
   }
 
+  /// Test seam for [_decryptBlock]. The guard it carries is the difference
+  /// between a loud failure and months of silent corruption, so it is worth
+  /// pinning directly rather than through a whole download.
+  @visibleForTesting
+  static List<int> decryptBlockForTest(Uint8List block, Uint8List? keyBytes) =>
+      _decryptBlock(block, keyBytes);
+
   static List<int> _decryptBlock(Uint8List currentChunk, Uint8List? keyBytes,
       [PaddedBlockCipher? cipher]) {
     if (keyBytes != null) {
-      if (currentChunk.length < 7 + 16) return Uint8List.fromList(currentChunk);
+      // A key is only supplied when the server answered
+      // `x-vaultsync-encrypted: true`, so every block must carry the magic.
+      //
+      // Copying the block through unchanged here turned a missing master key
+      // into silent corruption: raw ciphertext written to disk as if it were
+      // the save. See CryptoEngine.decryptBlock for the same guard on Android
+      // and for what it cost before it was added.
+      const minimumBlock = 7 + 16 + 16; // magic + IV + one padded AES block
+      if (currentChunk.length < minimumBlock) {
+        throw Exception(
+          'Encrypted block too short: got ${currentChunk.length} bytes, need at '
+          'least $minimumBlock. The stream is not VaultSync ciphertext.',
+        );
+      }
       bool match = true;
       for (int i = 0; i < 7; i++) {
         if (currentChunk[i] != _magicBytes[i]) {
@@ -516,7 +537,13 @@ class DartNativeCrypto {
           break;
         }
       }
-      if (!match) return Uint8List.fromList(currentChunk);
+      if (!match) {
+        throw Exception(
+          'Missing $magicHeader header on an encrypted block. Either the master '
+          'key is absent — sign out and back in to re-derive it — or the stored '
+          'file mixes encrypted and plaintext blocks.',
+        );
+      }
 
       final iv = Uint8List.fromList(currentChunk.sublist(7, 7 + 16));
       final ciphertext = Uint8List.fromList(currentChunk.sublist(7 + 16));

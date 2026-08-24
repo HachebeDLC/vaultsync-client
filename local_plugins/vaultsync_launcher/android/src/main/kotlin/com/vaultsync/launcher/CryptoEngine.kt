@@ -93,12 +93,32 @@ class CryptoEngine {
     /**
      * Decrypts an encrypted block into a pre-allocated buffer.
      */
+    /**
+     * Decrypts one block. The caller only reaches this with a key when the
+     * server answered `x-vaultsync-encrypted: true`, so every block must carry
+     * the magic header.
+     *
+     * It used to copy the block through unchanged when the header was missing
+     * or the block was too short. That turned a missing master key into silent
+     * corruption: the raw ciphertext was written to disk as if it were the
+     * save. It went unnoticed for months — PS2 memory cards on one device
+     * ended up 39 bytes too long (magic + IV + padding) and unreadable by the
+     * emulator, and a delta upload later patched plaintext blocks over
+     * encrypted ones, leaving blobs no device could download.
+     *
+     * Failing here is the point: an unreadable download is recoverable, a
+     * silently corrupted save is not.
+     */
     fun decryptBlock(encryptedBlock: ByteArray, encryptedLength: Int, secretKey: SecretKeySpec, output: ByteArray): Int {
-        if (encryptedLength < 7) {
-            System.arraycopy(encryptedBlock, 0, output, 0, encryptedLength)
-            return encryptedLength
+        // Magic (7) + IV (16) + at least one padded AES block (16).
+        val minimumBlock = 7 + IV_SIZE + PADDING_SIZE
+        if (encryptedLength < minimumBlock) {
+            throw IllegalStateException(
+                "Encrypted block too short: got $encryptedLength bytes, need at least $minimumBlock. " +
+                "The stream is not VaultSync ciphertext."
+            )
         }
-        
+
         // Zero-allocation magic check
         var match = true
         for (i in 0 until 7) {
@@ -107,12 +127,15 @@ class CryptoEngine {
                 break
             }
         }
-        
+
         if (!match) {
-            System.arraycopy(encryptedBlock, 0, output, 0, encryptedLength)
-            return encryptedLength
+            throw IllegalStateException(
+                "Missing $MAGIC_HEADER header on an encrypted block. Either the master key is " +
+                "absent — sign out and back in to re-derive it — or the stored file mixes " +
+                "encrypted and plaintext blocks."
+            )
         }
-        
+
         val iv = ByteArray(IV_SIZE)
         System.arraycopy(encryptedBlock, 7, iv, 0, IV_SIZE)
         val ivSpec = IvParameterSpec(iv)

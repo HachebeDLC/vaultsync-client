@@ -110,6 +110,21 @@ class SyncNetworkService {
     );
 
     final masterKey = await _apiClient.getEncryptionKey();
+    // Without the key the native uploader writes plaintext, and it does so
+    // without a word. That is how 20 unencrypted blobs reached the server from
+    // one device whose key had gone missing from secure storage — and worse,
+    // a delta upload patched plaintext blocks over encrypted ones, leaving
+    // files no device could download at all.
+    //
+    // The key is derived from the password at login, so a null here means the
+    // session is broken, not that the user opted out of encryption. Refusing
+    // is the safe answer: the file stays on the device, intact.
+    if (masterKey == null) {
+      throw Exception(
+        'Master key unavailable — refusing to upload $remotePath unencrypted. '
+        'Sign out and back in to re-derive it.',
+      );
+    }
     final baseUrl = await _apiClient.getBaseUrl();
     final token = await _apiClient.getToken();
 
