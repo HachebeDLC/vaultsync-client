@@ -46,6 +46,25 @@ class _BootScreenState extends ConsumerState<BootScreen> {
       if (!mounted) return;
 
       if (ref.read(authProvider.notifier).isAuthenticated) {
+        // A token can outlive the master key. Reinstalling the APK leaves the
+        // auth token readable but drops the key from secure storage, and the
+        // app carried on as if nothing had happened: uploads silently went up
+        // as plaintext and downloads were written as raw ciphertext. On one
+        // device that produced PS2 memory cards 39 bytes too long — magic, IV
+        // and padding — which the emulator reported as damaged saves.
+        //
+        // The key is derived from the password, so the only way back is a
+        // fresh login. Do it here rather than let sync discover it later.
+        if (await client.getEncryptionKey() == null) {
+          developer.log(
+              'BOOT: Session has a token but no master key — signing out so it can be re-derived',
+              name: 'VaultSync',
+              level: 1000);
+          await client.clearToken();
+          if (mounted) context.go('/auth');
+          return;
+        }
+
         final paths = await ref.read(systemPathServiceProvider).getAllSystemPaths();
         if (!mounted) return;
         
