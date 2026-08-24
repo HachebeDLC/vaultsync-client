@@ -819,6 +819,22 @@ class SystemPathService {
           await prefs.remove("saf_uri_$posixPath");
           return rawPath;
         }
+        // Covering the path is not enough — the grant also has to still exist.
+        // Reinstalling the APK drops every persisted URI permission while this
+        // mirror survives in prefs, so the app went on handing out a
+        // content:// URI it no longer held and every write failed with EACCES,
+        // once per file. Dropping the stale entry falls back to POSIX and lets
+        // ensureSafPermission ask for the folder again.
+        final stillGranted = await _platform
+            .invokeMethod<bool>('checkSafPermission', {'uri': persistedUri});
+        if (stillGranted != true) {
+          developer.log(
+              'PATH: Persisted SAF grant for $systemId is no longer held (reinstall?) — discarding: $persistedUri',
+              name: 'VaultSync',
+              level: 1000);
+          await prefs.remove("saf_uri_$posixPath");
+          return rawPath;
+        }
         developer.log(
             'PATH: Using persisted SAF URI for $systemId: $persistedUri',
             name: 'VaultSync',
