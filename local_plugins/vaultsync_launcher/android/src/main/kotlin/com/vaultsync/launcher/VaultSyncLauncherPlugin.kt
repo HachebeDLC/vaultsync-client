@@ -145,7 +145,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         methodChannel.setMethodCallHandler(null)
         automationEngine.stopMonitoring()
         connectivityMonitor.stopMonitoring()
-        powerManagerHelper.releasePowerLock()
+        powerManagerHelper.releaseAllOwnedByThisInstance()
         executor.shutdown()
         syncExecutor.shutdown()
         context = null

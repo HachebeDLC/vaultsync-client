@@ -212,7 +212,7 @@ void main() async {
   if (Platform.isAndroid || Platform.isIOS) {
     await Workmanager().initialize(
       callbackDispatcher,
-      isInDebugMode: true,
+      isInDebugMode: kDebugMode,
     );
   }
 

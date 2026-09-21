@@ -89,10 +89,12 @@ class BackgroundSyncService {
     }
   }
 
-  Future<void> startMonitoring() async {
+  Future<void> startMonitoring(
+      {Duration interval = const Duration(seconds: 15)}) async {
     if (Platform.isAndroid) {
       await _platform.invokeMethod('startMonitoring', {
         'packages': packageToSystem.keys.toList(),
+        'interval': interval.inMilliseconds,
       });
     }
   }
