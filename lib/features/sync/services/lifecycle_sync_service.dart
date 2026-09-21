@@ -2,13 +2,11 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/sync_provider.dart';
 import '../../../core/services/connectivity_provider.dart';
 import 'background_sync_service.dart';
 import 'sync_service.dart';
-import 'system_path_service.dart';
 
 final lifecycleSyncServiceProvider = Provider<LifecycleSyncService>((ref) {
   final service = LifecycleSyncService(ref);
@@ -18,7 +16,6 @@ final lifecycleSyncServiceProvider = Provider<LifecycleSyncService>((ref) {
 
 class LifecycleSyncService with WidgetsBindingObserver {
   final Ref _ref;
-  static const _platform = MethodChannel('com.vaultsync.app/launcher');
 
   LifecycleSyncService(this._ref) {
     WidgetsBinding.instance.addObserver(this);
@@ -62,44 +59,19 @@ class LifecycleSyncService with WidgetsBindingObserver {
         return;
       }
 
-      // Android: require usage stats permission to detect which emulator closed.
-      bool hasPermission = false;
+      // Android: the app process may have been dead for anything from
+      // seconds to hours (low-memory killer), so instead of the old 5-minute
+      // getRecentlyClosedEmulator window, catch up from the last checkpoint
+      // via usage-stats history. This also covers the case where the app
+      // simply resumed normally.
       if (Platform.isAndroid) {
-        hasPermission =
-            await _platform.invokeMethod('hasUsageStatsPermission') ?? false;
-      }
-      if (!hasPermission) return;
-
-      String? closedPackage;
-      if (Platform.isAndroid) {
-        closedPackage =
-            await _platform.invokeMethod('getRecentlyClosedEmulator', {
-          'packages': BackgroundSyncService.packageToSystem.keys.toList(),
-        });
-      }
-
-      if (closedPackage != null) {
-        final systemId = BackgroundSyncService.packageToSystem[closedPackage];
+        final handled =
+            await _ref.read(backgroundSyncServiceProvider).catchUpMissedExits();
         developer.log(
-          'LIFECYCLE: Detected recently active emulator $closedPackage. Triggering ${systemId ?? 'full'} sync.',
+          'LIFECYCLE: App resumed on Android. Catch-up handled $handled missed exit(s).',
           name: 'VaultSync',
           level: 800,
         );
-        if (systemId != null) {
-          final pathService = _ref.read(systemPathServiceProvider);
-          final path = await pathService.getEffectivePath(systemId);
-          final systems =
-              await pathService.getEmulatorRepository().loadSystems();
-          final config =
-              systems.where((s) => s.system.id == systemId).firstOrNull;
-          await _ref.read(syncProvider.notifier).syncSingleSystem(
-                systemId,
-                path,
-                ignoredFolders: config?.system.ignoredFolders,
-              );
-        } else {
-          await _ref.read(syncProvider.notifier).sync();
-        }
       }
     } catch (e) {
       developer.log('LIFECYCLE: Sync error',

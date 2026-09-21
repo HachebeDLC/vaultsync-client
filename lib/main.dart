@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/services/api_client_provider.dart';
 import 'core/services/api_client.dart';
@@ -23,6 +25,7 @@ import 'features/sync/presentation/system_detail_screen.dart';
 import 'features/sync/presentation/conflict_screen.dart';
 import 'features/sync/presentation/sync_history_screen.dart';
 import 'features/sync/services/sync_service.dart';
+import 'features/sync/services/background_sync_service.dart';
 import 'core/services/decky_bridge_service.dart';
 import 'features/sync/services/lifecycle_sync_service.dart';
 import 'core/utils/offline_banner.dart';
@@ -69,6 +72,13 @@ void callbackDispatcher() {
         // processQueueTask. This branch therefore did nothing at all — it
         // re-enqueued itself and returned, so the queue was never drained.
         await syncService.drainQueueNow();
+      } else if (task == 'exitCatchUp') {
+        // Periodic wake-up for exits missed while the process was dead
+        // (low-memory killer). Only checks usage-stats history and syncs
+        // the affected systems — must not also run a full sync.
+        final backgroundSyncService = container.read(backgroundSyncServiceProvider);
+        final handled = await backgroundSyncService.catchUpMissedExits();
+        developer.log('WORKER: exitCatchUp handled $handled missed exit(s)', name: 'VaultSync', level: 800);
       } else {
         // periodicSync / syncTask / generic — battery-efficient fast sync.
         await syncService.runSync(
@@ -238,6 +248,41 @@ class _VaultSyncAppState extends ConsumerState<VaultSyncApp> {
     ref.read(lifecycleSyncServiceProvider);
     if (Platform.isLinux) {
       ref.read(deckyBridgeServiceProvider).start();
+    }
+    if (Platform.isAndroid) {
+      // Fire-and-forget: exits may have been missed while the process was
+      // dead (low-memory killer), so catch up on process start rather than
+      // waiting for the user to resume the app or flip the settings toggle.
+      // Must not block startup.
+      unawaited(_startExitCatchUp());
+    }
+  }
+
+  Future<void> _startExitCatchUp() async {
+    final backgroundSyncService = ref.read(backgroundSyncServiceProvider);
+    try {
+      await backgroundSyncService.catchUpMissedExits();
+    } catch (e) {
+      developer.log('STARTUP: catchUpMissedExits failed', name: 'VaultSync', level: 900, error: e);
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('auto_sync_on_exit') ?? false) {
+        await backgroundSyncService.startMonitoring();
+        // Re-registering with `keep` is a cheap no-op if this task already
+        // exists from a previous launch/toggle — it just guarantees the
+        // wake-up survives a process restart where the toggle was never
+        // touched again.
+        await Workmanager().registerPeriodicTask(
+          'exit-catchup',
+          'exitCatchUp',
+          frequency: const Duration(minutes: 15),
+          existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+        );
+      }
+    } catch (e) {
+      developer.log('STARTUP: exit monitoring/catch-up registration failed', name: 'VaultSync', level: 900, error: e);
     }
   }
 

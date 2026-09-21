@@ -119,13 +119,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('auto_sync_on_exit', value);
     setState(() => _autoSyncOnExit = value);
-    
+
     if (value) {
        if (_hasUsagePermission) {
           ref.read(backgroundSyncServiceProvider).startMonitoring();
        }
+       // The live polling loop dies with the process (low-memory killer),
+       // so also register a periodic wake-up that catches up on missed
+       // exits from usage-stats history. See BackgroundSyncService.catchUpMissedExits.
+       if (Platform.isAndroid || Platform.isIOS) {
+         developer.log('SCHEDULER: Registering exit-catchup task (15 min)', name: 'VaultSync', level: 800);
+         await Workmanager().registerPeriodicTask(
+           'exit-catchup',
+           'exitCatchUp',
+           frequency: const Duration(minutes: 15),
+           existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+         );
+       }
     } else {
        ref.read(backgroundSyncServiceProvider).stopMonitoring();
+       if (Platform.isAndroid || Platform.isIOS) {
+         developer.log('SCHEDULER: Cancelling exit-catchup task', name: 'VaultSync', level: 800);
+         await Workmanager().cancelByUniqueName('exit-catchup');
+       }
     }
   }
 

@@ -117,6 +117,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         val ctx = binding.applicationContext
         context = ctx
+        android.util.Log.i("VaultSync", "🔌 PLUGIN: attached instance=${System.identityHashCode(this)} pid=${android.os.Process.myPid()} thread=${Thread.currentThread().name}")
         methodChannel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
         methodChannel.setMethodCallHandler(this)
         
@@ -142,6 +143,7 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        android.util.Log.i("VaultSync", "🔌 PLUGIN: detached instance=${System.identityHashCode(this)} pid=${android.os.Process.myPid()}")
         methodChannel.setMethodCallHandler(null)
         automationEngine.stopMonitoring()
         connectivityMonitor.stopMonitoring()
@@ -225,6 +227,11 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             "getRecentlyClosedEmulator" -> {
                 val packages = call.argument<List<String>>("packages") ?: emptyList()
                 result.success(automationEngine.getRecentlyClosedEmulator(packages))
+            }
+            "getEmulatorExitsSince" -> {
+                val packages = call.argument<List<String>>("packages") ?: emptyList()
+                val sinceMs = (call.argument<Any>("sinceMs") as? Number)?.toLong() ?: 0L
+                result.success(automationEngine.getEmulatorExitsSince(packages, sinceMs))
             }
             "listLibraryNative" -> {
                 val uriStr = call.argument<String>("uri") ?: return result.error("ARG_MISSING", "uri missing", null)
