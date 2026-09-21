@@ -88,20 +88,26 @@ class SyncNetworkService {
     required String relPath,
     required String deviceName,
     required Function(String, String, String, int?) onRecordSuccess,
-    String? plainHash, 
+    String? plainHash,
     List<String>? localBlockHashes,
     bool force = false,
     String? rommKey,
     String? rommUrl,
     String? rommApiKey,
+    // Overrides the uploaded file's mtime-derived `updatedAt`. Used by the
+    // RomM ingest path: the byte source is a throwaway temp file whose own
+    // mtime means nothing — the timestamp that matters is RomM's
+    // `romm_updated_at`, so the caller passes it in rather than us reading
+    // whatever the OS just stamped the temp file with.
+    int? updatedAtOverride,
   }) async {
-    final Map? info = (Platform.isLinux || Platform.isWindows || Platform.isMacOS) 
+    final Map? info = (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
         ? await DartNativeCrypto.getFileInfo(path)
         : await _platform.invokeMapMethod('getFileInfo', {'uri': path});
 
     if (info == null) return;
     final int size = info['size'];
-    final int updatedAt = info['lastModified'] ?? 0;
+    final int updatedAt = updatedAtOverride ?? (info['lastModified'] ?? 0);
 
     final String hash = plainHash ?? (
       (Platform.isLinux || Platform.isWindows || Platform.isMacOS)

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/api_client.dart';
 import '../../../core/services/api_client_provider.dart';
 import '../data/sync_repository.dart';
+import 'romm_ingest_service.dart';
 import 'sync_service.dart';
 import 'system_path_service.dart';
 
@@ -137,7 +138,7 @@ class SyncEventService {
     _reconnectTimer = Timer(delay, () => startListening());
   }
 
-  void _handleEvent(String data) {
+  Future<void> _handleEvent(String data) async {
     // The SSE library may surface a 401 response body as event data.
     if (data.contains('Invalid or expired token') || data.contains('Could not validate credentials')) {
       _handle401();
@@ -147,6 +148,32 @@ class SyncEventService {
       final Map<String, dynamic> payload = json.decode(data);
       if (payload['type'] == 'test_notification') {
         developer.log('SSE TEST: ${payload['message']}', name: 'VaultSync', level: 800);
+        return;
+      }
+      if (payload['type'] == 'romm_save_newer') {
+        // The server re-sends this every 10 minutes while its copy stays
+        // older than RomM's, so handling must be idempotent — RommIngestService
+        // dedupes in-flight (path, romm_updated_at) pairs itself.
+        developer.log('SSE: RomM save newer than vault copy: ${payload['path']}', name: 'VaultSync', level: 800);
+        try {
+          final ingestService = _ref?.read(rommIngestServiceProvider);
+          if (ingestService == null) {
+            developer.log('SSE: No RommIngestService available — cannot ingest ${payload['path']}',
+                name: 'VaultSync', level: 900);
+            return;
+          }
+          final ingested = await ingestService.ingest(payload);
+          final systemId = payload['system_id'];
+          // A normal per-system sync downloads the just-uploaded server copy
+          // into the local folder with its existing path resolution and
+          // conflict handling — this handler never writes local files itself.
+          if (ingested && systemId is String) {
+            _scheduleSync(systemId);
+          }
+        } catch (e, stack) {
+          developer.log('SSE: romm_save_newer handling failed for ${payload['path']}',
+              name: 'VaultSync', level: 1000, error: e, stackTrace: stack);
+        }
         return;
       }
       developer.log('SSE EVENT: ${payload['path']}', name: 'VaultSync', level: 800);
