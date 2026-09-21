@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'launcher_channel_router.dart';
 
 /// Provider for the Connectivity instance to allow mocking in tests.
 final connectivityInstanceProvider = Provider<Connectivity>((ref) {
@@ -22,17 +24,20 @@ final connectivityProvider = StreamProvider<List<ConnectivityResult>>((ref) {
       }
     });
 
-    platform.setMethodCallHandler((call) async {
-      if (call.method == 'onConnectivityChanged') {
-        final bool isOnline = call.arguments;
-        if (!controller.isClosed) {
-          controller.add(isOnline ? [ConnectivityResult.wifi] : [ConnectivityResult.none]);
-        }
+    // Routed through LauncherChannelRouter: this channel also carries
+    // BackgroundSyncService's 'onEmulatorClosed' calls, and a MethodChannel
+    // only supports one inbound handler per isolate — calling
+    // setMethodCallHandler here directly would silently disable (or, via
+    // onDispose below, wipe out) BackgroundSyncService's handler.
+    final unregister = LauncherChannelRouter().register('onConnectivityChanged', (call) async {
+      final bool isOnline = call.arguments;
+      if (!controller.isClosed) {
+        controller.add(isOnline ? [ConnectivityResult.wifi] : [ConnectivityResult.none]);
       }
     });
 
     ref.onDispose(() {
-      platform.setMethodCallHandler(null);
+      unregister();
       controller.close();
     });
 
@@ -56,6 +61,43 @@ final isOnlineProvider = Provider<bool>((ref) {
   // Return true if any of the results are not 'none'
   return connectivity.any((result) => result != ConnectivityResult.none);
 });
+
+/// Resolves the real connectivity state, waiting for it instead of racing it.
+///
+/// [isOnlineProvider] reads `ref.watch(connectivityProvider).value`
+/// synchronously. On Android, `connectivityProvider`'s first value arrives
+/// asynchronously from `platform.invokeMethod('isOnline')`. In a fresh
+/// [ProviderContainer] — always the case in the WorkManager background
+/// isolate (see `callbackDispatcher` in `main.dart`) — a synchronous read
+/// happens before that first value exists, `.value` is null, and
+/// [isOnlineProvider] incorrectly reports false. Measured on-device: the
+/// native `isOnline` call landed at 18:48:24.314 and the very next native
+/// call (issued right after the synchronous read) at .325 — the decision
+/// was made before the answer existed. That silently queued 1453 files for
+/// offline upload that a real network connection could have sent right away.
+///
+/// This awaits [connectivityProvider]'s first real emission instead, with a
+/// [timeout] safety net.
+///
+/// On timeout or error this returns `true` (assume online). Wrongly
+/// assuming offline silently queues everything and uploads nothing — the
+/// bug above — while wrongly assuming online just makes the requests fail
+/// through the existing error handling, which is the safer failure mode.
+Future<bool> resolveIsOnline(Ref ref, {Duration timeout = const Duration(seconds: 5)}) async {
+  try {
+    final result = await ref.read(connectivityProvider.future).timeout(timeout);
+    return result.any((r) => r != ConnectivityResult.none);
+  } catch (e, st) {
+    developer.log(
+      'CONNECTIVITY: resolveIsOnline timed out or failed — assuming ONLINE',
+      name: 'VaultSync',
+      level: 900,
+      error: e,
+      stackTrace: st,
+    );
+    return true;
+  }
+}
 
 /// Provider to track if the user has manually dismissed the offline banner.
 /// Resets when the device becomes online.

@@ -129,11 +129,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
        // exits from usage-stats history. See BackgroundSyncService.catchUpMissedExits.
        if (Platform.isAndroid || Platform.isIOS) {
          developer.log('SCHEDULER: Registering exit-catchup task (15 min)', name: 'VaultSync', level: 800);
+         // `update`, as at startup: an existing job picks up the current
+         // constraints instead of being left as it was registered.
          await Workmanager().registerPeriodicTask(
            'exit-catchup',
            'exitCatchUp',
            frequency: const Duration(minutes: 15),
-           existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+           constraints: Constraints(networkType: NetworkType.connected),
+           existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
          );
        }
     } else {

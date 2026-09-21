@@ -4,13 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/launcher_channel_router.dart';
 import 'sync_service.dart';
 import 'system_path_service.dart';
 
 final backgroundSyncServiceProvider = Provider<BackgroundSyncService>((ref) {
   final syncService = ref.watch(syncServiceProvider);
   final pathService = ref.watch(systemPathServiceProvider);
-  return BackgroundSyncService(syncService, pathService);
+  final service = BackgroundSyncService(syncService, pathService);
+  ref.onDispose(service.dispose);
+  return service;
 });
 
 /// Preference key gating both the live (process-alive) exit detection and the
@@ -41,11 +44,26 @@ class BackgroundSyncService {
   final bool _isAndroid;
 
   bool _catchUpInProgress = false;
+  void Function()? _unregister;
 
   BackgroundSyncService(this._syncService, this._pathService,
       {@visibleForTesting bool? isAndroidOverride})
       : _isAndroid = isAndroidOverride ?? Platform.isAndroid {
-    _platform.setMethodCallHandler(_handleMethodCall);
+    // Routed through LauncherChannelRouter: this channel also carries
+    // connectivityProvider's 'onConnectivityChanged' calls, and a
+    // MethodChannel only supports one inbound handler per isolate — calling
+    // setMethodCallHandler here directly would silently disable (or be wiped
+    // out by) connectivityProvider's handler.
+    _unregister = LauncherChannelRouter().register('onEmulatorClosed', _handleMethodCall);
+  }
+
+  /// Unregisters this service's launcher-channel callback. Called when the
+  /// owning provider is disposed (e.g. the WorkManager background isolate's
+  /// [ProviderContainer] at the end of each task) so a later task run in the
+  /// same isolate doesn't stack a second callback on top of this one.
+  void dispose() {
+    _unregister?.call();
+    _unregister = null;
   }
 
   // Canonical map of emulator package -> VaultSync system id.

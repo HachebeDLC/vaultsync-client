@@ -270,15 +270,25 @@ class _VaultSyncAppState extends ConsumerState<VaultSyncApp> {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getBool('auto_sync_on_exit') ?? false) {
         await backgroundSyncService.startMonitoring();
-        // Re-registering with `keep` is a cheap no-op if this task already
-        // exists from a previous launch/toggle — it just guarantees the
-        // wake-up survives a process restart where the toggle was never
-        // touched again.
+        // Re-registering here guarantees the wake-up survives a process
+        // restart where the toggle was never touched again. Must use
+        // `update`, not `keep`: a job already registered on the device (from
+        // before this fix, or from a stale app version) had no CONNECTIVITY
+        // constraint, and `keep` leaves an existing periodic task completely
+        // untouched — the unconstrained job would never be replaced and
+        // would keep firing under the standby firewall with no network,
+        // which is exactly how 1453 files ended up stuck in
+        // pending_offline_upload. `update` (available since WorkManager
+        // 2.8.0 / workmanager_platform_interface 0.9.x, confirmed in
+        // pubspec.lock) applies the new Constraints to the existing task in
+        // place without resetting its accumulated period like `replace`
+        // would.
         await Workmanager().registerPeriodicTask(
           'exit-catchup',
           'exitCatchUp',
           frequency: const Duration(minutes: 15),
-          existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+          constraints: Constraints(networkType: NetworkType.connected),
+          existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
         );
       }
     } catch (e) {

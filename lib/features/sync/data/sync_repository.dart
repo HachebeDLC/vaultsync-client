@@ -255,7 +255,14 @@ class SyncRepository {
       // happened after the last diffSystem/dashboard refresh (30s TTL window).
       _scanCache.remove('${systemId}_$effectivePath');
       final String cloudPrefix = (systemId.toLowerCase() == 'eden') ? 'switch' : (localPath.toLowerCase().contains('retroarch') ? 'RetroArch' : systemId);
-      final bool isOnline = ignoreConnectivity || (_ref?.read(isOnlineProvider) ?? true);
+      // Await the real connectivity answer instead of racing it: a
+      // synchronous read(isOnlineProvider) is wrong in a fresh
+      // ProviderContainer (always the case in the WorkManager background
+      // isolate) because connectivityProvider's first value on Android
+      // arrives asynchronously from a platform call. See resolveIsOnline's
+      // doc comment for the measured evidence.
+      final ref = _ref;
+      final bool isOnline = ignoreConnectivity || (ref == null ? true : await resolveIsOnline(ref));
 
       try { await _pathService.mkdirs(effectivePath); } catch (e) {
         developer.log('⚠️ SYNC: Failed to ensure base path exists', name: 'VaultSync', level: 900, error: e);
