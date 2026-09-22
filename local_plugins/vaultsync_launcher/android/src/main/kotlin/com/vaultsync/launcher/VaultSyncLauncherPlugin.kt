@@ -31,6 +31,19 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     companion object {
         private const val CHANNEL_NAME = "com.vaultsync.app/launcher"
         private const val PICK_DIRECTORY_REQUEST_CODE = 9999
+
+        @Volatile
+        private var activeChannel: MethodChannel? = null
+
+        /**
+         * The MethodChannel of the most recently attached Flutter engine, if
+         * any is currently attached — null once it has detached. Read by
+         * [SyncForegroundService] to decide whether a detected exit can be
+         * delivered directly (`invokeMethod`) or must go through WorkManager
+         * instead, since the service is a separate Android component that
+         * outlives any particular engine attachment.
+         */
+        fun currentChannel(): MethodChannel? = activeChannel
     }
 
     private lateinit var methodChannel: MethodChannel
@@ -124,28 +137,38 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         fileScanner = FileScanner(ctx)
         cryptoEngine = CryptoEngine()
         powerManagerHelper = PowerManagerHelper(ctx)
-        automationEngine = AutomationEngine(ctx, methodChannel)
+        automationEngine = AutomationEngine(ctx)
         connectivityMonitor = ConnectivityMonitor(ctx, methodChannel)
         networkClient = NetworkClient()
-        
+
         uploadManager = UploadManager(
             ctx, networkClient, cryptoEngine, syncExecutor, mainHandler,
             ::isShizukuPath, ::getCleanPath, ::getShizukuServiceSync
         )
-        
+
         downloadManager = DownloadManager(
             ctx, networkClient, cryptoEngine, fileScanner, executor, mainHandler,
             ::isShizukuPath, ::getCleanPath, ::getShizukuServiceSync, ::setFileTimestampInternal
         )
-        
+
         connectivityMonitor.startMonitoring()
         bindShizukuService()
+        // activeChannel is set in onAttachedToActivity, not here: the
+        // WorkManager isolate attaches its own engine (and plugin instance)
+        // with no Activity, and a detected exit sent to that isolate would
+        // go unheard.
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         android.util.Log.i("VaultSync", "🔌 PLUGIN: detached instance=${System.identityHashCode(this)} pid=${android.os.Process.myPid()}")
         methodChannel.setMethodCallHandler(null)
-        automationEngine.stopMonitoring()
+        if (activeChannel === methodChannel) {
+            activeChannel = null
+        }
+        // Do NOT stop monitoring here: the whole point of moving detection
+        // into SyncForegroundService is that it survives this engine (and
+        // even the app process) going away. Only this instance's own
+        // sync-lock ownership is released below.
         connectivityMonitor.stopMonitoring()
         powerManagerHelper.releaseAllOwnedByThisInstance()
         executor.shutdown()
@@ -524,12 +547,17 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
             }
             "startMonitoring" -> {
                 val packages = call.argument<List<String>>("packages") ?: emptyList()
-                val interval = (call.argument<Any>("interval") as? Number)?.toLong() ?: 15000L
-                automationEngine.startMonitoring(packages, interval)
+                // The interval argument is retained on the Dart API for
+                // compatibility, but detection now runs inside
+                // SyncForegroundService on its own fixed ~15s cadence rather
+                // than a caller-supplied one, since it must keep running
+                // with no Dart side present at all (sticky restart, boot).
+                MonitoringPrefs.setPackages(ctx, packages)
+                PowerManagerHelper.setMonitoringEnabled(ctx, true)
                 result.success(true)
             }
             "stopMonitoring" -> {
-                automationEngine.stopMonitoring()
+                PowerManagerHelper.setMonitoringEnabled(ctx, false)
                 result.success(true)
             }
             "getLocalizedString" -> {
@@ -1015,14 +1043,19 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
         binding.addActivityResultListener(this)
+        activeChannel = methodChannel
     }
 
     override fun onDetachedFromActivityForConfigChanges() { activity = null }
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
         binding.addActivityResultListener(this)
+        activeChannel = methodChannel
     }
-    override fun onDetachedFromActivity() { activity = null }
+    override fun onDetachedFromActivity() {
+        activity = null
+        if (activeChannel === methodChannel) activeChannel = null
+    }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?): Boolean {
         val ctx = context ?: return false

@@ -10,4 +10,5 @@
     <string name="notification_channel_description">Mantiene VaultSync en ejecución para evitar caídas de conexión</string>
     <string name="notification_title">VaultSync</string>
     <string name="notification_content">Sincronización en curso…</string>
+    <string name="notification_content_monitoring">Vigilando el cierre de juegos</string>
 </resources>
