@@ -2,6 +2,8 @@ package com.vaultsync.launcher
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
+import android.system.Os
 import androidx.documentfile.provider.DocumentFile
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -271,7 +273,15 @@ class DownloadManager(
                             val baseDir = getCleanPath(uriStr)
                             val finalPath = File(baseDir, localFilename).absolutePath
                             val svc = boundShizuku ?: getShizukuServiceSync()
-                            mapOf("size" to svc.getFileSize(finalPath), "lastModified" to svc.getLastModified(finalPath))
+                            // "shizuku://" + File(baseDir, localFilename).absolutePath is
+                            // byte-identical to what scanShizukuRecursive emits for this file:
+                            // it walks from the same getCleanPath(uriStr) base, joining path
+                            // segments with '/' the same way File's parent+child join does.
+                            mapOf(
+                                "size" to svc.getFileSize(finalPath),
+                                "lastModified" to svc.getLastModified(finalPath),
+                                "uri" to "shizuku://$finalPath"
+                            )
                         }
                         uriStr.startsWith("content://") -> {
                             // Fetch from content resolver (omitted for brevity, assume similar to original)
@@ -282,23 +292,89 @@ class DownloadManager(
                             for (i in 0 until pathParts.size - 1) {
                                 currentDir = currentDir?.let { fileScanner.findFileStrict(it, pathParts[i]) }
                             }
-                            var finalSize = 0L; var finalTs = 0L
+                            var finalSize = 0L; var finalTs = 0L; var finalUri: String? = null
                             if (currentDir != null) {
-                                val childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(currentDir.uri, android.provider.DocumentsContract.getDocumentId(currentDir.uri))
-                                context.contentResolver.query(childrenUri, arrayOf(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME, android.provider.DocumentsContract.Document.COLUMN_SIZE, android.provider.DocumentsContract.Document.COLUMN_LAST_MODIFIED), null, null, null)?.use { cursor ->
+                                val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(currentDir.uri, DocumentsContract.getDocumentId(currentDir.uri))
+                                context.contentResolver.query(
+                                    childrenUri,
+                                    arrayOf(
+                                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                                        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                                        DocumentsContract.Document.COLUMN_SIZE,
+                                        DocumentsContract.Document.COLUMN_LAST_MODIFIED
+                                    ),
+                                    null, null, null
+                                )?.use { cursor ->
                                     val targetName = pathParts.last()
+                                    val rows = mutableListOf<SafChildRow>()
                                     while (cursor.moveToNext()) {
-                                        if (cursor.getString(0) == targetName) {
-                                            finalSize = cursor.getLong(1); finalTs = cursor.getLong(2); break
-                                        }
+                                        rows.add(
+                                            SafChildRow(
+                                                documentId = cursor.getString(0),
+                                                displayName = cursor.getString(1),
+                                                size = cursor.getLong(2),
+                                                lastModified = cursor.getLong(3)
+                                            )
+                                        )
+                                    }
+                                    val match = FileScanner.selectMatchingChild(rows, targetName)
+                                    if (match != null) {
+                                        val docId = match.documentId
+                                        finalSize = match.size
+                                        finalTs = match.lastModified
+
+                                        // Build the tree part EXACTLY the way the scanner
+                                        // builds it for this same root (FileScanner.getTreeUri),
+                                        // so this string is byte-identical to what
+                                        // scanSafRecursive would emit for this file on the
+                                        // next scan — otherwise the state row is keyed by a
+                                        // URI the scanner never produces (see the sync
+                                        // desync this fixes).
+                                        val scannerTreeUri = fileScanner.getTreeUri(treeUri)
+                                        val docUri = DocumentsContract.buildDocumentUriUsingTree(scannerTreeUri, docId)
+
+                                        // The SAF cursor's SIZE/LAST_MODIFIED are unreliable
+                                        // under Android/data (see
+                                        // FileScanner.resolveScannedSizeAndMtime and the
+                                        // batched fstat pass in scanSafRecursive); correct
+                                        // them the same way here so the recorded state
+                                        // matches what the next scan will report.
+                                        try {
+                                            context.contentResolver.openFileDescriptor(docUri, "r")?.use { pfd ->
+                                                val stat = Os.fstat(pfd.fileDescriptor)
+                                                val fstatMtime = if (stat.st_mtime > 0L) stat.st_mtime * 1000L else null
+                                                val (resolvedSize, resolvedMtime) = FileScanner.resolveScannedSizeAndMtime(
+                                                    cursorSize = finalSize,
+                                                    cursorLastModified = finalTs,
+                                                    fstatMtime = fstatMtime,
+                                                    fstatSize = stat.st_size,
+                                                )
+                                                finalSize = resolvedSize
+                                                finalTs = resolvedMtime
+                                            }
+                                        } catch (_: Exception) {}
+
+                                        finalUri = docUri.toString()
                                     }
                                 }
                             }
-                            mapOf("size" to finalSize, "lastModified" to finalTs)
+                            val resultUri = finalUri
+                            if (resultUri != null) {
+                                mapOf("size" to finalSize, "lastModified" to finalTs, "uri" to resultUri)
+                            } else {
+                                mapOf("size" to finalSize, "lastModified" to finalTs)
+                            }
                         }
                         else -> {
                             val finalFile = File(File(uriStr), localFilename)
-                            mapOf("size" to finalFile.length(), "lastModified" to finalFile.lastModified())
+                            // finalFile.absolutePath is byte-identical to what
+                            // scanLocalRecursive emits: it walks File(path) with the same
+                            // root (uriStr == the scan's `path`) and joins the same segments.
+                            mapOf(
+                                "size" to finalFile.length(),
+                                "lastModified" to finalFile.lastModified(),
+                                "uri" to finalFile.absolutePath
+                            )
                         }
                     }
                     mainHandler.post { result.success(finalInfo) }

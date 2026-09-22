@@ -13,6 +13,25 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Callable
 import kotlin.math.min
 
+/**
+ * One row pulled from a SAF children cursor: (documentId, displayName,
+ * size, lastModified). Plain top-level data class (not nested in
+ * [FileScanner]'s companion object — a class nested there is only reachable
+ * as `FileScanner.Companion.SafChildRow`, not the `FileScanner.SafChildRow`
+ * shorthand that works for companion functions/properties) so the by-name
+ * row selection DownloadManager performs when reporting the post-download
+ * canonical "uri" (see `DownloadManager.handleDownloadFile`'s SAF branch)
+ * can be unit-tested without a real ContentResolver / DocumentsContract —
+ * those Android framework classes throw ("not mocked") in plain JVM unit
+ * tests and this module has no Robolectric setup.
+ */
+data class SafChildRow(
+    val documentId: String,
+    val displayName: String,
+    val size: Long,
+    val lastModified: Long
+)
+
 class FileScanner(private val context: Context) {
     private val headerScanner = BinaryHeaderScanner()
 
@@ -230,6 +249,15 @@ class FileScanner(private val context: Context) {
             val lastModified = fstatMtime ?: cursorLastModified
             return Pair(size, lastModified)
         }
+
+        /**
+         * Picks the row whose [SafChildRow.displayName] equals [targetName],
+         * mirroring the linear cursor scan DownloadManager performs right
+         * after a SAF download to find the docId of the file it just wrote.
+         * Returns the first match in cursor order, or null if none matches.
+         */
+        fun selectMatchingChild(rows: List<SafChildRow>, targetName: String): SafChildRow? =
+            rows.firstOrNull { it.displayName == targetName }
     }
 
     private val safLock = Any()
@@ -242,7 +270,10 @@ class FileScanner(private val context: Context) {
         directoryContentCache.clear()
     }
 
-    private fun getTreeUri(uri: Uri): Uri {
+    // Package-visible (not private) so DownloadManager can build the exact
+    // same tree-URI shape when reporting the post-download canonical "uri" —
+    // see DownloadManager.handleDownloadFile's SAF branch.
+    fun getTreeUri(uri: Uri): Uri {
         return try {
             val treeId = DocumentsContract.getTreeDocumentId(uri)
             DocumentsContract.buildTreeDocumentUri(uri.authority, treeId)

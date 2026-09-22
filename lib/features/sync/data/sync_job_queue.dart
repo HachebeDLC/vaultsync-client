@@ -55,6 +55,13 @@ class SyncJobQueue {
           ? List<String>.from(jsonDecode(blockHashesJson))
           : null;
 
+      // Set when a completed download's state row was written under a
+      // canonical URI different from the job's (synthetic) `path` and that
+      // synthetic row was deleted — see the `downloadResult['uri']` handling
+      // below. Guards the final `updateStatus(path, ...)` call so it doesn't
+      // resurrect / no-op against a row that's intentionally gone.
+      bool statePathMoved = false;
+
       try {
         if (status == 'pending_upload') {
           onProgress
@@ -99,15 +106,40 @@ class SyncJobQueue {
           );
 
           if (downloadResult is Map) {
-            await _db.upsertState(
-              path,
-              (downloadResult['size'] as num).toInt(),
-              (downloadResult['lastModified'] as num).toInt(),
-              job['hash'], 'synced',
-              systemId: systemId,
-              remotePath: remotePath,
-              relPath: relPath,
-            );
+            final int resultSize = (downloadResult['size'] as num).toInt();
+            final int resultLastModified = (downloadResult['lastModified'] as num).toInt();
+            // Native now returns the canonical URI it actually wrote/resolved
+            // the file under (see DownloadManager.handleDownloadFile). `path`
+            // here is the synthetic `p.join(effectivePath, destRelPath)` string
+            // SyncRepository queued the job under for a remote-only download —
+            // not a URI the scanner can ever produce. When native hands back a
+            // different, real one, move the state row there so the next sync's
+            // `getState(scannedUri)` lookup actually finds it instead of
+            // re-hashing (and, offline, re-snapshotting) the file forever.
+            final String? canonicalUri = downloadResult['uri'] as String?;
+            if (canonicalUri != null && canonicalUri != path) {
+              await _db.upsertState(
+                canonicalUri,
+                resultSize,
+                resultLastModified,
+                job['hash'], 'synced',
+                systemId: systemId,
+                remotePath: remotePath,
+                relPath: relPath,
+              );
+              await _db.deleteState(path);
+              statePathMoved = true;
+            } else {
+              await _db.upsertState(
+                path,
+                resultSize,
+                resultLastModified,
+                job['hash'], 'synced',
+                systemId: systemId,
+                remotePath: remotePath,
+                relPath: relPath,
+              );
+            }
           } else {
             try {
               final info =
@@ -129,7 +161,9 @@ class SyncJobQueue {
           }
         }
 
-        await _db.updateStatus(path, 'synced');
+        if (!statePathMoved) {
+          await _db.updateStatus(path, 'synced');
+        }
       } catch (e) {
         if (e is ApiException && (e.statusCode == 401 || e.statusCode == 403)) {
           rethrow; // Don't retry auth failures, let the UI handle logout

@@ -235,6 +235,73 @@ class SyncStateDatabase {
     });
   }
 
+  /// Extracts the SAF tree-root segment from a `content://.../tree/<root>...`
+  /// URI (the part between `/tree/` and the next `/`, or the end of the
+  /// string). Returns null when [uri] has no `/tree/` segment. Kept as plain
+  /// substring work rather than a SQL `LIKE` pattern: the segment is
+  /// percent-encoded (e.g. `primary%3AAndroid%2Fdata%2F...`), and embedding a
+  /// literal `%` in a `LIKE` pattern turns it into a wildcard, not a match.
+  static String? _treeRootOf(String uri) {
+    const marker = '/tree/';
+    final idx = uri.indexOf(marker);
+    if (idx == -1) return null;
+    final after = uri.substring(idx + marker.length);
+    final slash = after.indexOf('/');
+    return slash == -1 ? after : after.substring(0, slash);
+  }
+
+  /// Deletes dead `sync_state` rows for [systemId] left behind by two known
+  /// causes, both harmless to lose because they can never be re-matched by a
+  /// future scan and status is 'synced' (real work, not a queued job):
+  ///
+  ///  (a) "tree+path" shaped rows: a `content://` URI containing `/tree/` but
+  ///      not `/document/`. The only source of this shape was the download
+  ///      branch keying state by `p.join(effectivePath, destRelPath)` instead
+  ///      of the URI the native downloader actually wrote to — `FileScanner`
+  ///      never emits this shape, so the row can never be looked up again.
+  ///
+  ///  (b) `content://` rows whose SAF tree root differs from
+  ///      [effectivePath]'s tree root — left over from an earlier SAF grant
+  ///      for the same system (e.g. a stale
+  ///      `.../Android%2Fdata%2Fdev.eden.eden_emulator%2Ffiles` grant after
+  ///      the user re-granted `.../Android%2Fdata%2Fdev.eden.eden_emulator`).
+  ///
+  /// Rows with any other status (pending/failed) are never touched — they are
+  /// real queued work the native side can still act on. `local_versions` is
+  /// untouched. Returns the number of rows removed.
+  Future<int> cleanupDeadContentUriRows(String systemId, String effectivePath) async {
+    final db = await database;
+    final rows = await db.query(
+      'sync_state',
+      columns: ['path'],
+      where: 'system_id = ? AND status = ? AND path LIKE ?',
+      whereArgs: [systemId, 'synced', 'content://%'],
+    );
+    if (rows.isEmpty) return 0;
+
+    final currentTreeRoot = _treeRootOf(effectivePath);
+    final deadPaths = <String>[];
+    for (final row in rows) {
+      final path = row['path'] as String;
+      final hasTree = path.contains('/tree/');
+      if (!hasTree) continue;
+      final hasDocument = path.contains('/document/');
+      final isTreePathShaped = !hasDocument;
+      final isStaleRoot = hasDocument &&
+          currentTreeRoot != null &&
+          _treeRootOf(path) != currentTreeRoot;
+      if (isTreePathShaped || isStaleRoot) deadPaths.add(path);
+    }
+    if (deadPaths.isEmpty) return 0;
+
+    final placeholders = List.filled(deadPaths.length, '?').join(',');
+    await db.transaction((txn) async {
+      await txn.delete('sync_block_hashes', where: 'path IN ($placeholders)', whereArgs: deadPaths);
+      await txn.delete('sync_state', where: 'path IN ($placeholders)', whereArgs: deadPaths);
+    });
+    return deadPaths.length;
+  }
+
   Future<List<Map<String, dynamic>>> findEntriesByBlockHash(String blockHash) async {
     final db = await database;
     return await db.rawQuery(

@@ -268,6 +268,22 @@ class SyncRepository {
         developer.log('⚠️ SYNC: Failed to ensure base path exists', name: 'VaultSync', level: 900, error: e);
       }
 
+      // One-time-per-sync cleanup of dead sync_state rows: keyed by a
+      // synthetic download-destination path the scanner never emits, or by a
+      // stale SAF grant's tree root. Cheap (single indexed query + guarded
+      // delete) and must run before diffing so `getState` lookups below never
+      // see a dead row masquerading as cached state. Never touches
+      // pending/failed rows or local_versions — see
+      // SyncStateDatabase.cleanupDeadContentUriRows.
+      try {
+        final removed = await _syncStateDb.cleanupDeadContentUriRows(systemId, effectivePath);
+        if (removed > 0) {
+          developer.log('SYNC: Removed $removed dead sync_state row(s) for $systemId', name: 'VaultSync', level: 800);
+        }
+      } catch (e) {
+        developer.log('⚠️ SYNC: Dead sync_state row cleanup failed', name: 'VaultSync', level: 900, error: e);
+      }
+
       final localList = await _getCachedOrNewScan(systemId, effectivePath, ignoredFolders, saveExtensions);
       final localFiles = _conflictResolver.processLocalFiles(systemId, localList);
 

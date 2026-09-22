@@ -133,4 +133,110 @@ void main() {
       expect(pendingJobs.any((r) => r['status'] == 'pending_download' && r['path'] == '/p2'), isTrue);
     });
   });
+
+  // Covers SyncRepository.syncSystem's pre-diff cleanup: rows keyed by a URI
+  // shape the SAF scanner can never emit (the download-destination fix in
+  // sync_job_queue.dart), and rows left behind under a since-replaced SAF
+  // grant. Only 'synced' rows of these two dead shapes are ever removed —
+  // pending/failed rows are real queued work.
+  group('cleanupDeadContentUriRows', () {
+    const currentRoot =
+        'content://com.android.externalstorage.documents/tree/primary%3AAndroid%2Fdata%2Fdev.eden.eden_emulator';
+    const staleRoot =
+        'content://com.android.externalstorage.documents/tree/primary%3AAndroid%2Fdata%2Fdev.eden.eden_emulator%2Ffiles';
+
+    const treePathShaped = '$currentRoot/nand/user/save/0000000000000000/deadbeef/rep_gamedata1.dat';
+    const currentRootDocUri = '$currentRoot/document/primary%3Asomething%2Fdoc123';
+    const staleRootDocUri = '$staleRoot/document/primary%3Asomething%2Fdoc456';
+    const nonContentPath = '/storage/emulated/0/RetroArch/saves/game.srm';
+
+    test('deletes synced tree+path shaped rows (no /document/ segment)', () async {
+      await syncDb.upsertState(treePathShaped, 100, 100, 'h', 'synced', systemId: 'switch');
+
+      final removed = await syncDb.cleanupDeadContentUriRows('switch', currentRoot);
+
+      expect(removed, 1);
+      expect(await syncDb.getState(treePathShaped), isNull);
+    });
+
+    test('deletes synced rows whose tree root differs from the current root', () async {
+      await syncDb.upsertState(staleRootDocUri, 100, 100, 'h', 'synced', systemId: 'switch');
+
+      final removed = await syncDb.cleanupDeadContentUriRows('switch', currentRoot);
+
+      expect(removed, 1);
+      expect(await syncDb.getState(staleRootDocUri), isNull);
+    });
+
+    test('keeps synced document-uri rows under the current root', () async {
+      await syncDb.upsertState(currentRootDocUri, 100, 100, 'h', 'synced', systemId: 'switch');
+
+      final removed = await syncDb.cleanupDeadContentUriRows('switch', currentRoot);
+
+      expect(removed, 0);
+      expect(await syncDb.getState(currentRootDocUri), isNotNull);
+    });
+
+    test('never removes pending or failed rows, even when dead-shaped', () async {
+      await syncDb.upsertState(treePathShaped, 100, 100, 'h', 'pending_download', systemId: 'switch');
+      await syncDb.upsertState(staleRootDocUri, 100, 100, 'h', 'failed', systemId: 'switch');
+
+      final removed = await syncDb.cleanupDeadContentUriRows('switch', currentRoot);
+
+      expect(removed, 0);
+      expect(await syncDb.getState(treePathShaped), isNotNull);
+      expect(await syncDb.getState(staleRootDocUri), isNotNull);
+    });
+
+    test('never touches rows for a different systemId', () async {
+      await syncDb.upsertState(treePathShaped, 100, 100, 'h', 'synced', systemId: 'other-system');
+
+      final removed = await syncDb.cleanupDeadContentUriRows('switch', currentRoot);
+
+      expect(removed, 0);
+      expect(await syncDb.getState(treePathShaped), isNotNull);
+    });
+
+    test('ignores non-content:// paths entirely', () async {
+      await syncDb.upsertState(nonContentPath, 100, 100, 'h', 'synced', systemId: 'retroarch');
+
+      final removed = await syncDb.cleanupDeadContentUriRows('retroarch', '/storage/emulated/0/RetroArch/saves');
+
+      expect(removed, 0);
+      expect(await syncDb.getState(nonContentPath), isNotNull);
+    });
+
+    test('also removes the row from sync_block_hashes', () async {
+      await syncDb.upsertState(
+        treePathShaped, 100, 100, 'h', 'synced',
+        systemId: 'switch',
+        blockHashes: '["bh1", "bh2"]',
+      );
+
+      final removed = await syncDb.cleanupDeadContentUriRows('switch', currentRoot);
+
+      expect(removed, 1);
+      final db = await syncDb.database;
+      final blockRows = await db.query('sync_block_hashes', where: 'path = ?', whereArgs: [treePathShaped]);
+      expect(blockRows, isEmpty);
+    });
+
+    test('does not touch local_versions', () async {
+      final db = await syncDb.database;
+      await db.insert('local_versions', {
+        'id': 'v1',
+        'systemId': 'switch',
+        'filePath': 'rep_gamedata1.dat',
+        'timestamp': 1000,
+        'size': 100,
+        'fileHash': 'h',
+      });
+      await syncDb.upsertState(treePathShaped, 100, 100, 'h', 'synced', systemId: 'switch');
+
+      await syncDb.cleanupDeadContentUriRows('switch', currentRoot);
+
+      final versions = await db.query('local_versions');
+      expect(versions.length, 1);
+    });
+  });
 }
