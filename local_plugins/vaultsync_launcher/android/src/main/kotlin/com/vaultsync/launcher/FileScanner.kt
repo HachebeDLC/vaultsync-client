@@ -204,6 +204,32 @@ class FileScanner(private val context: Context) {
          * skipped. Keep in sync with DartFileScanner.normaliseSaveExtension. */
         fun normaliseSaveExtension(ext: String): String =
             if (STATE_SLOT_RE.matches(ext)) "state" else ext
+
+        /**
+         * Resolves the (size, lastModified) pair to record for a SAF-scanned file
+         * under Android/data, given the SAF cursor's values and the result of the
+         * `Os.fstat()` performed to work around unreliable SAF cursor metadata
+         * there (see `scanSafRecursive`'s batched fstat pass).
+         *
+         * The SAF cursor's COLUMN_SIZE is suspected to be as unreliable as its
+         * LAST_MODIFIED under Android/data: on-device, scans reported 0 bytes
+         * for the same Switch saves that are empty on the server, and a 4012-byte
+         * save went unsynced in a way only a 0-byte scan explains (inferred).
+         * fstat's value wins whenever fstat produced one; the cursor value is
+         * only the fallback when fstat failed outright (null) or, for mtime
+         * only, reported a non-positive value (the existing "unreliable"
+         * signal already handled by the caller before this function sees it).
+         */
+        fun resolveScannedSizeAndMtime(
+            cursorSize: Long,
+            cursorLastModified: Long,
+            fstatMtime: Long?,
+            fstatSize: Long?
+        ): Pair<Long, Long> {
+            val size = fstatSize ?: cursorSize
+            val lastModified = fstatMtime ?: cursorLastModified
+            return Pair(size, lastModified)
+        }
     }
 
     private val safLock = Any()
@@ -545,22 +571,37 @@ class FileScanner(private val context: Context) {
 
         // Batch-fstat in parallel for Android/data/ files where SAF cursor
         // LAST_MODIFIED is unreliable. Uses Os.fstat() on file descriptors
-        // to get kernel mtime. Parallelized to reduce IPC wall-clock time.
+        // to get kernel mtime AND size. Parallelized to reduce IPC wall-clock time.
+        // The SAF cursor's COLUMN_SIZE is suspected to be as unreliable as its
+        // LAST_MODIFIED under Android/data (8 Switch saves scanned as 0 bytes
+        // on-device; whether they really held content is not yet verified). Since
+        // we already pay for the fd open + Os.fstat() to fix mtime, read st_size
+        // from the same stat struct at no extra IPC cost rather than opening a
+        // second fd. Cursor values remain the fallback when fstat fails/throws.
         if (pendingFstats != null && pendingFstats.isNotEmpty()) {
             val pool = Executors.newFixedThreadPool(min(pendingFstats.size, 8))
             val futures = pendingFstats.map { (idx, docUri) ->
-                pool.submit(Callable<Pair<Int, Long>?> {
+                pool.submit(Callable<Triple<Int, Long?, Long?>?> {
                     try {
                         context.contentResolver.openFileDescriptor(docUri, "r")?.use { pfd ->
                             val stat = Os.fstat(pfd.fileDescriptor)
-                            if (stat.st_mtime > 0L) Pair(idx, stat.st_mtime * 1000L) else null
+                            val mtime = if (stat.st_mtime > 0L) stat.st_mtime * 1000L else null
+                            Triple(idx, mtime, stat.st_size)
                         }
                     } catch (_: Exception) { null }
                 })
             }
             for (future in futures) {
-                val pair = future.get() ?: continue
-                results.getJSONObject(pair.first).put("lastModified", pair.second)
+                val (idx, mtime, size) = future.get() ?: continue
+                val obj = results.getJSONObject(idx)
+                val (resolvedSize, resolvedMtime) = resolveScannedSizeAndMtime(
+                    cursorSize = obj.getLong("size"),
+                    cursorLastModified = obj.getLong("lastModified"),
+                    fstatMtime = mtime,
+                    fstatSize = size,
+                )
+                obj.put("size", resolvedSize)
+                obj.put("lastModified", resolvedMtime)
             }
             pool.shutdown()
         }

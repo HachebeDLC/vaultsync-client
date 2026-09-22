@@ -424,11 +424,22 @@ class SyncRepository {
                 && (cached['size'] as num?)?.toInt() == localSize
                 && (localTs ~/ 1000) <= cachedTsSec;
 
-            if (localUnchanged && isJournaledSynced(prefs, systemId, relPath, remoteHash)) continue;
+            // Zero-size metadata is where stale SAF metadata is suspected to bite:
+            // on-device, a Switch save that was 4012 bytes on disk was never
+            // uploaded over a 0-byte server copy, and the only branch consistent
+            // with the DB state is a scan reporting 0 bytes (inferred, not yet
+            // observed directly). The shortcuts below (journal + DB-cached hash match) only compare metadata/
+            // journal entries against each other, never actual file content, so when
+            // either side is reporting size 0 they cannot tell a real empty file from
+            // bad scan metadata. Skip both shortcuts in that case and fall through to
+            // hashing the real bytes.
+            final bool zeroSizeInvolved = localSize == 0 || (remoteInfo['size'] as num).toInt() == 0;
+
+            if (!zeroSizeInvolved && localUnchanged && isJournaledSynced(prefs, systemId, relPath, remoteHash)) continue;
             // Primary: hash + synced status match is sufficient — SAF/content:// paths
             // cannot reliably set lastModified after a download, so timestamp matching
             // would always fail and trigger an expensive re-hash on every subsequent sync.
-            if (localUnchanged && cached['hash'] == remoteHash && cached['status'] == 'synced') {
+            if (!zeroSizeInvolved && localUnchanged && cached['hash'] == remoteHash && cached['status'] == 'synced') {
               recordSyncSuccess(prefs, systemId, relPath, remoteHash, localTs);
               developer.log('SYNC: DB-cached synced (hash match, local unchanged) — skipping $relPath', name: 'VaultSync', level: 800);
               continue;
@@ -439,14 +450,24 @@ class SyncRepository {
             final String localHash;
             // Use cached hash if available (one read for block hashes only);
             // otherwise single-pass combined method (one read instead of two).
-            final cachedHash = await _hashService.getCachedHash(localInfo['uri'], localSize, localTs);
+            // The (uri, size, lastModified)-keyed hash cache is bypassed entirely when
+            // zeroSizeInvolved: it is keyed on the very same untrustworthy size, so a
+            // prior lookup at (uri, 0, ts) could hand back a stale hash — e.g. one
+            // cached the last time this same bad scan metadata was seen — masking a
+            // real content change. Read+hash the actual bytes every time instead, and
+            // skip writing the result back into that cache too (getLocalHash's own
+            // internal cache read has the identical staleness problem), so a later
+            // sync with correct metadata always gets a fresh answer.
+            final cachedHash = zeroSizeInvolved ? null : await _hashService.getCachedHash(localInfo['uri'], localSize, localTs);
             if (cachedHash != null) {
               currentBlockHashes = await _networkService.getBlockHashes(localInfo['uri'], masterKey);
               localHash = cachedHash;
             } else {
               final combined = await _networkService.getBlockHashesAndFileHash(localInfo['uri'], masterKey);
               currentBlockHashes = (combined['blockHashes'] as List).cast<String>();
-              localHash = await _hashService.getLocalHash(localInfo['uri'], localSize, localTs, precomputedHash: combined['fileHash'] as String);
+              localHash = zeroSizeInvolved
+                  ? combined['fileHash'] as String
+                  : await _hashService.getLocalHash(localInfo['uri'], localSize, localTs, precomputedHash: combined['fileHash'] as String);
             }
             if (localHash == remoteHash) {
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'synced', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
