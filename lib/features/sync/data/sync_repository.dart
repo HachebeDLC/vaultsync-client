@@ -440,11 +440,12 @@ class SyncRepository {
                 && (cached['size'] as num?)?.toInt() == localSize
                 && (localTs ~/ 1000) <= cachedTsSec;
 
-            // Zero-size metadata is where stale SAF metadata is suspected to bite:
-            // on-device, a Switch save that was 4012 bytes on disk was never
-            // uploaded over a 0-byte server copy, and the only branch consistent
-            // with the DB state is a scan reporting 0 bytes (inferred, not yet
-            // observed directly). The shortcuts below (journal + DB-cached hash match) only compare metadata/
+            // When either side is 0 bytes, don't trust metadata: on-device, a
+            // 4 KB Switch save was never uploaded over a 0-byte server copy. The
+            // 0-byte scans were real empty files in a stray copy of the save tree
+            // (the scan root skipped files/), not bad SAF metadata, but the lesson
+            // holds: an empty file matching an empty journal entry says nothing
+            // about the real save. The shortcuts below (journal + DB-cached hash match) only compare metadata/
             // journal entries against each other, never actual file content, so when
             // either side is reporting size 0 they cannot tell a real empty file from
             // bad scan metadata. Skip both shortcuts in that case and fall through to
@@ -505,6 +506,19 @@ class SyncRepository {
               onProgress?.call('Queueing $relPath for patching (Local Newer)...');
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
             } else {
+              // Never let an empty cloud copy replace a non-empty local file, the
+              // mirror of the upload guard above and of the server's 409. A 0-byte
+              // "newer" remote is a failure signature, not an edit: the production
+              // server holds 18 such files, and a device restoring them over real
+              // saves is how they spread. Leave the local file alone.
+              if ((remoteInfo['size'] as num).toInt() == 0 && localSize > 0) {
+                developer.log(
+                    'SYNC: Refusing to download empty cloud copy of $relPath over a $localSize-byte local file',
+                    name: 'VaultSync',
+                    level: 1000);
+                onError?.call('Skipped $relPath: cloud copy is empty but the local file is not');
+                continue;
+              }
               onProgress?.call('Queueing $relPath for patching (Cloud Newer)...');
               // Use originalRelPath (local-relative) so the job queue passes the correct
               // path to Kotlin's downloadFile. Using the cloud-relative relPath here

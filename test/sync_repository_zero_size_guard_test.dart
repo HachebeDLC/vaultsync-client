@@ -175,6 +175,27 @@ void main() {
       )).called(1);
     });
 
+    test('(d) empty cloud copy newer than a non-empty local file -> never queued for download', () async {
+      final olderLocalTs = staleTs - 86400000;
+      when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({
+        relPath: {'uri': localUri, 'lastModified': olderLocalTs, 'size': 4052, 'originalRelPath': relPath},
+      });
+      when(() => mockDiffService.fetchAllRemoteFiles(any())).thenAnswer((_) async => [
+        {'path': remotePath, 'hash': kEmptyHash, 'size': 0, 'updated_at': staleTs},
+      ]);
+      when(() => mockSyncStateDb.getState(localUri)).thenAnswer((_) async => null);
+      when(() => mockNetworkService.getBlockHashesAndFileHash(localUri, 'master-key'))
+          .thenAnswer((_) async => {'blockHashes': ['b1'], 'fileHash': 'real-content-hash-nonempty'});
+      final errors = <String>[];
+
+      await repository.syncSystem(systemId, localPath, ignoreConnectivity: true, onError: errors.add);
+
+      verifyNever(() => mockSyncStateDb.upsertState(any(), any(), any(), any(), 'pending_download',
+        systemId: any(named: 'systemId'), remotePath: any(named: 'remotePath'),
+        relPath: any(named: 'relPath'), blockHashes: any(named: 'blockHashes')));
+      expect(errors.single, contains('cloud copy is empty'));
+    });
+
     test('(b) stale 0B scan + matching journal/DB row, and real content IS empty -> marked synced, no upload', () async {
       when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({
         relPath: {'uri': localUri, 'lastModified': staleTs, 'size': 0, 'originalRelPath': relPath},

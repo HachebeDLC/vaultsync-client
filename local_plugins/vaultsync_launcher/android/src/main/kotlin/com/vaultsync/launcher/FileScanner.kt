@@ -230,10 +230,10 @@ class FileScanner(private val context: Context) {
          * `Os.fstat()` performed to work around unreliable SAF cursor metadata
          * there (see `scanSafRecursive`'s batched fstat pass).
          *
-         * The SAF cursor's COLUMN_SIZE is suspected to be as unreliable as its
-         * LAST_MODIFIED under Android/data: on-device, scans reported 0 bytes
-         * for the same Switch saves that are empty on the server, and a 4012-byte
-         * save went unsynced in a way only a 0-byte scan explains (inferred).
+         * Size is taken from the same fstat as mtime so both fields come from
+         * one consistent source. (The 0-byte scans that prompted this turned out
+         * to be genuinely empty files in a stray copy of the save tree, not bad
+         * cursor metadata.)
          * fstat's value wins whenever fstat produced one; the cursor value is
          * only the fallback when fstat failed outright (null) or, for mtime
          * only, reported a non-positive value (the existing "unreliable"
@@ -603,9 +603,9 @@ class FileScanner(private val context: Context) {
         // Batch-fstat in parallel for Android/data/ files where SAF cursor
         // LAST_MODIFIED is unreliable. Uses Os.fstat() on file descriptors
         // to get kernel mtime AND size. Parallelized to reduce IPC wall-clock time.
-        // The SAF cursor's COLUMN_SIZE is suspected to be as unreliable as its
-        // LAST_MODIFIED under Android/data (8 Switch saves scanned as 0 bytes
-        // on-device; whether they really held content is not yet verified). Since
+        // Size is read from the same stat as mtime, so both come from one
+        // consistent source (the 0-byte scans that prompted this were genuinely
+        // empty files in a stray copy of the save tree, not bad metadata). Since
         // we already pay for the fd open + Os.fstat() to fix mtime, read st_size
         // from the same stat struct at no extra IPC cost rather than opening a
         // second fd. Cursor values remain the fallback when fstat fails/throws.
