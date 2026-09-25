@@ -540,4 +540,18 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get rommZkWarningCancel => 'Annuler';
+
+  @override
+  String get batteryOptimizationDialogTitle =>
+      'Continuer la surveillance pendant les jeux ?';
+
+  @override
+  String get batteryOptimizationDialogBody =>
+      'Android arrête parfois le service de surveillance de VaultSync pendant qu\'un jeu est en cours, ce qui peut faire manquer la fermeture. Exempter VaultSync de l\'optimisation de la batterie lui permet de reprendre la surveillance ensuite. Ceci est facultatif.';
+
+  @override
+  String get batteryOptimizationDialogConfirm => 'Autoriser';
+
+  @override
+  String get batteryOptimizationDialogCancel => 'Pas maintenant';
 }

@@ -246,5 +246,9 @@
   "rommZkWarningTitle": "Privacy Warning",
   "rommZkWarningBody": "Enabling RomM integration requires the server to temporarily decrypt your saves in order to push them. Your saves will leave the end-to-end encrypted vault during this process.\n\nOnly enable this if you trust your VaultSync server.",
   "rommZkWarningConfirm": "Enable Anyway",
-  "rommZkWarningCancel": "Cancel"
+  "rommZkWarningCancel": "Cancel",
+  "batteryOptimizationDialogTitle": "Keep Watching During Games?",
+  "batteryOptimizationDialogBody": "Android sometimes stops VaultSync's background watcher while a game is running, so it can miss the exit. Exempting VaultSync from battery optimization lets it resume watching afterward. This is optional.",
+  "batteryOptimizationDialogConfirm": "Allow",
+  "batteryOptimizationDialogCancel": "Not Now"
 }

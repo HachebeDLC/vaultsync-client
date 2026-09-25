@@ -96,7 +96,7 @@ class SyncService {
         final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
         final ignoredFolders = systemConfig?.system.ignoredFolders;
         final saveExtensions = systemConfig?.system.saveExtensions;
-        final effectivePaths = await _resolveEffectivePaths(systemId);
+        final effectivePaths = await _resolveEffectivePaths(systemId, onError: onError);
 
         for (final path in effectivePaths) {
           final syncKey = '${systemId}_$path';
@@ -174,7 +174,7 @@ class SyncService {
             .saveExtensions;
       } catch (_) {}
 
-      final effectivePaths = await _resolveEffectivePaths(systemId);
+      final effectivePaths = await _resolveEffectivePaths(systemId, onError: onError);
       for (final path in effectivePaths) {
         if (path.startsWith('shizuku://') && (!shizukuRunning || !shizukuAuthorized)) {
           final reason = !shizukuRunning ? 'Shizuku not running' : 'Shizuku not authorized';
@@ -239,12 +239,12 @@ class SyncService {
     return await _repository.diffSystem(systemId, localPath);
   }
 
-  Future<List<String>> _resolveEffectivePaths(String systemId) async {
+  Future<List<String>> _resolveEffectivePaths(String systemId, {Function(String)? onError}) async {
     if (systemId.toLowerCase() == 'retroarch') {
       final paths = await _pathService.getRetroArchPaths();
       return [paths['saves']!, paths['states']!];
     }
-    return [await _pathService.getEffectivePath(systemId)];
+    return [await _pathService.getEffectivePath(systemId, onWarning: onError)];
   }
 
   // Cloud namespace must be 'RetroArch' (capitalized) for either:

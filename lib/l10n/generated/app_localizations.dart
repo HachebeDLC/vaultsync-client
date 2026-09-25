@@ -1075,6 +1075,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get rommZkWarningCancel;
+
+  /// No description provided for @batteryOptimizationDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep Watching During Games?'**
+  String get batteryOptimizationDialogTitle;
+
+  /// No description provided for @batteryOptimizationDialogBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Android sometimes stops VaultSync\'s background watcher while a game is running, so it can miss the exit. Exempting VaultSync from battery optimization lets it resume watching afterward. This is optional.'**
+  String get batteryOptimizationDialogBody;
+
+  /// No description provided for @batteryOptimizationDialogConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get batteryOptimizationDialogConfirm;
+
+  /// No description provided for @batteryOptimizationDialogCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Not Now'**
+  String get batteryOptimizationDialogCancel;
 }
 
 class _AppLocalizationsDelegate

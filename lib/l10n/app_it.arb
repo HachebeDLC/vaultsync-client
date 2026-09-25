@@ -167,5 +167,9 @@
   "rommZkWarningTitle": "Avviso sulla privacy",
   "rommZkWarningBody": "Abilitare l'integrazione RomM richiede che il server decifri temporaneamente i tuoi salvataggi per inviarli. Durante questo processo, i tuoi salvataggi usciranno dal vault cifrato end-to-end.\n\nAbilita questa funzione solo se hai fiducia nel tuo server VaultSync.",
   "rommZkWarningConfirm": "Abilita comunque",
-  "rommZkWarningCancel": "Annulla"
+  "rommZkWarningCancel": "Annulla",
+  "batteryOptimizationDialogTitle": "Continuare il monitoraggio durante i giochi?",
+  "batteryOptimizationDialogBody": "Android a volte interrompe il monitoraggio in background di VaultSync mentre un gioco è in esecuzione, quindi potrebbe non rilevare la chiusura. Escludere VaultSync dall'ottimizzazione della batteria gli consente di riprendere il monitoraggio in seguito. Questo passaggio è facoltativo.",
+  "batteryOptimizationDialogConfirm": "Consenti",
+  "batteryOptimizationDialogCancel": "Non ora"
 }

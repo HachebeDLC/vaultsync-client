@@ -167,6 +167,10 @@
   "rommZkWarningTitle": "Avertissement de confidentialité",
   "rommZkWarningBody": "L'activation de l'intégration RomM nécessite que le serveur déchiffre temporairement vos sauvegardes pour les transférer. Pendant ce processus, vos sauvegardes quittent le coffre chiffré de bout en bout.\n\nN'activez ceci que si vous faites confiance à votre serveur VaultSync.",
   "rommZkWarningConfirm": "Activer quand même",
-  "rommZkWarningCancel": "Annuler"
+  "rommZkWarningCancel": "Annuler",
+  "batteryOptimizationDialogTitle": "Continuer la surveillance pendant les jeux ?",
+  "batteryOptimizationDialogBody": "Android arrête parfois le service de surveillance de VaultSync pendant qu'un jeu est en cours, ce qui peut faire manquer la fermeture. Exempter VaultSync de l'optimisation de la batterie lui permet de reprendre la surveillance ensuite. Ceci est facultatif.",
+  "batteryOptimizationDialogConfirm": "Autoriser",
+  "batteryOptimizationDialogCancel": "Pas maintenant"
 }
 

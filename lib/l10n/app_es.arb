@@ -167,6 +167,10 @@
   "rommZkWarningTitle": "Advertencia de privacidad",
   "rommZkWarningBody": "Activar la integración con RomM requiere que el servidor descifre temporalmente tus partidas para enviarlas. Durante este proceso, tus partidas saldrán del cifrado de extremo a extremo.\n\nActiva esto solo si confías en tu servidor VaultSync.",
   "rommZkWarningConfirm": "Activar de todos modos",
-  "rommZkWarningCancel": "Cancelar"
+  "rommZkWarningCancel": "Cancelar",
+  "batteryOptimizationDialogTitle": "¿Mantener la vigilancia durante los juegos?",
+  "batteryOptimizationDialogBody": "Android a veces detiene el vigilante en segundo plano de VaultSync mientras juegas, por lo que puede pasar por alto el cierre. Eximir a VaultSync de la optimización de batería le permite reanudar la vigilancia después. Esto es opcional.",
+  "batteryOptimizationDialogConfirm": "Permitir",
+  "batteryOptimizationDialogCancel": "Ahora no"
 }
 

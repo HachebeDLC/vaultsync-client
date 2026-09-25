@@ -22,6 +22,30 @@ final systemPathsProvider = FutureProvider<Map<String, String>>((ref) async {
   return service.getAllSystemPaths();
 });
 
+/// Outcome of [SystemPathService.decidePackageRootMigration].
+enum PackageRootMigrationOutcome {
+  /// [rawPath] isn't a bare Switch/Eden package-root SAF tree — nothing to do.
+  notApplicable,
+
+  /// A SAF grant for the `/files` subfolder is already held; the caller
+  /// should switch to [PackageRootMigrationResult.migratedPath] and persist it.
+  migrated,
+
+  /// [rawPath] is a package-root tree, but no grant is held for `/files` —
+  /// the caller should leave the path as-is and warn instead of guessing.
+  blockedNoGrant,
+}
+
+/// Result of [SystemPathService.decidePackageRootMigration].
+class PackageRootMigrationResult {
+  final PackageRootMigrationOutcome outcome;
+
+  /// Set only when [outcome] is [PackageRootMigrationOutcome.migrated].
+  final String? migratedPath;
+
+  const PackageRootMigrationResult(this.outcome, [this.migratedPath]);
+}
+
 /// Service responsible for resolving platform-specific emulator paths and
 /// identifying game save locations.
 class SystemPathService {
@@ -562,6 +586,88 @@ class SystemPathService {
     return requested == granted || requested.startsWith('$granted/');
   }
 
+  /// Given a SAF tree URI whose tree document ID is exactly
+  /// `primary:Android/data/<package>` — the app's own external-files package
+  /// root, with no deeper segment (not already `.../files`, not some other
+  /// subfolder, not a child-document URI) — returns the tree URI for the
+  /// `<package>/files` subfolder, percent-encoded the same way the app stores
+  /// tree URIs elsewhere (see [_buildInitialUri]:
+  /// `content://com.android.externalstorage.documents/tree/primary%3AAndroid%2Fdata%2F<package>%2Ffiles`).
+  ///
+  /// Returns null for anything else: a non-SAF path, a SAF path from a
+  /// different document provider, a tree already at or below `/files`, or a
+  /// tree rooted anywhere other than `Android/data` on the `primary` volume.
+  ///
+  /// This exists because a Switch/Eden save folder is sometimes configured
+  /// (via the SAF picker) at the *package* directory
+  /// (`.../Android/data/dev.eden.eden_emulator`) instead of its `files`
+  /// subfolder where Eden actually keeps saves. The native scan's Switch
+  /// filter only recognizes top-level entries like `nand`/`user`/`save`, so
+  /// `files/` is skipped entirely when rooted at the package dir — see the
+  /// migration in [getEffectivePath] that uses this function.
+  ///
+  /// Deliberately parsed by hand (not via [Uri]'s path-segment API) so the
+  /// percent-encoding produced matches exactly what the app already persists,
+  /// rather than depending on [Uri]'s own (correct, but independently
+  /// verified here) encode/decode round-trip.
+  @visibleForTesting
+  static String? packageRootFilesTreeUri(String uri) {
+    const prefix =
+        'content://com.android.externalstorage.documents/tree/';
+    if (!uri.startsWith(prefix)) return null;
+
+    final encodedDocId = uri.substring(prefix.length);
+    // A literal '/' here means there's more after the tree-document segment
+    // (e.g. an appended `/document/...` child reference) — not the bare tree
+    // URI this function expects.
+    if (encodedDocId.isEmpty || encodedDocId.contains('/')) return null;
+
+    final String docId;
+    try {
+      docId = Uri.decodeComponent(encodedDocId);
+    } catch (_) {
+      return null;
+    }
+
+    final colonIndex = docId.indexOf(':');
+    if (colonIndex == -1) return null;
+    final volume = docId.substring(0, colonIndex);
+    if (volume != 'primary') return null;
+
+    final relPath = docId.substring(colonIndex + 1);
+    final relParts = relPath.split('/').where((s) => s.isNotEmpty).toList();
+    // Must be exactly Android/data/<package> — no more, no less.
+    if (relParts.length != 3) return null;
+    if (relParts[0] != 'Android' || relParts[1] != 'data') return null;
+    if (relParts[2].isEmpty) return null;
+
+    final newDocId = '$volume:${relParts.join('/')}/files';
+    final encodedNewDocId = Uri.encodeComponent(newDocId);
+    return '$prefix$encodedNewDocId';
+  }
+
+  /// Pure decision for the Switch/Eden package-root SAF migration (see
+  /// [packageRootFilesTreeUri] and [getEffectivePath]), separated out from
+  /// the async orchestration (persisting the change, logging, surfacing a
+  /// warning) so the decision itself — migrate, block, or don't apply — is
+  /// unit-testable without Android's real permission APIs.
+  @visibleForTesting
+  static PackageRootMigrationResult decidePackageRootMigration(
+      String rawPath,
+      {required bool grantHeld}) {
+    final filesUri = packageRootFilesTreeUri(rawPath);
+    if (filesUri == null) {
+      return const PackageRootMigrationResult(
+          PackageRootMigrationOutcome.notApplicable);
+    }
+    if (grantHeld) {
+      return PackageRootMigrationResult(
+          PackageRootMigrationOutcome.migrated, filesUri);
+    }
+    return const PackageRootMigrationResult(
+        PackageRootMigrationOutcome.blockedNoGrant);
+  }
+
   /// Ensures a usable SAF grant exists for [path], prompting the user if needed.
   ///
   /// Returns `false` when the folder is restricted and the user dismissed the
@@ -752,7 +858,14 @@ class SystemPathService {
   }
 
   /// Resolves the 'effective' path for Android, handling POSIX, SAF, and Shizuku abstraction.
-  Future<String> getEffectivePath(String systemId) async {
+  ///
+  /// [onWarning], when supplied, surfaces a user-facing message for a
+  /// migration this method could not safely apply on its own (see the
+  /// Switch/Eden package-root check below) — every sync entry point that
+  /// already has an `onError`-style callback threads it through here as
+  /// [onWarning] (see `SyncService._resolveEffectivePaths`).
+  Future<String> getEffectivePath(String systemId,
+      {void Function(String)? onWarning}) async {
     String? rawPath = await getSystemPath(systemId);
     final emulatorId = await getSystemEmulator(systemId);
 
@@ -802,6 +915,47 @@ class SystemPathService {
 
     if (posixPath.toLowerCase().contains('android/data')) {
       if (rawPath.startsWith('content://')) {
+        final sid = systemId.toLowerCase();
+        if (sid == 'switch' || sid == 'eden') {
+          final candidateFilesUri = packageRootFilesTreeUri(rawPath);
+          if (candidateFilesUri != null) {
+            // Same check used elsewhere in this file to verify a persisted
+            // SAF grant is still actually held before trusting it (see the
+            // reinstall-drops-grants handling further down) — reused here
+            // rather than guessing that a /files grant exists.
+            final grantHeld = await _platform.invokeMethod<bool>(
+                    'checkSafPermission', {'uri': candidateFilesUri}) ==
+                true;
+            final decision =
+                decidePackageRootMigration(rawPath, grantHeld: grantHeld);
+            switch (decision.outcome) {
+              case PackageRootMigrationOutcome.migrated:
+                final migratedPath = decision.migratedPath!;
+                developer.log(
+                    'PATH: Migrating $systemId SAF grant from package root to /files: $rawPath -> $migratedPath',
+                    name: 'VaultSync',
+                    level: 800);
+                rawPath = migratedPath;
+                await setSystemPath(systemId, rawPath);
+                return rawPath;
+              case PackageRootMigrationOutcome.blockedNoGrant:
+                developer.log(
+                    'PATH: $systemId SAF path is rooted at the Android/data package '
+                    'dir, not its files/ subfolder, but no SAF grant is held for '
+                    'files/ — leaving the path as-is rather than guessing. A stray '
+                    'copy outside files/ may get synced instead of the real save tree.',
+                    name: 'VaultSync',
+                    level: 900);
+                onWarning?.call(
+                    'VaultSync needs access to the "files" folder inside the '
+                    '$systemId emulator\'s data directory to sync correctly. '
+                    'Please re-select the save folder in Settings.');
+                break;
+              case PackageRootMigrationOutcome.notApplicable:
+                break;
+            }
+          }
+        }
         developer.log('PATH: Using SAF effective path for $systemId: $rawPath',
             name: 'VaultSync', level: 800);
         return rawPath;

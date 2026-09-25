@@ -531,4 +531,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rommZkWarningCancel => 'Cancel';
+
+  @override
+  String get batteryOptimizationDialogTitle => 'Keep Watching During Games?';
+
+  @override
+  String get batteryOptimizationDialogBody =>
+      'Android sometimes stops VaultSync\'s background watcher while a game is running, so it can miss the exit. Exempting VaultSync from battery optimization lets it resume watching afterward. This is optional.';
+
+  @override
+  String get batteryOptimizationDialogConfirm => 'Allow';
+
+  @override
+  String get batteryOptimizationDialogCancel => 'Not Now';
 }

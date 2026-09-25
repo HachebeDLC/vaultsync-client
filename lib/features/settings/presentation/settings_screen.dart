@@ -14,6 +14,7 @@ import '../../auth/domain/auth_provider.dart';
 import '../../sync/services/system_path_service.dart';
 import '../../sync/services/background_sync_service.dart';
 import '../../sync/services/desktop_background_sync_service.dart';
+import '../services/battery_optimization_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../l10n/generated/app_localizations.dart';
 
@@ -124,6 +125,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
        if (_hasUsagePermission) {
           ref.read(backgroundSyncServiceProvider).startMonitoring();
        }
+       await ref.read(batteryOptimizationServiceProvider).ensureExempt(
+         confirm: () => _confirmBatteryOptimizationExemption(),
+       );
        // The live polling loop dies with the process (low-memory killer),
        // so also register a periodic wake-up that catches up on missed
        // exits from usage-stats history. See BackgroundSyncService.catchUpMissedExits.
@@ -146,6 +150,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> with WidgetsBin
          await Workmanager().cancelByUniqueName('exit-catchup');
        }
     }
+  }
+
+  /// Rationale dialog shown before requesting the battery-optimization
+  /// exemption. Only shown when auto-sync-on-exit is turned on and the app
+  /// isn't already exempt — see [BatteryOptimizationService.ensureExempt].
+  Future<bool> _confirmBatteryOptimizationExemption() async {
+    if (!mounted) return false;
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.batteryOptimizationDialogTitle),
+        content: Text(l10n.batteryOptimizationDialogBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.batteryOptimizationDialogCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.batteryOptimizationDialogConfirm),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   Future<void> _togglePeriodicSync(bool value) async {

@@ -167,5 +167,9 @@
   "rommZkWarningTitle": "Datenschutz-Hinweis",
   "rommZkWarningBody": "Wenn du die RomM-Integration aktivierst, muss der Server deine Spielstände vorübergehend entschlüsseln, um sie übertragen zu können. Während dieses Vorgangs verlassen deine Daten den Ende-zu-Ende-verschlüsselten Tresor.\n\nAktiviere dies nur, wenn du deinem VaultSync-Server vertraust.",
   "rommZkWarningConfirm": "Trotzdem aktivieren",
-  "rommZkWarningCancel": "Abbrechen"
+  "rommZkWarningCancel": "Abbrechen",
+  "batteryOptimizationDialogTitle": "Überwachung während des Spielens beibehalten?",
+  "batteryOptimizationDialogBody": "Android beendet manchmal VaultSyncs Hintergrundüberwachung während ein Spiel läuft, sodass das Beenden übersehen werden kann. Wenn du VaultSync von der Akku-Optimierung ausnimmst, kann es die Überwachung danach fortsetzen. Dies ist optional.",
+  "batteryOptimizationDialogConfirm": "Erlauben",
+  "batteryOptimizationDialogCancel": "Nicht jetzt"
 }

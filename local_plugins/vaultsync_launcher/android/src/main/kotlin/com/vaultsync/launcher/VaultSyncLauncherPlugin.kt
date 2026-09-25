@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.DocumentsContract
 import android.provider.Settings
 import androidx.documentfile.provider.DocumentFile
@@ -234,6 +235,36 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 ctx.startActivity(intent)
                 result.success(true)
+            }
+            "isIgnoringBatteryOptimizations" -> {
+                val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+                result.success(pm.isIgnoringBatteryOptimizations(ctx.packageName))
+            }
+            "requestIgnoreBatteryOptimizations" -> {
+                val act = activity ?: return result.error("NO_ACTIVITY", "Activity is not available", null)
+                try {
+                    val primaryIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:${ctx.packageName}")
+                    }
+                    if (primaryIntent.resolveActivity(ctx.packageManager) != null) {
+                        act.startActivity(primaryIntent)
+                        result.success(true)
+                    } else {
+                        // Some OEMs (or a policy) don't resolve the direct-request intent;
+                        // fall back to the general allowlist settings screen.
+                        val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        if (fallbackIntent.resolveActivity(ctx.packageManager) != null) {
+                            act.startActivity(fallbackIntent)
+                            result.success(true)
+                        } else {
+                            android.util.Log.w("VaultSync", "No activity resolves battery optimization intents")
+                            result.success(false)
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("VaultSync", "requestIgnoreBatteryOptimizations failed: ${e.message}")
+                    result.success(false)
+                }
             }
             "isOnline" -> {
                 result.success(connectivityMonitor.isCurrentlyConnected())
