@@ -370,6 +370,46 @@ class SyncPathResolver {
     }
 
     if (sid == '3ds' || sid == 'citra' || sid == 'azahar') {
+       // Evidence (real device, POCO F8 Pro): Azahar/Citra really stores saves
+       // at `<sdmc-prefix>/title/00040000/<titleid>/data/00000001/<file>`
+       // (e.g. `sdmc/Nintendo 3DS/<id0>/<id1>/title/00040000/<titleid>/...`),
+       // never at the SAF root's `saves/<titleid>/...`. The scanner
+       // (DartFileScanner/FileScanner.shouldSyncFile) only ever syncs local
+       // paths that contain a `title/00040000` component, so downloading a
+       // remote-only `saves/<titleid>/...` cloud key to `saves/<titleid>/...`
+       // (the old fallback below) puts the file somewhere the scanner never
+       // looks: it is never recognized as already-local, and the same remote
+       // key is re-downloaded on every subsequent sync forever, without the
+       // game (which reads only the real sdmc path) ever seeing it. When the
+       // local scan already contains at least one real
+       // `.../title/00040000/<titleid>/...` save, mirror that same prefix for
+       // this file so it lands where both the scanner and the emulator expect
+       // it. Guarded to leave a cloud path that already carries a
+       // `title/00040000` component (i.e. is already in local-path shape)
+       // untouched, and to fall back to the old behaviour when no local
+       // title/00040000 folder exists to copy the prefix from.
+       if (!relPath.toLowerCase().contains('title/00040000')) {
+         final titleSavesMatch =
+             RegExp(r'^saves/([0-9A-Fa-f]{8})(?:/(.*))?$').firstMatch(relPath);
+         if (titleSavesMatch != null) {
+           final titleId = titleSavesMatch.group(1)!;
+           final rest = titleSavesMatch.group(2);
+           final sdmcPrefix = _find3dsSdmcPrefix(lastScanList);
+           if (sdmcPrefix != null) {
+             final destTail = (rest == null || rest.isEmpty)
+                 ? 'title/00040000/$titleId'
+                 : 'title/00040000/$titleId/$rest';
+             final dest = sdmcPrefix.isEmpty ? destTail : '$sdmcPrefix/$destTail';
+             developer.log(
+                 'RESOLVER: 3DS remote-only "$cloudRelPath" -> "$dest" '
+                 '(mirrored sdmc title/00040000 prefix)',
+                 name: 'VaultSync',
+                 level: 800);
+             return dest;
+           }
+         }
+       }
+
        final isRooted = lastScanList.any((f) => (f['relPath'] as String).startsWith('title/'));
        if (!isRooted) {
          // Mirror image of the getCloudRelPath fix above: a SAF root at the
@@ -543,6 +583,62 @@ class SyncPathResolver {
       }
     }
     return result;
+  }
+
+  /// Scans [lastScanList] for real 3DS/Citra/Azahar saves living at
+  /// `<prefix>/title/00040000/<8-hex-titleid>/...` and returns the `<prefix>`
+  /// segment(s) that precede `title/00040000` (e.g.
+  /// `sdmc/Nintendo 3DS/0000000000000000/0000000000000000`, or `''` when
+  /// `title/00040000` is itself the first component). Used by
+  /// [getLocalRelPath] to place a remote-only `saves/<titleid>/...` cloud
+  /// file next to the device's real saves instead of at the SAF root, where
+  /// the scanner never looks (see the 3DS branch above for the full story).
+  ///
+  /// The matched title id in the scanned path need not be the same title id
+  /// being resolved — it only tells us which sdmc layout this device uses.
+  /// When scan entries disagree (multiple distinct prefixes present), the
+  /// most common one is returned and the disagreement is logged; when only
+  /// one prefix is present it is returned without logging. Returns null when
+  /// no local scan entry has a `title/00040000/<8-hex>` component at all.
+  static String? _find3dsSdmcPrefix(List<dynamic> lastScanList) {
+    final titleIdSegment = RegExp(r'^[0-9A-Fa-f]{8}$');
+    final counts = <String, int>{};
+    final order = <String>[];
+
+    for (final f in lastScanList) {
+      final raw = f is Map ? f['relPath'] as String? : null;
+      if (raw == null) continue;
+      final segments = raw.replaceAll('\\', '/').split('/');
+      for (var i = 0; i + 2 < segments.length; i++) {
+        if (segments[i].toLowerCase() == 'title' &&
+            segments[i + 1] == '00040000' &&
+            titleIdSegment.hasMatch(segments[i + 2])) {
+          final prefix = segments.sublist(0, i).join('/');
+          if (!counts.containsKey(prefix)) order.add(prefix);
+          counts[prefix] = (counts[prefix] ?? 0) + 1;
+          break;
+        }
+      }
+    }
+
+    if (counts.isEmpty) return null;
+    if (counts.length == 1) return order.first;
+
+    var best = order.first;
+    var bestCount = counts[best]!;
+    for (final p in order) {
+      final c = counts[p]!;
+      if (c > bestCount) {
+        best = p;
+        bestCount = c;
+      }
+    }
+    developer.log(
+        'RESOLVER: 3DS local scan has multiple sdmc title/00040000 prefixes '
+        '$counts — using the most common: "$best"',
+        name: 'VaultSync',
+        level: 900);
+    return best;
   }
 
   static String dedupeRootSegment(String localRoot, String relPath) {
