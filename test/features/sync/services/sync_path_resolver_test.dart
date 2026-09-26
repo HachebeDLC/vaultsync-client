@@ -44,4 +44,62 @@ void main() {
       expect(result, 'SAVEDATA/UCUS98631');
     });
   });
+
+  group('SyncPathResolver.dealiasFilesRootRemoteKeys', () {
+    test('leaves the map unchanged when the root is not a package files/ dir', () {
+      final remoteFiles = {'files/saves/X.sav': {'hash': 'h1'}};
+      final result = SyncPathResolver.dealiasFilesRootRemoteKeys(
+        remoteFiles,
+        rootIsPackageFilesDir: false,
+      );
+      expect(result, same(remoteFiles));
+    });
+
+    test('melonDS case: files/saves/X with no canonical counterpart -> de-aliased, matches local saves/X', () {
+      final remoteFiles = {
+        'files/saves/Mario Kart DS (E).sav': {'hash': 'abc', 'size': 4096},
+      };
+      final result = SyncPathResolver.dealiasFilesRootRemoteKeys(
+        remoteFiles,
+        rootIsPackageFilesDir: true,
+      );
+      expect(result, {
+        'saves/Mario Kart DS (E).sav': {'hash': 'abc', 'size': 4096},
+      });
+    });
+
+    test('both files/saves/X and saves/X present -> canonical wins, duplicate logged once', () {
+      final remoteFiles = {
+        'files/saves/X.sav': {'hash': 'stale'},
+        'saves/X.sav': {'hash': 'fresh'},
+      };
+      String? loggedCanonical;
+      String? loggedAliased;
+      final result = SyncPathResolver.dealiasFilesRootRemoteKeys(
+        remoteFiles,
+        rootIsPackageFilesDir: true,
+        onDuplicate: (canonicalKey, aliasedKey) {
+          loggedCanonical = canonicalKey;
+          loggedAliased = aliasedKey;
+        },
+      );
+      expect(result, {
+        'saves/X.sav': {'hash': 'fresh'},
+      });
+      expect(loggedCanonical, 'saves/X.sav');
+      expect(loggedAliased, 'files/saves/X.sav');
+    });
+
+    test('non-aliased keys and an unrelated top-level "files" entry pass through untouched', () {
+      final remoteFiles = {
+        'saves/Y.sav': {'hash': 'y'},
+        'files': {'hash': 'dir-marker'},
+      };
+      final result = SyncPathResolver.dealiasFilesRootRemoteKeys(
+        remoteFiles,
+        rootIsPackageFilesDir: true,
+      );
+      expect(result, remoteFiles);
+    });
+  });
 }

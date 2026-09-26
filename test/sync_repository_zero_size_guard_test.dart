@@ -197,6 +197,71 @@ void main() {
       expect(errors.single, contains('cloud copy is empty'));
     });
 
+    test('(e) empty local file + non-empty cloud copy with an OLDER cloud timestamp -> still queued for download, never upload', () async {
+      // The local mtime is NEWER than the cloud copy's updated_at, which would
+      // normally take the "Local Newer" upload branch. An empty local file must
+      // never win that comparison — repairing the empty file via download is the
+      // only correct outcome, so the emptyLocalNonEmptyRemote guard must force
+      // the download branch regardless of what the timestamps say.
+      final olderRemoteTs = staleTs - 86400000;
+      const remoteHash64k = 'cloud-64kb-hash';
+      when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({
+        relPath: {'uri': localUri, 'lastModified': staleTs, 'size': 0, 'originalRelPath': relPath},
+      });
+      when(() => mockDiffService.fetchAllRemoteFiles(any())).thenAnswer((_) async => [
+        {'path': remotePath, 'hash': remoteHash64k, 'size': 65536, 'updated_at': olderRemoteTs},
+      ]);
+      when(() => mockSyncStateDb.getState(localUri)).thenAnswer((_) async => null);
+      when(() => mockNetworkService.getBlockHashesAndFileHash(localUri, 'master-key'))
+          .thenAnswer((_) async => {'blockHashes': ['b1'], 'fileHash': kEmptyHash});
+
+      await repository.syncSystem(systemId, localPath, ignoreConnectivity: true);
+
+      verify(() => mockSyncStateDb.upsertState(
+        localUri, 65536, olderRemoteTs, remoteHash64k, 'pending_download',
+        systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: any(named: 'blockHashes'),
+      )).called(1);
+
+      verifyNever(() => mockSyncStateDb.upsertState(
+        any(), any(), any(), any(), 'pending_upload',
+        systemId: any(named: 'systemId'), remotePath: any(named: 'remotePath'),
+        relPath: any(named: 'relPath'), blockHashes: any(named: 'blockHashes'),
+      ));
+    });
+
+    test('(f) both local and cloud copies empty, with an older cloud timestamp -> unchanged behaviour (still uploads, not forced to download)', () async {
+      // Sanity check that the new emptyLocalNonEmptyRemote guard only fires when
+      // the cloud copy is non-empty — a genuinely empty cloud copy must still
+      // fall through to the ordinary timestamp-based decision, exactly as
+      // before this change.
+      final olderRemoteTs = staleTs - 86400000;
+      when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({
+        relPath: {'uri': localUri, 'lastModified': staleTs, 'size': 0, 'originalRelPath': relPath},
+      });
+      when(() => mockDiffService.fetchAllRemoteFiles(any())).thenAnswer((_) async => [
+        {'path': remotePath, 'hash': kEmptyHash, 'size': 0, 'updated_at': olderRemoteTs},
+      ]);
+      when(() => mockSyncStateDb.getState(localUri)).thenAnswer((_) async => null);
+      when(() => mockNetworkService.getBlockHashesAndFileHash(localUri, 'master-key'))
+          .thenAnswer((_) async => {'blockHashes': ['b1'], 'fileHash': 'real-content-hash-nonempty'});
+
+      await repository.syncSystem(systemId, localPath, ignoreConnectivity: true);
+
+      // Local (with a real, non-empty hash) is newer than the remote's ts, and
+      // both are reported as size 0 — the pre-existing "Local Newer" path still
+      // applies unchanged: this file uploads instead of being forced to download.
+      verify(() => mockSyncStateDb.upsertState(
+        localUri, 0, staleTs, 'real-content-hash-nonempty', 'pending_upload',
+        systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: any(named: 'blockHashes'),
+      )).called(1);
+
+      verifyNever(() => mockSyncStateDb.upsertState(
+        any(), any(), any(), any(), 'pending_download',
+        systemId: any(named: 'systemId'), remotePath: any(named: 'remotePath'),
+        relPath: any(named: 'relPath'), blockHashes: any(named: 'blockHashes'),
+      ));
+    });
+
     test('(b) stale 0B scan + matching journal/DB row, and real content IS empty -> marked synced, no upload', () async {
       when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({
         relPath: {'uri': localUri, 'lastModified': staleTs, 'size': 0, 'originalRelPath': relPath},

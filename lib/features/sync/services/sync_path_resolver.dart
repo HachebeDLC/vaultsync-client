@@ -25,6 +25,67 @@ class SyncPathResolver {
     return lower.endsWith('.app') || lower.endsWith('.tmd') || lower.endsWith('.wad');
   }
 
+  /// Normalizes the `files/` alias in a remote file-listing map for a system
+  /// whose local scan root is itself an Android/data package's `files/`
+  /// directory (see `SystemPathService.isPackageFilesDir`,
+  /// `packageRootFilesTreeUri` and `packageRootFilesPosixPath`).
+  ///
+  /// Evidence (real device): melonDS's local root is
+  /// `.../Android/data/me.magnum.melonds/files`, and its saves scan as
+  /// `saves/<name>.sav` relative to that root. Another device on the same
+  /// account had melonDS configured at the *package* root instead
+  /// (`.../me.magnum.melonds`, one level up) and so uploaded the same files
+  /// as `files/saves/<name>.sav` — the `files/` segment baked into the cloud
+  /// path because, from that root, it really was part of the relative path.
+  /// Once the local root is `.../files`, `files/saves/<name>.sav` and
+  /// `saves/<name>.sav` are the exact same on-disk file, but as plain map
+  /// keys they never match: `files/saves/X` always looks remote-only against
+  /// a local scan keyed by `saves/X`, so it is downloaded to
+  /// `<root>/files/saves/X` (a nested duplicate) on every single sync,
+  /// forever, regardless of content.
+  ///
+  /// [rootIsPackageFilesDir] gates the whole rewrite: pass
+  /// `SystemPathService.isPackageFilesDir(effectiveRoot)`. When false, this
+  /// returns [remoteFiles] unchanged — a top-level `files/` segment is only
+  /// ever this alias when the scan root truly is a package's `files/` dir;
+  /// for any other root it might be a real, meaningfully-named subfolder.
+  ///
+  /// When both the aliased (`files/x`) and canonical (`x`) keys are present
+  /// in [remoteFiles] at once (e.g. one device uploaded both ways over time),
+  /// the canonical key wins — it is what every scan of this root actually
+  /// produces — and the alias is dropped rather than merged, reported via
+  /// [onDuplicate] so the caller can log it. This never renames or deletes
+  /// anything server-side; it only changes which cloud entry this device's
+  /// diff compares its local file against.
+  static Map<String, dynamic> dealiasFilesRootRemoteKeys(
+    Map<String, dynamic> remoteFiles, {
+    required bool rootIsPackageFilesDir,
+    void Function(String canonicalKey, String aliasedKey)? onDuplicate,
+  }) {
+    if (!rootIsPackageFilesDir) return remoteFiles;
+    const prefix = 'files/';
+
+    final result = <String, dynamic>{};
+    for (final entry in remoteFiles.entries) {
+      final key = entry.key;
+      if (!key.startsWith(prefix) || key.length <= prefix.length) {
+        result[key] = entry.value;
+      }
+    }
+    for (final entry in remoteFiles.entries) {
+      final key = entry.key;
+      if (key.startsWith(prefix) && key.length > prefix.length) {
+        final canonicalKey = key.substring(prefix.length);
+        if (remoteFiles.containsKey(canonicalKey)) {
+          onDuplicate?.call(canonicalKey, key);
+          continue;
+        }
+        result[canonicalKey] = entry.value;
+      }
+    }
+    return result;
+  }
+
 
   String getCloudRelPath(String systemId, String localRelPath, {Map<String, dynamic>? probedMetadata}) {
     final sid = systemId.toLowerCase();

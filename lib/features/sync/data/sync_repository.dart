@@ -403,7 +403,7 @@ class SyncRepository {
         final fileList = await _diffService.fetchAllRemoteFiles(cloudPrefix);
         final actualPrefix = cloudPrefix.toLowerCase();
 
-        final remoteFiles = <String, dynamic>{};
+        var remoteFiles = <String, dynamic>{};
         for (var f in fileList) {
           final path = f['path'] as String;
           String rel = path;
@@ -416,6 +416,26 @@ class SyncRepository {
             }
           }
           remoteFiles[rel] = f;
+        }
+
+        // De-alias the `files/` namespace duplication (see
+        // SyncPathResolver.dealiasFilesRootRemoteKeys) when this system's
+        // effective root is itself an Android/data package's `files/`
+        // directory: some device uploaded the same relative path with a
+        // redundant leading `files/` segment (its root was the package dir,
+        // one level up), which otherwise never matches this device's local
+        // scan keys and gets re-downloaded to a nested duplicate every sync.
+        if (SystemPathService.isPackageFilesDir(effectivePath)) {
+          remoteFiles = SyncPathResolver.dealiasFilesRootRemoteKeys(
+            remoteFiles,
+            rootIsPackageFilesDir: true,
+            onDuplicate: (canonicalKey, aliasedKey) => developer.log(
+                'SYNC: $systemId — "$aliasedKey" is a files/-prefixed duplicate of '
+                '"$canonicalKey" under this package\'s files/ root; using '
+                '"$canonicalKey" and ignoring the duplicate',
+                name: 'VaultSync',
+                level: 900),
+          );
         }
 
         // Prune queue rows the server can never satisfy again (its listing no
@@ -523,19 +543,28 @@ class SyncRepository {
             final String remoteHash = remoteInfo['hash'];
             final int localTs = (localInfo['lastModified'] as num).toInt();
             final int localSize = (localInfo['size'] as num).toInt();
+            final int remoteSize = (remoteInfo['size'] as num).toInt();
 
-            // Never let an empty local file replace a non-empty cloud copy. A save
-            // that reads as 0 bytes is a failure signal, not an edit: a stale SAF
-            // index listing files that no longer exist produced 23 such phantoms,
-            // all of which were uploaded over their real counterparts. Skipping
-            // leaves the good remote copy intact; the next sync re-evaluates.
-            if (localSize == 0 && (remoteInfo['size'] as num).toInt() > 0) {
+            // Never let an empty local file replace a non-empty cloud copy by
+            // UPLOAD. A save that reads as 0 bytes is a failure signal, not an
+            // edit: a stale SAF index listing files that no longer exist produced
+            // 23 such phantoms, all of which were uploaded over their real
+            // counterparts. This must NOT also block the DOWNLOAD that would
+            // repair the empty local file — that used to `continue` here
+            // unconditionally, which also skipped the legitimate repair download
+            // and left the file empty forever (a 65536-byte cloud copy restored
+            // to the server never made it back down). The forced-download branch
+            // below (`emptyLocalNonEmptyRemote`) is where that repair actually
+            // happens; this flag only needs to keep it out of the "Local Newer"
+            // upload branch, regardless of what the timestamps say — an empty
+            // file can never legitimately be newer than a real one.
+            final bool emptyLocalNonEmptyRemote = localSize == 0 && remoteSize > 0;
+            if (emptyLocalNonEmptyRemote) {
               developer.log(
-                  'SYNC: Refusing to upload empty $relPath over a ${remoteInfo['size']}-byte cloud copy',
+                  'SYNC: Local $relPath is empty (0 bytes) but the cloud copy is $remoteSize bytes — '
+                  'repairing via download instead of uploading the empty file over it',
                   name: 'VaultSync',
                   level: 1000);
-              onError?.call('Skipped $relPath: local file is empty but the cloud copy is not');
-              continue;
             }
 
             final cached = await _syncStateDb.getState(localInfo['uri']);
@@ -564,7 +593,7 @@ class SyncRepository {
             // either side is reporting size 0 they cannot tell a real empty file from
             // bad scan metadata. Skip both shortcuts in that case and fall through to
             // hashing the real bytes.
-            final bool zeroSizeInvolved = localSize == 0 || (remoteInfo['size'] as num).toInt() == 0;
+            final bool zeroSizeInvolved = localSize == 0 || remoteSize == 0;
 
             if (!zeroSizeInvolved && localUnchanged && isJournaledSynced(prefs, systemId, relPath, remoteHash)) continue;
             // Primary: hash + synced status match is sufficient — SAF/content:// paths
@@ -646,7 +675,11 @@ class SyncRepository {
               continue;
             }
 
-            if (localTsSecToCompare >= remoteTsSec) {
+            // emptyLocalNonEmptyRemote forces this into the download branch below
+            // regardless of the timestamp comparison — an empty local file must
+            // never be uploaded, no matter how "new" its mtime looks (see the
+            // comment where the flag is computed above).
+            if (!emptyLocalNonEmptyRemote && localTsSecToCompare >= remoteTsSec) {
               onProgress?.call('Queueing $relPath for patching (Local Newer)...');
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));
             } else {
@@ -655,7 +688,7 @@ class SyncRepository {
               // "newer" remote is a failure signature, not an edit: the production
               // server holds 18 such files, and a device restoring them over real
               // saves is how they spread. Leave the local file alone.
-              if ((remoteInfo['size'] as num).toInt() == 0 && localSize > 0) {
+              if (remoteSize == 0 && localSize > 0) {
                 developer.log(
                     'SYNC: Refusing to download empty cloud copy of $relPath over a $localSize-byte local file',
                     name: 'VaultSync',
