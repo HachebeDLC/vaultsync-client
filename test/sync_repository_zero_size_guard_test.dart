@@ -116,6 +116,7 @@ void main() {
     );
 
     when(() => mockPathService.getEffectivePath(any())).thenAnswer((_) async => localPath);
+    when(() => mockPathService.pathExists(any())).thenAnswer((_) async => true);
     when(() => mockPathService.mkdirs(any())).thenAnswer((_) async => true);
     when(() => mockApiClient.getEncryptionKey()).thenAnswer((_) async => 'master-key');
     when(() => mockJobQueue.process(any(), any(), any(),

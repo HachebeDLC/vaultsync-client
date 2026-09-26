@@ -144,6 +144,20 @@ class SyncDiffService {
       final localFiles =
           _conflictResolver.processLocalFiles(systemId, localList);
 
+      // Wii/GC/Dolphin NAND blobs are quarantined as garbage server-side and
+      // must never show up as syncable in the dashboard/diff view either —
+      // see SyncPathResolver.isWiiNandBlobCloudPath (mirrors
+      // cleanup_garbage._is_wii_nand_blob) and SyncRepository.syncSystem's
+      // matching filter on the actual upload/download path.
+      localFiles.removeWhere((relPath, _) =>
+          SyncPathResolver.isWiiNandBlobCloudPath('$cloudPrefix/$relPath'));
+      remoteFiles.removeWhere((relPath, info) {
+        final fullPath = (info is Map && info['path'] is String)
+            ? info['path'] as String
+            : '$cloudPrefix/$relPath';
+        return SyncPathResolver.isWiiNandBlobCloudPath(fullPath);
+      });
+
       final cloudRelPaths = <String>{
         ...localFiles.keys,
         ...remoteFiles.keys

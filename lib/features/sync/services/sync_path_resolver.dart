@@ -1,6 +1,31 @@
 import 'dart:developer' as developer;
 
 class SyncPathResolver {
+  /// Mirrors the server's Wii/GC/Dolphin NAND-blob quarantine rule exactly —
+  /// see `vaultsync_server/app/cleanup_garbage.py`'s `_is_wii_nand_blob`:
+  ///
+  ///   top = path.split('/')[0].lower()
+  ///   if top not in ('wii', 'dolphin', 'gc'): return False
+  ///   return path.lower().endswith(('.app', '.tmd', '.wad'))
+  ///
+  /// [cloudPath] must be the FULL cloud-relative path, including the
+  /// top-level system segment (e.g. `wii/00010008/.../content/0000001c.app`),
+  /// not a path already stripped of it. The server quarantines these NAND
+  /// install/title-metadata blobs as garbage — a download of one 404s, and an
+  /// upload of one just gets quarantined right back — so the client must
+  /// never queue them for either direction in the first place. Case
+  /// -insensitive on both the top segment and the suffix, exactly like the
+  /// server.
+  static bool isWiiNandBlobCloudPath(String cloudPath) {
+    final parts = cloudPath.split('/');
+    if (parts.isEmpty) return false;
+    final top = parts.first.toLowerCase();
+    if (top != 'wii' && top != 'dolphin' && top != 'gc') return false;
+    final lower = cloudPath.toLowerCase();
+    return lower.endsWith('.app') || lower.endsWith('.tmd') || lower.endsWith('.wad');
+  }
+
+
   String getCloudRelPath(String systemId, String localRelPath, {Map<String, dynamic>? probedMetadata}) {
     final sid = systemId.toLowerCase();
     final parts = localRelPath.split('/');

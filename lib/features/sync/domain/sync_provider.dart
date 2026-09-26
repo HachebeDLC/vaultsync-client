@@ -73,7 +73,17 @@ class SyncNotifier extends StateNotifier<SyncState> {
   }
 
   void _addError(dynamic error, {String systemId = 'All'}) {
-    final userError = ErrorMapper.map(error);
+    // `onError` callbacks throughout the sync pipeline hand back an
+    // already-human-readable String (a permission/skip reason, or a
+    // pre-formatted "Title: message" from a mapped exception) rather than the
+    // raw exception object. Running a String back through ErrorMapper.map
+    // never matches any of its checks and silently replaces it with the
+    // generic "Sync Failed" fallback — exactly the swallowed-real-cause
+    // symptom this banner should not have. Only map real exception objects;
+    // show a String as-is.
+    final userError = error is String
+        ? UserFacingError(title: 'Sync Issue', message: error)
+        : ErrorMapper.map(error);
     state = state.copyWith(syncErrors: [...state.syncErrors, userError]);
     
     String? actionLabel;

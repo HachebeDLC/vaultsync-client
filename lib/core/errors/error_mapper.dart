@@ -21,10 +21,49 @@ class UserFacingError {
   String toString() => '$title: $message';
 }
 
+/// Thrown by [SyncRepository.syncSystem] when a system's configured local
+/// folder does not exist and cannot be created because it lives inside
+/// another app's `Android/data/<package>` directory — that directory is only
+/// created by the emulator itself the first time it runs, and VaultSync has
+/// no way to create it under scoped storage (see
+/// `SystemPathService.safNeededFor`). Mapped below into a specific,
+/// non-fatal, per-system message instead of the generic "Sync Failed"
+/// catch-all, and must not abort syncing the other configured systems.
+class MissingSyncFolderException implements Exception {
+  final String systemId;
+  final String path;
+
+  MissingSyncFolderException(this.systemId, this.path);
+
+  @override
+  String toString() =>
+      '$systemId: folder not found ($path). Open the emulator once or pick the folder again.';
+}
+
+/// Builds the raw diagnostic string persisted alongside a friendly mapped
+/// error (see `SyncLog.detail`) — the exception's real type and message,
+/// trimmed to ~300 chars. This is what actually failed; it is never shown as
+/// the primary UI text (that stays the friendly title/message from
+/// [ErrorMapper.map]) but lets adb/logcat and the in-app history show the
+/// real cause instead of a swallowed generic message.
+String buildErrorDetail(dynamic error) {
+  final raw = '${error.runtimeType}: $error';
+  return raw.length > 300 ? '${raw.substring(0, 300)}…' : raw;
+}
+
 class ErrorMapper {
   static UserFacingError map(dynamic error) {
     final errStr = error.toString();
-    
+
+    if (error is MissingSyncFolderException) {
+      return UserFacingError(
+        title: 'Folder Not Found',
+        message: error.toString(),
+        action: SyncAction.reselectFolder,
+        originalError: error,
+      );
+    }
+
     if (error is ApiException || errStr.contains('HTTP 401') || errStr.contains('HTTP 403')) {
       int statusCode = 0;
       if (error is ApiException) {

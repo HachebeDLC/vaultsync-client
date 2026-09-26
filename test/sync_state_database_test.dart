@@ -239,4 +239,88 @@ void main() {
       expect(versions.length, 1);
     });
   });
+
+  // Covers item 6: a failed/pending_download job whose remote_path the
+  // server no longer lists (quarantined, deleted, or never valid — e.g. the
+  // 199 Wii NAND-blob rows on a real device, 179 of which 404'd forever)
+  // must be dropped instead of retried indefinitely.
+  group('pruneStaleQueueRows', () {
+    test('removes a failed row whose remote_path is not in the current listing', () async {
+      await syncDb.upsertState('/local/a.bin', 100, 100, 'h', 'failed',
+          systemId: 'wii', remotePath: 'wii/00010008/x/content/1.app');
+
+      final removed = await syncDb.pruneStaleQueueRows('wii', <String>{});
+
+      expect(removed, 1);
+      expect(await syncDb.getState('/local/a.bin'), isNull);
+    });
+
+    test('removes a pending_download row whose remote_path is not in the current listing', () async {
+      await syncDb.upsertState('/local/b.bin', 100, 100, 'h', 'pending_download',
+          systemId: 'wii', remotePath: 'wii/title/00010001/x.bin');
+
+      final removed = await syncDb.pruneStaleQueueRows('wii', <String>{'wii/other/file.bin'});
+
+      expect(removed, 1);
+      expect(await syncDb.getState('/local/b.bin'), isNull);
+    });
+
+    test('keeps a failed/pending_download row whose remote_path is still listed', () async {
+      const remotePath = 'wii/title/00010000/RSAE01/save.bin';
+      await syncDb.upsertState('/local/c.bin', 100, 100, 'h', 'failed',
+          systemId: 'wii', remotePath: remotePath);
+
+      final removed = await syncDb.pruneStaleQueueRows('wii', <String>{remotePath});
+
+      expect(removed, 0);
+      expect(await syncDb.getState('/local/c.bin'), isNotNull);
+    });
+
+    test('never touches a pending_upload row, even when its remote_path is unlisted', () async {
+      await syncDb.upsertState('/local/d.bin', 100, 100, 'h', 'pending_upload',
+          systemId: 'wii', remotePath: 'wii/title/00010000/new_save.bin');
+
+      final removed = await syncDb.pruneStaleQueueRows('wii', <String>{});
+
+      expect(removed, 0);
+      expect(await syncDb.getState('/local/d.bin'), isNotNull);
+    });
+
+    test('never touches a synced row, even when its remote_path is unlisted', () async {
+      await syncDb.upsertState('/local/e.bin', 100, 100, 'h', 'synced',
+          systemId: 'wii', remotePath: 'wii/title/00010000/old_save.bin');
+
+      final removed = await syncDb.pruneStaleQueueRows('wii', <String>{});
+
+      expect(removed, 0);
+      expect(await syncDb.getState('/local/e.bin'), isNotNull);
+    });
+
+    test('never touches rows for a different systemId', () async {
+      await syncDb.upsertState('/local/f.bin', 100, 100, 'h', 'failed',
+          systemId: 'gc', remotePath: 'wii/title/00010000/f.bin');
+
+      final removed = await syncDb.pruneStaleQueueRows('wii', <String>{});
+
+      expect(removed, 0);
+      expect(await syncDb.getState('/local/f.bin'), isNotNull);
+    });
+
+    test('also removes the row from sync_block_hashes', () async {
+      await syncDb.upsertState('/local/g.bin', 100, 100, 'h', 'failed',
+          systemId: 'wii', remotePath: 'wii/title/00010000/g.bin', blockHashes: '["bh1"]');
+
+      final removed = await syncDb.pruneStaleQueueRows('wii', <String>{});
+
+      expect(removed, 1);
+      final db = await syncDb.database;
+      final blockRows = await db.query('sync_block_hashes', where: 'path = ?', whereArgs: ['/local/g.bin']);
+      expect(blockRows, isEmpty);
+    });
+
+    test('returns 0 without touching anything when there are no matching rows', () async {
+      final removed = await syncDb.pruneStaleQueueRows('wii', <String>{});
+      expect(removed, 0);
+    });
+  });
 }

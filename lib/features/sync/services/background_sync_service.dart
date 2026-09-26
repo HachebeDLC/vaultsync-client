@@ -46,6 +46,23 @@ class BackgroundSyncService {
   bool _catchUpInProgress = false;
   void Function()? _unregister;
 
+  /// How long after a package's exit sync completes to ignore a second exit
+  /// notification for the *same package*, arriving from either detection
+  /// path. Both the live `onEmulatorClosed` callback (native foreground-
+  /// service detector) and [catchUpMissedExits] (run at app startup and every
+  /// 15 minutes) call [_syncClosedPackage] for the same package when the app
+  /// is opened right after an emulator closes — the native detector sees the
+  /// exit live, and the very next catch-up run sees the same exit again in
+  /// its lookback window — so without this guard the same system was synced
+  /// twice back to back.
+  static const Duration kDuplicateExitSyncWindow = Duration(seconds: 90);
+
+  /// Last time each package's exit was successfully synced, by either
+  /// detection path. In-memory only (per process/isolate) — intentionally not
+  /// persisted, since the window is short and only needs to survive the two
+  /// detection paths racing each other within the same app session.
+  final Map<String, DateTime> _lastPackageSyncAt = {};
+
   BackgroundSyncService(this._syncService, this._pathService,
       {@visibleForTesting bool? isAndroidOverride})
       : _isAndroid = isAndroidOverride ?? Platform.isAndroid {
@@ -135,6 +152,19 @@ class BackgroundSyncService {
 
     if (systemId == null) return false;
 
+    final lastSync = _lastPackageSyncAt[package];
+    if (lastSync != null) {
+      final elapsed = DateTime.now().difference(lastSync);
+      if (elapsed < kDuplicateExitSyncWindow) {
+        developer.log(
+            '$logPrefix: Skipping duplicate exit sync for $package ($systemId) — '
+            'already synced ${elapsed.inSeconds}s ago via the other detection path',
+            name: 'VaultSync',
+            level: 800);
+        return true;
+      }
+    }
+
     final path = await _pathService.getEffectivePath(systemId);
     final systems = await _pathService.getEmulatorRepository().loadSystems();
     final config = systems.where((s) => s.system.id == systemId).firstOrNull;
@@ -147,6 +177,7 @@ class BackgroundSyncService {
         onProgress: (msg) =>
             developer.log('$logPrefix: $msg', name: 'VaultSync', level: 800),
       );
+      _lastPackageSyncAt[package] = DateTime.now();
       return true;
     } catch (e) {
       developer.log('$logPrefix SYNC FAILED',

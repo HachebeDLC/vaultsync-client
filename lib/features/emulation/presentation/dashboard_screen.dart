@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -222,9 +223,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with WidgetsB
           if (bridgeAlert != null) bridgeAlert,
           if (syncState.syncErrors.isNotEmpty && bridgeAlert == null)
             _buildActionAlert(
-              syncState.syncErrors.first.title, 
+              syncState.syncErrors.first.title,
               syncState.syncErrors.first.message,
-              Icons.error_outline, 
+              Icons.error_outline,
               Colors.red.shade900,
               onAction: () {
                 final error = syncState.syncErrors.first;
@@ -240,6 +241,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with WidgetsB
                 ref.read(syncProvider.notifier).clearErrors();
               },
               actionLabel: _getActionLabel(syncState.syncErrors.first.action, l10n),
+              onShowDetails: () => _showErrorDetails(context, syncState.syncErrors.first),
             ),
           
           Expanded(
@@ -333,7 +335,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with WidgetsB
     );
   }
 
-  Widget _buildActionAlert(String title, String subtitle, IconData icon, Color color, {required VoidCallback onAction, required String actionLabel}) {
+  /// [subtitle] is capped to a few lines with an ellipsis so a very long
+  /// message (a raw exception, or several systems' worth of reasons joined
+  /// together) cannot grow this banner past the space its parent Column
+  /// actually has — on a real device this pushed the dashboard's body content
+  /// below it into a "RenderFlex overflowed by 17 pixels on the bottom", and
+  /// the underlying error was never visible anyway (the banner clipped, and
+  /// there was no way to read the rest). When [onShowDetails] is supplied, a
+  /// "Details" affordance opens the full text in a scrollable, selectable
+  /// dialog instead.
+  Widget _buildActionAlert(String title, String subtitle, IconData icon, Color color, {required VoidCallback onAction, required String actionLabel, VoidCallback? onShowDetails}) {
      return Container(
         margin: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -343,36 +354,102 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with WidgetsB
         ),
         child: Padding(
           padding: const EdgeInsets.all(12.0),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                child: Icon(icon, color: Colors.white, size: 20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                    child: Icon(icon, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text(
+                          subtitle,
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: onAction,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: color,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ],
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text(subtitle, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                  ],
+              if (onShowDetails != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: onShowDetails,
+                    style: TextButton.styleFrom(
+                      foregroundColor: color,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                    ),
+                    child: const Text('Details', style: TextStyle(fontSize: 12)),
+                  ),
                 ),
-              ),
-              ElevatedButton(
-                onPressed: onAction, 
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: color, 
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  visualDensity: VisualDensity.compact,
-                ),
-                child: Text(actionLabel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-              ),
             ],
           ),
         ),
      );
+  }
+
+  /// Full, unabridged error text — the friendly title/message plus, when
+  /// known, the real underlying cause (exception type + message) — in a
+  /// scrollable, selectable dialog. This is where the text the banner above
+  /// truncates is actually fully readable, and where a user can copy it into
+  /// a bug report.
+  void _showErrorDetails(BuildContext context, UserFacingError error) {
+    final detail = buildErrorDetail(error.originalError);
+    final fullText = error.originalError != null
+        ? '${error.title}\n\n${error.message}\n\nCause: $detail'
+        : '${error.title}\n\n${error.message}';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Error Details'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 400),
+              child: SingleChildScrollView(
+                child: SelectableText(fullText, style: const TextStyle(fontSize: 13)),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Clipboard.setData(ClipboardData(text: fullText)),
+              child: const Text('Copy'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

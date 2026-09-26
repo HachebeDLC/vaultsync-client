@@ -1,11 +1,13 @@
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import '../data/sync_repository.dart';
 import '../domain/sync_log_provider.dart';
+import '../domain/notification_models.dart';
 import '../domain/notification_provider.dart';
 import 'system_path_service.dart';
 import 'notification_service.dart';
@@ -86,6 +88,12 @@ class SyncService {
       final bool shizukuAuthorized = shizukuStatus?['authorized'] == true;
 
       final Set<String> syncedPaths = {};
+      // One failing system must not stop the rest — see the per-system
+      // try/catch below. Collected so the "All" summary at the end names
+      // every system that failed and why, instead of the loop aborting on
+      // the first failure and (across repeated sync attempts) leaving behind
+      // a pile of identical, contentless "Sync Failed" entries.
+      final List<String> failedSystemSummaries = [];
 
       for (final entry in paths.entries) {
         if (isCancelled?.call() == true) { onProgress?.call('Sync Cancelled'); return; }
@@ -93,53 +101,100 @@ class SyncService {
         if (isBackground) await _notificationService.showSyncStatus('VaultSync', 'Syncing $systemId...');
         onProgress?.call('Syncing $systemId...');
 
-        final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
-        final ignoredFolders = systemConfig?.system.ignoredFolders;
-        final saveExtensions = systemConfig?.system.saveExtensions;
-        final effectivePaths = await _resolveEffectivePaths(systemId, onError: onError);
+        try {
+          final systemConfig = allSystems.where((s) => s.system.id == systemId).firstOrNull;
+          final ignoredFolders = systemConfig?.system.ignoredFolders;
+          final saveExtensions = systemConfig?.system.saveExtensions;
+          final effectivePaths = await _resolveEffectivePaths(systemId, onError: onError);
 
-        for (final path in effectivePaths) {
-          final syncKey = '${systemId}_$path';
-          if (syncedPaths.contains(syncKey)) continue;
+          for (final path in effectivePaths) {
+            final syncKey = '${systemId}_$path';
+            if (syncedPaths.contains(syncKey)) continue;
 
-          if (path.startsWith('shizuku://')) {
-            if (!shizukuRunning || !shizukuAuthorized) {
-              final reason = !shizukuRunning ? 'Shizuku not running' : 'Shizuku not authorized';
-              developer.log('SKIPPING $systemId: $reason', name: 'VaultSync', level: 900);
-              _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Skipped: $reason', isError: true);
+            if (path.startsWith('shizuku://')) {
+              if (!shizukuRunning || !shizukuAuthorized) {
+                final reason = !shizukuRunning ? 'Shizuku not running' : 'Shizuku not authorized';
+                developer.log('SKIPPING $systemId: $reason', name: 'VaultSync', level: 900);
+                _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Skipped: $reason', isError: true);
+                continue;
+              }
+            }
+
+            final hasPermission = await _pathService.ensureSafPermission(path);
+            if (!hasPermission) {
+              onProgress?.call('Permission denied for $path. Skipping.');
+              onError?.call('Permission denied for $path');
               continue;
             }
-          }
 
-          final hasPermission = await _pathService.ensureSafPermission(path);
-          if (!hasPermission) { 
-            onProgress?.call('Permission denied for $path. Skipping.'); 
-            onError?.call('Permission denied for $path'); 
-            continue; 
+            await _repository.syncSystem(
+              _cloudNamespaceFor(systemId, path),
+              path,
+              ignoredFolders: ignoredFolders,
+              saveExtensions: saveExtensions,
+              onProgress: onProgress,
+              onError: onError,
+              fastSync: fastSync,
+              isCancelled: isCancelled,
+              ignoreConnectivity: ignoreConnectivity
+            );
+            syncedPaths.add(syncKey);
           }
-
-          await _repository.syncSystem(
-            _cloudNamespaceFor(systemId, path),
-            path,
-            ignoredFolders: ignoredFolders,
-            saveExtensions: saveExtensions,
-            onProgress: onProgress,
-            onError: onError,
-            fastSync: fastSync,
-            isCancelled: isCancelled,
-            ignoreConnectivity: ignoreConnectivity
+          _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Synchronized');
+        } catch (e, stack) {
+          developer.log('SYNC ERROR ($systemId): $e\n$stack', name: 'VaultSync', level: 1000);
+          // developer.log never reaches logcat on a release Android build —
+          // this is what lets adb see a sync failure at all.
+          debugPrint('VaultSync ERROR [$systemId]: ${buildErrorDetail(e)}');
+          final userError = ErrorMapper.map(e);
+          _ref?.read(syncLogProvider.notifier).addLog(
+            systemId,
+            userError.message,
+            isError: true,
+            errorTitle: userError.title,
+            detail: buildErrorDetail(e),
           );
-          syncedPaths.add(syncKey);
+          failedSystemSummaries.add('$systemId: ${userError.title} — ${userError.message}');
+          // A session-expired/login error is not specific to this system —
+          // every other system would fail the exact same way, so there is no
+          // point continuing the loop. Everything else is per-system and the
+          // loop moves on to the next one.
+          if (userError.action == SyncAction.login) rethrow;
         }
-        _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Synchronized');
       }
       await triggerQueueProcessing();
-      onProgress?.call('Sync Complete!');
+
+      if (failedSystemSummaries.isNotEmpty) {
+        final combinedMessage = failedSystemSummaries.join('; ');
+        final aggregateTitle = failedSystemSummaries.length == 1
+            ? '1 system failed to sync'
+            : '${failedSystemSummaries.length} systems failed to sync';
+        _ref?.read(notificationLogProvider.notifier).addNotification(
+          title: aggregateTitle,
+          message: combinedMessage,
+          type: NotificationType.error,
+          systemId: 'All',
+        );
+        _ref?.read(syncLogProvider.notifier).addLog(
+          'All',
+          combinedMessage,
+          isError: true,
+          errorTitle: aggregateTitle,
+        );
+        onError?.call(combinedMessage);
+        onProgress?.call('Sync completed with ${failedSystemSummaries.length} error(s)');
+      } else {
+        onProgress?.call('Sync Complete!');
+      }
     } catch(e, stack) {
+      // Reached only for failures outside the per-system loop above (loading
+      // the configured systems/paths, or a login-required error rethrown from
+      // inside it — see the comment there).
       developer.log('SYNC ERROR (All): $e\n$stack', name: 'VaultSync', level: 1000);
+      debugPrint('VaultSync ERROR [All]: ${buildErrorDetail(e)}');
       _ref?.read(notificationLogProvider.notifier).addError(e, systemId: 'All');
       final userError = ErrorMapper.map(e);
-      _ref?.read(syncLogProvider.notifier).addLog('All', userError.message, isError: true, errorTitle: userError.title);
+      _ref?.read(syncLogProvider.notifier).addLog('All', userError.message, isError: true, errorTitle: userError.title, detail: buildErrorDetail(e));
       onError?.call(userError.toString());
       if (userError.action == SyncAction.login) rethrow;
     } finally {
@@ -209,9 +264,10 @@ class SyncService {
       await triggerQueueProcessing();
       _ref?.read(syncLogProvider.notifier).addLog(systemId, 'Auto-Sync Success');
     } catch(e) {
+      debugPrint('VaultSync ERROR [$systemId]: ${buildErrorDetail(e)}');
       _ref?.read(notificationLogProvider.notifier).addError(e, systemId: systemId);
       final userError = ErrorMapper.map(e);
-      _ref?.read(syncLogProvider.notifier).addLog(systemId, userError.message, isError: true, errorTitle: userError.title);
+      _ref?.read(syncLogProvider.notifier).addLog(systemId, userError.message, isError: true, errorTitle: userError.title, detail: buildErrorDetail(e));
       onError?.call(userError.toString());
       if (userError.action == SyncAction.login) rethrow;
     } finally {

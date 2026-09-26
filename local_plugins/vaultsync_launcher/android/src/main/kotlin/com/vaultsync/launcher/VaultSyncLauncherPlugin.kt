@@ -182,6 +182,22 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
         android.util.Log.d("VaultSync", "📲 METHOD CALL: ${call.method}")
         when (call.method) {
             "getAndroidVersion" -> result.success(Build.VERSION.SDK_INT)
+            "getDeviceSettingsName" -> {
+                // The user-set name from Settings > About phone > Device name.
+                // Read via the raw Settings.Global key rather than the
+                // Settings.Global.DEVICE_NAME constant (not present on all
+                // compileSdk levels) — no permission is required to read it.
+                // Falls back to null (letting the Dart side fall through to
+                // the raw model/build code) when unset or unreadable, e.g. on
+                // OEM builds that don't populate it.
+                val name = try {
+                    Settings.Global.getString(ctx.contentResolver, "device_name")
+                } catch (e: Exception) {
+                    android.util.Log.w("VaultSync", "getDeviceSettingsName failed: ${e.message}")
+                    null
+                }
+                result.success(name)
+            }
             "acquirePowerLock" -> {
                 powerManagerHelper.acquirePowerLock()
                 result.success(true)

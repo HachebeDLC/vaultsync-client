@@ -63,4 +63,44 @@ void main() {
       expect(results.first['status'], 'Local Only');
     });
   });
+
+  group('Wii NAND blob exclusion (item 5)', () {
+    test('diffSystem excludes .app/.tmd/.wad NAND blobs from the results', () async {
+      when(() => mockApiClient.get(any(), queryParams: any(named: 'queryParams')))
+          .thenAnswer((_) async => {
+                'files': [
+                  {
+                    'path': 'wii/00010008/00000002/content/0000001c.app',
+                    'size': 10,
+                    'updated_at': 1000,
+                    'hash': 'h1',
+                  },
+                  {
+                    'path': 'wii/title/00010000/RSAE01/data01.bin',
+                    'size': 20,
+                    'updated_at': 2000,
+                    'hash': 'h2',
+                  },
+                ],
+                'next_cursor': null,
+              });
+      when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({});
+      when(() => mockConflictResolver.sortResults(any()))
+          .thenAnswer((inv) => inv.positionalArguments[0] as List<Map<String, dynamic>>);
+      when(() => mockSyncStateDb.getState(any())).thenAnswer((_) async => null);
+
+      final results = await diffService.diffSystem(
+        'wii',
+        '/roms/wii',
+        effectivePath: '/roms/wii',
+        getCachedOrNewScan: (sys, path, ignore, [saveExts]) async => [],
+        isJournaledSynced: (prefs, sys, rel, hash, {localTs}) => false,
+        recordSyncSuccess: (prefs, sys, rel, hash, [ts]) {},
+      );
+
+      expect(results.length, 1);
+      expect(results.first['relPath'], 'title/00010000/RSAE01/data01.bin');
+      expect(results.first['status'], 'Remote Only');
+    });
+  });
 }

@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mutex/mutex.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:path/path.dart' as p;
-import 'package:meta/meta.dart';
+import '../../../core/errors/error_mapper.dart';
 import 'file_cache.dart';
 import 'dart_file_scanner.dart';
 import 'sync_state_database.dart';
@@ -102,22 +103,70 @@ class SyncRepository {
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
   final _syncLock = Mutex();
 
+  /// Overridable so unit tests (which never run on real Android) can exercise
+  /// the native device-name lookup branch of [getDeviceNameInternal] without
+  /// a real device. Defaults to the real platform check everywhere else.
+  final bool _isAndroid;
+
   String? _cachedDeviceName;
   List<dynamic> _lastScanList = [];
 
   SyncRepository(
     this._apiClient, this._pathService, this._fileCache, this._networkService,
     this._pathResolver, this._syncStateDb, this._hashService, this._conflictResolver,
-    this._switchResolver, this._diffService, this._jobQueue, this._ref,
-  );
+    this._switchResolver, this._diffService, this._jobQueue, this._ref, {
+    @visibleForTesting bool? isAndroidOverride,
+  }) : _isAndroid = isAndroidOverride ?? Platform.isAndroid;
+
+  /// SharedPreferences key for an optional user-set device name override.
+  /// When present and non-blank this always wins — it is how a device whose
+  /// raw model reports as an unrecognisable code (e.g. a POCO F8 Pro
+  /// reporting as "2510DPC44G") can be given a name a user actually
+  /// recognises in the server's device list.
+  static const String kDeviceNameOverridePrefKey = 'device_name_override';
 
   Future<String> _getDeviceName() async => getDeviceNameInternal();
 
+  /// Resolves this device's display name, in order:
+  ///  1. [kDeviceNameOverridePrefKey], if the user has set one.
+  ///  2. On Android, the user-set name from Settings > About phone > Device
+  ///     name (`Settings.Global.DEVICE_NAME`, read via the native
+  ///     `getDeviceSettingsName` method — no permission required). Android
+  ///     otherwise reports the raw, often unrecognisable, model/build code.
+  ///  3. The previous behaviour: `device_info_plus`'s model/computerName/
+  ///     prettyName (desktop platforms keep this unchanged).
+  ///
+  /// This is also what [handleRemoteEvent] compares an incoming SSE event's
+  /// `origin_device` against to skip the device's own echoed changes, so both
+  /// sides of that comparison always resolve through this one method.
   @visibleForTesting
   Future<String> getDeviceNameInternal() async {
     if (_cachedDeviceName != null) return _cachedDeviceName!;
+
+    final prefs = await SharedPreferences.getInstance();
+    final override = prefs.getString(kDeviceNameOverridePrefKey)?.trim();
+    if (override != null && override.isNotEmpty) {
+      _cachedDeviceName = override;
+      return _cachedDeviceName!;
+    }
+
+    if (_isAndroid) {
+      try {
+        final settingsName =
+            await _platform.invokeMethod<String>('getDeviceSettingsName');
+        final trimmed = settingsName?.trim();
+        if (trimmed != null && trimmed.isNotEmpty) {
+          _cachedDeviceName = trimmed;
+          return _cachedDeviceName!;
+        }
+      } catch (e) {
+        developer.log('DEVICE: getDeviceSettingsName failed',
+            name: 'VaultSync', level: 800, error: e);
+      }
+    }
+
     final deviceInfo = DeviceInfoPlugin();
-    if (Platform.isAndroid) {
+    if (_isAndroid) {
       _cachedDeviceName = (await deviceInfo.androidInfo).model;
     } else if (Platform.isWindows) {
       _cachedDeviceName = (await deviceInfo.windowsInfo).computerName;
@@ -264,8 +313,36 @@ class SyncRepository {
       final ref = _ref;
       final bool isOnline = ignoreConnectivity || (ref == null ? true : await resolveIsOnline(ref));
 
-      try { await _pathService.mkdirs(effectivePath); } catch (e) {
-        developer.log('⚠️ SYNC: Failed to ensure base path exists', name: 'VaultSync', level: 900, error: e);
+      final bool pathAlreadyExisted = await _pathService.pathExists(effectivePath);
+      bool mkdirsOk = pathAlreadyExisted;
+      if (!pathAlreadyExisted) {
+        try {
+          mkdirsOk = await _pathService.mkdirs(effectivePath);
+        } catch (e) {
+          developer.log('⚠️ SYNC: Failed to ensure base path exists', name: 'VaultSync', level: 900, error: e);
+          mkdirsOk = false;
+        }
+      }
+
+      // The folder doesn't exist and VaultSync couldn't create it. When it
+      // lives under another app's Android/data/<package> directory (a
+      // SAF-gated location, checked purely by path shape — see
+      // SystemPathService.safNeededFor), that almost always means the
+      // emulator itself hasn't been run yet to create its own files
+      // directory (e.g. Flycast installed but never opened): VaultSync has
+      // no way to create another app's private folder under scoped storage.
+      // A `content://` path is excluded here because a granted SAF tree
+      // always reports mkdirsOk=true (see the Kotlin `mkdirs` handler) — its
+      // absence is a revoked/stale grant, handled separately by
+      // ensureSafPermission, not this case. Skip this one system with a
+      // specific, actionable reason instead of silently scanning nothing and
+      // reporting a hollow "success" — and without aborting the other
+      // configured systems (the caller catches this per-system).
+      if (!pathAlreadyExisted &&
+          !mkdirsOk &&
+          SystemPathService.safNeededFor(effectivePath) &&
+          !effectivePath.startsWith('content://')) {
+        throw MissingSyncFolderException(systemId, effectivePath);
       }
 
       // One-time-per-sync cleanup of dead sync_state rows: keyed by a
@@ -340,6 +417,43 @@ class SyncRepository {
           }
           remoteFiles[rel] = f;
         }
+
+        // Prune queue rows the server can never satisfy again (its listing no
+        // longer has that path — quarantined, deleted, or moved). Computed
+        // from the RAW listing (before the Wii-NAND-blob filter below) so a
+        // path the server still genuinely lists is never pruned out from
+        // under a job that could still succeed. Never touches pending_upload
+        // or synced rows, other systems, or local_versions — see
+        // SyncStateDatabase.pruneStaleQueueRows.
+        try {
+          final currentRemotePaths =
+              fileList.map((f) => f['path'] as String).toSet();
+          final pruned = await _syncStateDb.pruneStaleQueueRows(systemId, currentRemotePaths);
+          if (pruned > 0) {
+            developer.log(
+                'SYNC: Pruned $pruned stale queue row(s) for $systemId (remote file no longer listed)',
+                name: 'VaultSync',
+                level: 800);
+          }
+        } catch (e) {
+          developer.log('⚠️ SYNC: pruneStaleQueueRows failed', name: 'VaultSync', level: 900, error: e);
+        }
+
+        // Wii/GC/Dolphin NAND install data and title metadata (.app/.tmd/.wad)
+        // are quarantined as garbage server-side (see
+        // SyncPathResolver.isWiiNandBlobCloudPath, mirroring
+        // cleanup_garbage._is_wii_nand_blob) and must never be queued for
+        // upload OR download: an upload just gets quarantined right back, and
+        // a download 404s. Exclude them from both candidate sets before the
+        // diff below ever sees them.
+        localFiles.removeWhere((relPath, _) =>
+            SyncPathResolver.isWiiNandBlobCloudPath('$cloudPrefix/$relPath'));
+        remoteFiles.removeWhere((relPath, info) {
+          final fullPath = (info is Map && info['path'] is String)
+              ? info['path'] as String
+              : '$cloudPrefix/$relPath';
+          return SyncPathResolver.isWiiNandBlobCloudPath(fullPath);
+        });
 
         final cloudRelPaths = <String>{
           ...localFiles.keys,
@@ -541,6 +655,10 @@ class SyncRepository {
         await _commitSyncJournal(prefs);
       } catch (e, stack) {
         developer.log('SYNC ERROR ($systemId): $e\n$stack', name: 'VaultSync', level: 1000);
+        // developer.log's output never reaches logcat on a release Android
+        // build, which is how a real sync failure on-device left no trace at
+        // all to diagnose from. debugPrint always goes to stdout/logcat.
+        debugPrint('VaultSync ERROR [$systemId]: ${buildErrorDetail(e)}');
         _ref?.read(notificationLogProvider.notifier).addError(e, systemId: systemId);
         onError?.call(e.toString());
         rethrow;

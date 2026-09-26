@@ -302,6 +302,49 @@ class SyncStateDatabase {
     return deadPaths.length;
   }
 
+  /// Deletes [systemId]'s `failed` and `pending_download` rows whose
+  /// `remote_path` is no longer present in [currentRemotePaths] — the server
+  /// no longer has that file (quarantined as garbage, deleted, or never
+  /// existed at the path recorded), so the job can never succeed and would
+  /// otherwise be retried forever. This is how 199 Wii rows on one device
+  /// accumulated as permanently `failed`: their remote files had been
+  /// quarantined server-side as NAND blobs, so every retry 404'd.
+  ///
+  /// Deliberately narrow, mirroring [cleanupDeadContentUriRows]:
+  ///  - Only rows for [systemId] are touched.
+  ///  - Only `failed`/`pending_download` rows are eligible — `pending_upload`
+  ///    (the server not having the file yet is the whole point) and `synced`
+  ///    rows are never removed.
+  ///  - `local_versions` is untouched.
+  ///
+  /// Returns the number of rows removed.
+  Future<int> pruneStaleQueueRows(String systemId, Set<String> currentRemotePaths) async {
+    final db = await database;
+    final rows = await db.query(
+      'sync_state',
+      columns: ['path', 'remote_path'],
+      where: 'system_id = ? AND status IN (?, ?) AND remote_path IS NOT NULL',
+      whereArgs: [systemId, 'failed', 'pending_download'],
+    );
+    if (rows.isEmpty) return 0;
+
+    final stalePaths = <String>[];
+    for (final row in rows) {
+      final remotePath = row['remote_path'] as String?;
+      if (remotePath != null && !currentRemotePaths.contains(remotePath)) {
+        stalePaths.add(row['path'] as String);
+      }
+    }
+    if (stalePaths.isEmpty) return 0;
+
+    final placeholders = List.filled(stalePaths.length, '?').join(',');
+    await db.transaction((txn) async {
+      await txn.delete('sync_block_hashes', where: 'path IN ($placeholders)', whereArgs: stalePaths);
+      await txn.delete('sync_state', where: 'path IN ($placeholders)', whereArgs: stalePaths);
+    });
+    return stalePaths.length;
+  }
+
   Future<List<Map<String, dynamic>>> findEntriesByBlockHash(String blockHash) async {
     final db = await database;
     return await db.rawQuery(
