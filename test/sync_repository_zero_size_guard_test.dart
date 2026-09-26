@@ -404,5 +404,44 @@ void main() {
         blockHashes: any(named: 'blockHashes'),
       )).called(1);
     });
+
+    test('a RetroArch file outside the save extensions of this system is not re-downloaded', () async {
+      // On a phone, gba and n64 were both rooted at /storage/emulated/0/RetroArch.
+      // Each local scan filters by its own extensions (no .dsv), but the remote
+      // RetroArch listing was unfiltered, so saves/<game>.dsv looked remote-only
+      // and was re-downloaded over the existing local file on every sync.
+      const root = '/storage/emulated/0/RetroArch';
+      when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({});
+      when(() => mockDiffService.fetchAllRemoteFiles(any())).thenAnswer((_) async => [
+        {'path': 'RetroArch/saves/Mario Kart DS.dsv', 'hash': 'h1', 'size': 262266, 'updated_at': staleTs},
+      ]);
+
+      await repository.syncSystem('RetroArch', root, saveExtensions: ['srm', 'sav'], ignoreConnectivity: true);
+
+      verifyNever(() => mockSyncStateDb.upsertState(
+        any(), any(), any(), any(), 'pending_download',
+        systemId: any(named: 'systemId'), remotePath: any(named: 'remotePath'),
+        relPath: any(named: 'relPath'), blockHashes: any(named: 'blockHashes'),
+      ));
+    });
+
+    test('a RetroArch file inside the save extensions of this system is still downloaded', () async {
+      const root = '/storage/emulated/0/RetroArch';
+      when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({});
+      when(() => mockDiffService.fetchAllRemoteFiles(any())).thenAnswer((_) async => [
+        {'path': 'RetroArch/saves/Minish Cap.srm', 'hash': 'h2', 'size': 32768, 'updated_at': staleTs},
+      ]);
+      when(() => mockPathResolver.getLocalRelPath(any(), any(), any(), any(),
+          probedProfileId: any(named: 'probedProfileId'), localRoot: any(named: 'localRoot')))
+          .thenReturn('saves/Minish Cap.srm');
+
+      await repository.syncSystem('RetroArch', root, saveExtensions: ['srm', 'sav'], ignoreConnectivity: true);
+
+      verify(() => mockSyncStateDb.upsertState(
+        any(), any(), any(), any(), 'pending_download',
+        systemId: any(named: 'systemId'), remotePath: any(named: 'remotePath'),
+        relPath: any(named: 'relPath'), blockHashes: any(named: 'blockHashes'),
+      )).called(1);
+    });
   });
 }

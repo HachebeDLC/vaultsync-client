@@ -431,6 +431,22 @@ class SyncRepository {
         // re-queued the remote copy as a same-content "download" forever
         // (reproduced on-device with RetroArch DS saves: Mario Kart DS,
         // Nintendogs, WarioWare, Pokemon HeartGold, Professor Layton).
+        // A RetroArch folder is shared by several systems (gba, n64, nds, ...),
+        // each scanning it with its own save extensions, but the remote listing
+        // for the RetroArch namespace was not filtered. A file another system
+        // owns (a .dsv under a gba-configured RetroArch root) therefore looked
+        // remote-only and was re-downloaded over the existing local file on
+        // every sync. Apply the scanner's own rule to the remote keys; in this
+        // namespace the cloud-relative path is the local relative path.
+        if (actualPrefix == 'retroarch') {
+          final allowed = (saveExtensions == null || saveExtensions.isEmpty) ? null : saveExtensions.toSet();
+          final before = remoteFiles.length;
+          remoteFiles = Map<String, dynamic>.fromEntries(remoteFiles.entries.where((e) =>
+              DartFileScanner.shouldSyncFile(systemId.toLowerCase(), e.key, p.basename(e.key), saveExtensions: allowed)));
+          if (remoteFiles.length != before) {
+            developer.log('SYNC: $systemId ignores ${before - remoteFiles.length} RetroArch file(s) outside its save extensions', name: 'VaultSync', level: 800);
+          }
+        }
         if (actualPrefix == 'retroarch') {
           final rootAnchor = SyncPathResolver.retroArchRootAnchor(effectivePath);
           final localScanHasAnchor = SyncPathResolver.retroArchScanHasAnchor(localList);

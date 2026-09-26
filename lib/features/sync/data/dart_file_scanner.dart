@@ -56,7 +56,8 @@ class DartFileScanner {
     return false;
   }
 
-  @visibleForTesting
+  /// Also applied to remote RetroArch keys in SyncRepository.syncSystem, so a
+  /// system never compares files its own local scan would not have listed.
   static bool shouldSyncFile(
     String sid,
     String relPath,
