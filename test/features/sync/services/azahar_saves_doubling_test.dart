@@ -206,6 +206,57 @@ void main() {
     });
   });
 
+  group('getLocalRelPath 3DS: no local save yet -> Azahar default sdmc layout', () {
+    // Evidence (Retroid Pocket Nova): root is the SAF tree of the Azahar
+    // folder, which holds only config/gpu_drivers/log. With nothing to copy a
+    // prefix from, 12 remote-only saves went to Azahar/saves/ on every sync.
+    const novaRoot = 'content://com.android.externalstorage.documents/tree/primary%3AAzahar';
+    const defaultPrefix = 'sdmc/Nintendo 3DS/0000000000000000/0000000000000000';
+
+    test('Azahar folder root with an empty scan -> sdmc/Nintendo 3DS/0.../0.../title/00040000', () {
+      final result = resolver.getLocalRelPath(
+        '3ds',
+        '3ds/saves/00033c00/data/00000001/progress.sav',
+        {},
+        const [],
+        localRoot: novaRoot,
+      );
+      expect(result, '$defaultPrefix/title/00040000/00033c00/data/00000001/progress.sav');
+    });
+
+    test('round trip from the default layout gives back the cloud key', () {
+      final localDest = resolver.getLocalRelPath(
+        '3ds', '3ds/saves/00030700/data/00000001/system3.dat', {}, const [],
+        localRoot: novaRoot,
+      );
+      expect(resolver.getCloudRelPath('3ds', localDest!), 'saves/00030700/data/00000001/system3.dat');
+    });
+
+    test('a real local save still wins over the default', () {
+      final result = resolver.getLocalRelPath(
+        '3ds', '3ds/saves/00033600/data/00000001/save00.bin', {},
+        const [
+          {'relPath': 'sdmc/Nintendo 3DS/AAAA/BBBB/title/00040000/00033c00/data/00000001/progress.sav'},
+        ],
+        localRoot: novaRoot,
+      );
+      expect(result, 'sdmc/Nintendo 3DS/AAAA/BBBB/title/00040000/00033600/data/00000001/save00.bin');
+    });
+
+    test('the part of the layout already in the root is not repeated', () {
+      expect(SyncPathResolver.default3dsSdmcPrefix('/storage/emulated/0/3ds/sdmc'),
+          'Nintendo 3DS/0000000000000000/0000000000000000');
+      expect(SyncPathResolver.default3dsSdmcPrefix('shizuku:///storage/emulated/0/Azahar/sdmc/Nintendo 3DS'),
+          '0000000000000000/0000000000000000');
+      expect(SyncPathResolver.default3dsSdmcPrefix('shizuku:///storage/emulated/0/Azahar'), defaultPrefix);
+    });
+
+    test('a root already inside the id folders, or no root, gives no default', () {
+      expect(SyncPathResolver.default3dsSdmcPrefix('/x/sdmc/Nintendo 3DS/0000000000000000/0000000000000000'), isNull);
+      expect(SyncPathResolver.default3dsSdmcPrefix(null), isNull);
+    });
+  });
+
   group('SyncPathResolver.dealias3dsDoubledSavesRemoteKeys', () {
     test('collapses a leading doubled saves/saves/ key to the canonical single-saves/ key', () {
       final result = SyncPathResolver.dealias3dsDoubledSavesRemoteKeys({

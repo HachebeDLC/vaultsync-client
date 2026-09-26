@@ -386,15 +386,20 @@ class SyncPathResolver {
        // this file so it lands where both the scanner and the emulator expect
        // it. Guarded to leave a cloud path that already carries a
        // `title/00040000` component (i.e. is already in local-path shape)
-       // untouched, and to fall back to the old behaviour when no local
-       // title/00040000 folder exists to copy the prefix from.
+       // untouched. With no local title/00040000 folder to copy the prefix
+       // from, Azahar's default layout under the root is used instead.
        if (!relPath.toLowerCase().contains('title/00040000')) {
          final titleSavesMatch =
              RegExp(r'^saves/([0-9A-Fa-f]{8})(?:/(.*))?$').firstMatch(relPath);
          if (titleSavesMatch != null) {
            final titleId = titleSavesMatch.group(1)!;
            final rest = titleSavesMatch.group(2);
-           final sdmcPrefix = _find3dsSdmcPrefix(lastScanList);
+           // No local save to copy the layout from (Retroid Pocket Nova: the
+           // Azahar folder holds only config/gpu_drivers/log, so 12 files
+           // were re-downloaded to Azahar/saves/ on every sync). Fall back
+           // to Azahar's own default layout, the one the POCO F8 Pro has.
+           final sdmcPrefix = _find3dsSdmcPrefix(lastScanList) ??
+               default3dsSdmcPrefix(localRoot);
            if (sdmcPrefix != null) {
              final destTail = (rest == null || rest.isEmpty)
                  ? 'title/00040000/$titleId'
@@ -600,6 +605,29 @@ class SyncPathResolver {
   /// most common one is returned and the disagreement is logged; when only
   /// one prefix is present it is returned without logging. Returns null when
   /// no local scan entry has a `title/00040000/<8-hex>` component at all.
+  /// Where Azahar/Citra keep saves under [localRoot] when the device has
+  /// none yet: `sdmc/Nintendo 3DS/<id0>/<id1>`, with the all-zero ids these
+  /// emulators use. The part already covered by the root is dropped, so a
+  /// root at `sdmc` or `Nintendo 3DS` still lands in the right folder.
+  /// Returns null without a root, or when the root is already inside the
+  /// id folders (its depth can't be known from the name).
+  static String? default3dsSdmcPrefix(String? localRoot) {
+    if (localRoot == null || localRoot.isEmpty) return null;
+    const ids = '0000000000000000/0000000000000000';
+    final segments = Uri.decodeComponent(localRoot)
+        .split(RegExp(r'[/\\:]'))
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (segments.isEmpty) return null;
+    final leaf = segments.last.toLowerCase();
+    if (leaf == 'sdmc') return 'Nintendo 3DS/$ids';
+    if (leaf == 'nintendo 3ds') return ids;
+    if (RegExp(r'^[0-9a-f]{16}$').hasMatch(leaf) || leaf == 'title' || leaf == '00040000') {
+      return null;
+    }
+    return 'sdmc/Nintendo 3DS/$ids';
+  }
+
   static String? _find3dsSdmcPrefix(List<dynamic> lastScanList) {
     final titleIdSegment = RegExp(r'^[0-9A-Fa-f]{8}$');
     final counts = <String, int>{};
