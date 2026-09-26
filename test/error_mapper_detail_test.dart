@@ -33,6 +33,32 @@ void main() {
       final detail = buildErrorDetail(Exception(longMessage));
       expect(detail.length, lessThanOrEqualTo(301)); // 300 chars + the trailing ellipsis char
     });
+
+    test('redacts a Bearer token from the message', () {
+      final detail = buildErrorDetail(
+          Exception('HTTP 401: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc-def'));
+      expect(detail, isNot(contains('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9')));
+      expect(detail, contains('Bearer [REDACTED]'));
+    });
+
+    test('redacts an api_key query-style value from the message', () {
+      final detail =
+          buildErrorDetail(Exception('failed GET https://romm.local/api?api_key=sk-abcdef123456'));
+      expect(detail, isNot(contains('sk-abcdef123456')));
+      expect(detail, contains('[REDACTED]'));
+    });
+
+    test('redacts a JSON-ish password field from the message', () {
+      final detail =
+          buildErrorDetail(Exception('server said: {"password": "hunter2", "ok": false}'));
+      expect(detail, isNot(contains('hunter2')));
+    });
+
+    test('does not redact ordinary text that merely contains "key" as a substring', () {
+      final detail = buildErrorDetail(Exception('missing keyboard focus node'));
+      expect(detail, contains('missing keyboard focus node'));
+      expect(detail, isNot(contains('REDACTED')));
+    });
   });
 
   group('SyncLog.detail backward compatibility (item 1)', () {

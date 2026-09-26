@@ -40,14 +40,50 @@ class MissingSyncFolderException implements Exception {
       '$systemId: folder not found ($path). Open the emulator once or pick the folder again.';
 }
 
+/// Matches a `Bearer <token>` credential, e.g. inside a stringified HTTP
+/// exception that echoes the request/response headers.
+final _bearerTokenPattern =
+    RegExp(r'(Bearer)\s+[A-Za-z0-9\-_.~+/]+=*', caseSensitive: false);
+
+/// Matches `key: value` / `key=value` / `"key": "value"` pairs whose key
+/// name suggests a credential — API keys, auth tokens, passwords, client
+/// secrets — regardless of casing or separator style, so it catches both
+/// JSON-ish and header-ish renderings of the same exception text.
+///
+/// Deliberately does not match the bare word "authorization": a
+/// `Authorization: Bearer <token>` header is already fully handled by
+/// [_bearerTokenPattern] above, and re-matching it here would consume the
+/// literal word "Bearer" itself (already replaced with `[REDACTED]`) as if
+/// it were the secret value, garbling the output.
+final _sensitiveKeyValuePattern = RegExp(
+  r'("?(?:api[_-]?key|apikey|access[_-]?token|auth[_-]?token|refresh[_-]?token|client[_-]?secret|secret|password)"?\s*[:=]\s*)'
+  r'"?[A-Za-z0-9\-_.~+/=]+"?',
+  caseSensitive: false,
+);
+
+/// Redacts anything that looks like a bearer token, API key, auth header, or
+/// password from [input] before it is persisted or logged. Never perfect
+/// (it can't catch a secret in a shape it doesn't recognize), but it removes
+/// the two most common leak shapes: `Authorization: Bearer <token>` and
+/// `api_key=<value>`/`"apiKey": "<value>"`.
+String _redactSensitive(String input) {
+  return input
+      .replaceAllMapped(_bearerTokenPattern, (m) => '${m.group(1)} [REDACTED]')
+      .replaceAllMapped(
+          _sensitiveKeyValuePattern, (m) => '${m.group(1)}[REDACTED]');
+}
+
 /// Builds the raw diagnostic string persisted alongside a friendly mapped
 /// error (see `SyncLog.detail`) — the exception's real type and message,
-/// trimmed to ~300 chars. This is what actually failed; it is never shown as
-/// the primary UI text (that stays the friendly title/message from
+/// with anything resembling a bearer token, API key, auth header or password
+/// stripped (see [_redactSensitive]), then trimmed to ~300 chars. No stack
+/// traces are included — `error.toString()` on Dart exceptions does not
+/// include one. This is what actually failed; it is never shown as the
+/// primary UI text (that stays the friendly title/message from
 /// [ErrorMapper.map]) but lets adb/logcat and the in-app history show the
 /// real cause instead of a swallowed generic message.
 String buildErrorDetail(dynamic error) {
-  final raw = '${error.runtimeType}: $error';
+  final raw = _redactSensitive('${error.runtimeType}: $error');
   return raw.length > 300 ? '${raw.substring(0, 300)}…' : raw;
 }
 
