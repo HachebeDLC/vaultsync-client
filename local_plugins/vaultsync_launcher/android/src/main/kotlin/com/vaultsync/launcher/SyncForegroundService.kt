@@ -7,18 +7,9 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.work.Constraints
-import androidx.work.Data
-import androidx.work.ExistingWorkPolicy
-import androidx.work.ListenableWorker
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequest
-import androidx.work.WorkManager
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -26,32 +17,36 @@ import java.util.concurrent.TimeUnit
 /**
  * Low-importance foreground service that keeps VaultSync's exit-detection
  * loop alive while "sync on game exit" is enabled, and hosts the existing
- * "Synchronization in progress" service while a sync is running.
+ * "Synchronization in progress" notification while a sync is running.
  *
- * Whether this service should be running at all, and whether the wake/wifi
- * locks should be held, is decided by [PowerManagerHelper]'s shared
- * [ServiceLifetime] — this class only reacts to being started/stopped and
- * owns the detection loop itself, so it survives the owning Flutter engine
- * (and even the whole app process, via `START_STICKY`) going away.
+ * Declared with `android:process=":monitor"` in the manifest, so it runs in
+ * its own lightweight process rather than the main one. The whole point:
+ * the Flutter/Dart engine, which lives only in the main process, no longer
+ * has to stay resident all day just to keep this 15s detection loop alive —
+ * `:monitor` survives on its own, and the main process can die and be
+ * restarted (rarely, on an actual exit) without affecting monitoring.
+ *
+ * Two consequences of running in a separate process, both handled
+ * elsewhere:
+ *  - `:monitor` must never touch WorkManager or the Flutter method channel
+ *    directly (no multi-process WorkManager, and no engine here to own a
+ *    channel). When [dispatchExit] detects an exit, it hands off to the main
+ *    process via an explicit broadcast to [ExitDispatchReceiver], which does
+ *    exactly what this class used to do itself before the split.
+ *  - Whether a sync is active is decided in the main process by
+ *    [PowerManagerHelper], whose in-memory ref count no longer lives in this
+ *    process. That fact crosses the process boundary through the shared,
+ *    file-backed [MonitoringPrefs] store (`isSyncActive`/`setSyncActive`)
+ *    instead of any static/companion state.
  */
 class SyncForegroundService : Service() {
     companion object {
         const val CHANNEL_ID = "vaultsync_background_channel"
         const val NOTIFICATION_ID = 4040
         private const val MONITOR_INTERVAL_MS = 15_000L
-
-        // The workmanager plugin's own worker + input-data key, referenced by
-        // name (not by compile-time dependency on its Gradle module) — see
-        // dev.fluttercommunity.workmanager.BackgroundWorker in
-        // workmanager_android's source.
-        private const val WORKMANAGER_WORKER_CLASS = "dev.fluttercommunity.workmanager.BackgroundWorker"
-        private const val WORKMANAGER_DART_TASK_KEY = "dev.fluttercommunity.workmanager.DART_TASK"
-        private const val EXIT_CATCHUP_DART_TASK = "exitCatchUp"
-        private const val EXIT_CATCHUP_UNIQUE_WORK_NAME = "vaultsync-exit-catchup-oneoff"
     }
 
     private lateinit var automationEngine: AutomationEngine
-    private val mainHandler = Handler(Looper.getMainLooper())
     private var monitorExecutor: ScheduledExecutorService? = null
 
     override fun onCreate() {
@@ -63,22 +58,23 @@ class SyncForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Always resync the notification with current global state: this
-        // handles both a fresh start/refresh poke from PowerManagerHelper and
-        // a system-triggered START_STICKY restart (intent == null) after the
-        // process was killed.
-        PowerManagerHelper.restoreMonitoringFromPrefs(applicationContext)
+        // handles both a fresh start/refresh poke from PowerManagerHelper
+        // (running in the main process) and a system-triggered START_STICKY
+        // restart (intent == null) after this (:monitor) process was killed.
         updateNotification()
 
         if (MonitoringPrefs.isEnabled(applicationContext)) {
             startMonitoringLoopIfNeeded()
         } else {
             stopMonitoringLoop()
-            // The in-memory sync ref count (PowerLockCounter) does not
-            // survive process death. If we were restarted with neither
+            // Nothing here tracks an in-memory sync ref count anymore (that
+            // lives in the main process's PowerManagerHelper) — instead,
+            // consult the same cross-process syncActive flag the
+            // notification uses. If we were restarted with neither
             // monitoring enabled nor a sync actually in flight, there is no
             // reason left to be running — this is the only place that can
             // detect that case, since it's specific to a sticky restart.
-            if (!PowerManagerHelper.isSyncActive()) {
+            if (!MonitoringPrefs.isSyncActive(applicationContext)) {
                 Log.i("VaultSync", "🛡️ SERVICE: Restarted with nothing to do (no monitoring, no sync) — stopping self")
                 stopSelf()
             }
@@ -143,62 +139,26 @@ class SyncForegroundService : Service() {
             dispatchExit(pkg)
         }
 
-        // Advance unconditionally: dispatch is fire-and-forget (channel call
-        // or WorkManager job) and both paths are idempotent/checkpointed on
-        // the Dart side, so re-detecting the same exit next pass would only
-        // cause a harmless duplicate trigger, not correctness issues — but
-        // leaving the checkpoint behind would cause that every single pass.
+        // Advance unconditionally: dispatch is fire-and-forget (a broadcast
+        // to the main process) and idempotent/checkpointed on the Dart
+        // side, so re-detecting the same exit next pass would only cause a
+        // harmless duplicate trigger, not correctness issues — but leaving
+        // the checkpoint behind would cause that every single pass.
         MonitoringPrefs.setCheckpointMs(ctx, now)
     }
 
     /**
-     * Delivers a detected exit to Dart: directly through the live method
-     * channel if a Flutter engine is currently attached, or by enqueuing a
-     * one-off WorkManager job that runs the `exitCatchUp` Dart task
-     * otherwise. Never both, for the same exit.
+     * Hands a detected exit off to the main process via an explicit,
+     * non-exported broadcast to [ExitDispatchReceiver]. `:monitor` itself
+     * never calls the method channel or WorkManager directly — see this
+     * class's doc and [ExitDispatcher].
      */
     private fun dispatchExit(packageName: String) {
-        val channel = VaultSyncLauncherPlugin.currentChannel()
-        if (channel != null) {
-            Log.i("VaultSync", "👁️ MONITOR: Live engine attached — invoking onEmulatorClosed($packageName) directly")
-            mainHandler.post {
-                channel.invokeMethod("onEmulatorClosed", packageName)
-            }
-        } else {
-            Log.i("VaultSync", "👁️ MONITOR: No live engine — enqueuing exitCatchUp WorkManager job for $packageName")
-            enqueueExitCatchUpWork()
+        Log.i("VaultSync", "👁️ MONITOR: Exit detected for $packageName — notifying main process")
+        val intent = Intent(applicationContext, ExitDispatchReceiver::class.java).apply {
+            putExtra(ExitDispatchReceiver.EXTRA_PACKAGE_NAME, packageName)
         }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun enqueueExitCatchUpWork() {
-        try {
-            val workerClass = Class.forName(WORKMANAGER_WORKER_CLASS) as Class<out ListenableWorker>
-
-            val inputData = Data.Builder()
-                .putString(WORKMANAGER_DART_TASK_KEY, EXIT_CATCHUP_DART_TASK)
-                .build()
-
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-
-            val request = OneTimeWorkRequest.Builder(workerClass)
-                .setInputData(inputData)
-                .setConstraints(constraints)
-                .build()
-
-            WorkManager.getInstance(applicationContext).enqueueUniqueWork(
-                EXIT_CATCHUP_UNIQUE_WORK_NAME,
-                ExistingWorkPolicy.KEEP,
-                request
-            )
-            Log.i("VaultSync", "🧵 WORK: Enqueued one-off exitCatchUp job")
-        } catch (e: ClassNotFoundException) {
-            Log.e("VaultSync", "🧵 WORK: workmanager BackgroundWorker class not found — is the workmanager plugin installed?", e)
-        } catch (e: Exception) {
-            Log.e("VaultSync", "🧵 WORK: Failed to enqueue exitCatchUp job: ${e.message}", e)
-        }
+        applicationContext.sendBroadcast(intent)
     }
 
     // ---- Notification ---------------------------------------------------
@@ -229,7 +189,7 @@ class SyncForegroundService : Service() {
         val iconResId = resources.getIdentifier("launcher_icon", "mipmap", packageName)
         val validIcon = if (iconResId != 0) iconResId else android.R.drawable.ic_popup_sync
 
-        val contentText = if (PowerManagerHelper.isSyncActive()) {
+        val contentText = if (MonitoringPrefs.isSyncActive(applicationContext)) {
             resolveString("notification_content", "Synchronization in progress…")
         } else {
             resolveString("notification_content_monitoring", "Watching for game exits")

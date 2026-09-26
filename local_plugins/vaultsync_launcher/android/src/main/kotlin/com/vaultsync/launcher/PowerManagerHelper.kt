@@ -8,6 +8,22 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 
+/**
+ * Owns the process-wide sync ref count, the actual wake/wifi locks, and the
+ * decision of whether [SyncForegroundService] should be running.
+ *
+ * This class — including its companion state — only ever runs in the
+ * **main** process: it's constructed solely by [VaultSyncLauncherPlugin],
+ * which only attaches there (see [ProcessGuard]). `SyncForegroundService`,
+ * which since the `:monitor` process split is a separate OS process, does
+ * NOT hold a `PowerManagerHelper` and never calls it — it does not need the
+ * wake/wifi locks (those exist to keep the main process's CPU/network alive
+ * while *it* performs sync I/O, which still all happens in the main
+ * process), and the one piece of state it does need from here — whether a
+ * sync is active, for its notification text and its sticky-restart check —
+ * is mirrored into the cross-process [MonitoringPrefs] store below rather
+ * than shared via this companion object.
+ */
 class PowerManagerHelper(private val context: Context) {
     companion object {
         private val lock = Any()
@@ -30,17 +46,6 @@ class PowerManagerHelper(private val context: Context) {
             serviceLifetime.setMonitoringEnabled(MonitoringPrefs.isEnabled(context))
             monitoringRestored = true
         }
-
-        /** Called by [SyncForegroundService] on every (re)start. */
-        fun restoreMonitoringFromPrefs(context: Context) {
-            synchronized(lock) { restoreMonitoringLocked(context) }
-        }
-
-        /** True iff at least one sync currently holds the power lock. */
-        fun isSyncActive(): Boolean = sharedCounter.count > 0
-
-        /** True iff "sync on game exit" monitoring is currently turned on. */
-        fun isMonitoringActive(): Boolean = serviceLifetime.isMonitoringEnabled
 
         private fun startService(context: Context) {
             try {
@@ -105,6 +110,14 @@ class PowerManagerHelper(private val context: Context) {
             ownedCount++
             val serviceTransition = serviceLifetime.onSyncCountChanged(sharedCounter.count)
 
+            // SyncForegroundService now runs in :monitor, a separate
+            // process from this one, so it can no longer read
+            // sharedCounter directly to decide its notification text (or,
+            // on a sticky restart, whether it has anything left to do).
+            // Persist the fact a sync is active before poking the service,
+            // so :monitor's next onStartCommand sees the up-to-date value.
+            MonitoringPrefs.setSyncActive(context, sharedCounter.count > 0)
+
             when (serviceTransition) {
                 true -> startService(context)
                 false -> stopService(context) // unreachable on an acquire, kept for symmetry
@@ -146,6 +159,11 @@ class PowerManagerHelper(private val context: Context) {
             val shouldReleaseLocks = sharedCounter.release()
             ownedCount--
             val serviceTransition = serviceLifetime.onSyncCountChanged(sharedCounter.count)
+
+            // See the matching comment in acquirePowerLock(): keep the
+            // cross-process syncActive flag in lockstep with the ref count
+            // before poking (or not poking) the :monitor-hosted service.
+            MonitoringPrefs.setSyncActive(context, sharedCounter.count > 0)
 
             if (shouldReleaseLocks) {
                 if (wakeLock?.isHeld == true) {

@@ -73,13 +73,22 @@
             android:multiprocess="false"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
+        <!-- Runs in its own lightweight process so the main (Flutter/Dart)
+             process doesn't have to stay resident all day just to keep the
+             15s emulator-exit detection loop alive. See SyncForegroundService
+             and ExitDispatchReceiver's class docs for the design. -->
         <service
             android:name="com.vaultsync.launcher.SyncForegroundService"
             android:foregroundServiceType="dataSync"
+            android:process=":monitor"
             android:exported="false" />
 
+        <!-- Alongside SyncForegroundService in :monitor, so a boot or
+             MY_PACKAGE_REPLACED broadcast doesn't have to spin up the main
+             (Flutter) process just to start the monitor service. -->
         <receiver
             android:name="com.vaultsync.launcher.BootReceiver"
+            android:process=":monitor"
             android:exported="true"
             android:enabled="true">
             <intent-filter>
@@ -87,6 +96,16 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
             </intent-filter>
         </receiver>
+
+        <!-- Runs in the MAIN process (no android:process override). The only
+             bridge back from :monitor: SyncForegroundService sends this an
+             explicit broadcast (never implicit) when it detects an exit, and
+             this receiver does the WorkManager/method-channel dispatch that
+             :monitor itself must not do. Not exported: only components of
+             this app (any of its processes, same UID) may deliver to it. -->
+        <receiver
+            android:name="com.vaultsync.launcher.ExitDispatchReceiver"
+            android:exported="false" />
 
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"

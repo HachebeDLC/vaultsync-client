@@ -130,6 +130,17 @@ class VaultSyncLauncherPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, 
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         val ctx = binding.applicationContext
+        // Defense in depth: a Flutter engine (and therefore this plugin,
+        // WorkManager, etc.) must never attach in the :monitor process — the
+        // whole point of splitting SyncForegroundService/BootReceiver into
+        // that process is to avoid keeping the Dart engine resident just for
+        // exit detection. Nothing should route an engine attach there today,
+        // but refuse loudly rather than silently duplicating main-process
+        // state (e.g. PowerManagerHelper's companion) into a second process.
+        if (ProcessGuard.isMonitorProcessName(ProcessGuard.currentProcessName(ctx))) {
+            android.util.Log.e("VaultSync", "🚫 PLUGIN: Refusing to attach in the :monitor process — Flutter must never run there")
+            return
+        }
         context = ctx
         android.util.Log.i("VaultSync", "🔌 PLUGIN: attached instance=${System.identityHashCode(this)} pid=${android.os.Process.myPid()} thread=${Thread.currentThread().name}")
         methodChannel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
