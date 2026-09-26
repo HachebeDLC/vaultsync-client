@@ -167,5 +167,14 @@ class ShizukuService : IShizukuService.Stub() {
         }
     }
 
-    override fun destroy() { /* Standard Binder lifecycle */ }
+    /**
+     * Shizuku calls this (transaction 16777114) to stop the user service, e.g.
+     * when the app process dies with daemon(false). The process runs as
+     * `shell` with oom_score_adj -1000, so nothing else ever reclaims it: it
+     * has to exit itself. While this was a no-op, the POCO F8 Pro had 11
+     * orphaned `com.vaultsync.app:shizuku` processes at ~70 MB PSS each.
+     */
+    override fun destroy() {
+        System.exit(0)
+    }
 }
