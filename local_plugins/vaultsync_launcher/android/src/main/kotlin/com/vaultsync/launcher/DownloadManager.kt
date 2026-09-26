@@ -101,7 +101,12 @@ class DownloadManager(
                 var boundShizuku: IShizukuService? = null
 
                 networkClient.openDownloadConnection(url, token, reqBody).use { connection ->
-                    if (connection.responseCode != 200) throw Exception("Download failed: HTTP ${connection.responseCode}")
+                    // Reject any non-success response BEFORE touching the target file or the
+                    // decryptor. This must run first, ahead of every branch below (Shizuku, SAF,
+                    // plain filesystem) — see DownloadStatus.kt for why.
+                    if (!isSuccessfulDownloadStatus(connection.responseCode)) {
+                        throw Exception(describeDownloadHttpFailure(connection.responseCode))
+                    }
 
                     val isEncryptedHeader = connection.getHeaderField("x-vaultsync-encrypted")
                     if (isEncryptedHeader == "false") {
@@ -119,6 +124,14 @@ class DownloadManager(
 
                             // Snapshot existing file before overwrite or patch.
                             val existingSize = try { svc.getFileSize(finalPath) } catch (_: Exception) { -1L }
+                            // Captured before any write so a rollback can restore it: overwriting
+                            // the file (even with the original bytes) otherwise stamps mtime to
+                            // "now", which made a rolled-back OLDER save look newer than the
+                            // server copy on the very next sync and caused it to be re-uploaded
+                            // over the user's good version.
+                            val originalMtime = if (existingSize >= 0L) {
+                                try { svc.getLastModified(finalPath) } catch (_: Exception) { null }
+                            } else null
                             if (patchIndices != null && existingSize < 0L) {
                                 throw Exception("Refusing to patch missing file: $localFilename")
                             }
@@ -144,10 +157,12 @@ class DownloadManager(
                                             throw Exception("Shizuku rollback size mismatch for $localFilename")
                                         }
                                     }
+                                    if (originalMtime != null) setFileTimestampInternal("shizuku://$finalPath", originalMtime)
                                 } else if (existingSize < 0L) {
                                     svc.deleteFile(finalPath)
                                 } else {
                                     svc.openFile(finalPath, "rwt")?.close()
+                                    if (originalMtime != null) setFileTimestampInternal("shizuku://$finalPath", originalMtime)
                                 }
                             }
 
@@ -195,6 +210,17 @@ class DownloadManager(
                             if (existingSize > 0L && backup == null) {
                                 throw Exception("Refusing to overwrite $localFilename without a verified local backup")
                             }
+                            // NOTE: unlike the Shizuku and plain-filesystem branches below, SAF
+                            // (content://) rollback does NOT restore the original mtime.
+                            // DocumentsContract/DocumentFile expose no reliable, widely-supported
+                            // way to set a document's last-modified time after the fact (it's
+                            // provider-dependent and commonly unsupported), so
+                            // setFileTimestampInternal is a no-op for content:// paths. A rolled-
+                            // back SAF file can therefore still look "newer" than the server copy
+                            // after a failed download — the sync-decision guard in
+                            // SyncRepository.syncSystem (content-hash comparison against the hash
+                            // recorded at failure time) is what actually prevents the bad
+                            // re-upload in that case, not mtime.
                             rollback = {
                                 context.contentResolver.openFileDescriptor(targetFile.uri, "rwt")?.use { descriptor ->
                                     FileOutputStream(descriptor.fileDescriptor).use { out ->
@@ -229,6 +255,11 @@ class DownloadManager(
                             }
 
                             val existed = finalFile.exists()
+                            // Captured before any write — see the Shizuku branch's comment above
+                            // for why this matters: File.copyTo/setLength both stamp mtime to
+                            // "now", which is exactly what made a rolled-back OLDER save look
+                            // newer than the server copy 12 seconds later.
+                            val originalMtime = if (existed) finalFile.lastModified() else null
                             if (patchIndices != null && !existed) {
                                 throw Exception("Refusing to patch missing file: $localFilename")
                             }
@@ -251,6 +282,7 @@ class DownloadManager(
                                     !existed -> finalFile.delete()
                                     else -> java.io.RandomAccessFile(finalFile, "rw").use { it.setLength(0) }
                                 }
+                                if (originalMtime != null) finalFile.setLastModified(originalMtime)
                             }
 
                             java.io.RandomAccessFile(finalFile, "rw").use { raf ->

@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../../../core/services/api_client.dart';
 import '../data/dart_native_crypto.dart';
@@ -9,13 +10,25 @@ class SyncNetworkService {
   final ApiClient _apiClient;
   static const _platform = MethodChannel('com.vaultsync.app/launcher');
 
+  /// Test seam only. When set, replaces the real native/method-channel/desktop
+  /// dispatch inside [_executeNative] with this function, so the 401-classify
+  /// -> refresh -> retry-once logic below it can be exercised without a real
+  /// device, platform channel, or network call. Left null in production.
+  @visibleForTesting
+  Future<dynamic> Function(String methodName, Map<String, dynamic> args)?
+      debugNativeOverride;
+
   SyncNetworkService(this._apiClient);
 
   Future<dynamic> _executeNative(String methodName, Map<String, dynamic> args) async {
     final isDesktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
-    
+
     Future<dynamic> run() async {
       developer.log('SYNC NETWORK: Calling $methodName (RomM Key: ${args['rommKey'] != null})', name: 'VaultSync', level: 800);
+      final override = debugNativeOverride;
+      if (override != null) {
+        return await override(methodName, args);
+      }
       if (isDesktop) {
         if (methodName == 'uploadFileNative') {
           await DartNativeCrypto.uploadFileNative(args);

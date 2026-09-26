@@ -616,6 +616,36 @@ class SyncRepository {
             final int remoteTsSec = (remoteInfo['updated_at'] as num).toInt() ~/ 1000;
             final int localTsSecToCompare = localTs ~/ 1000;
 
+            // A rollback after a failed download restores the file's bytes but
+            // can leave its mtime looking newer than the server copy (a plain
+            // filesystem write always stamps "now"; SAF can't set mtime at
+            // all — see DownloadManager.handleDownloadFile's rollback
+            // comments). Trusting mtime alone in that case took the "Local
+            // Newer" branch below and re-uploaded the OLD, rolled-back save
+            // straight over the user's good server copy.
+            //
+            // Guard: if this row's last attempt was a DOWNLOAD that ultimately
+            // failed, and the local file's content hash hasn't changed since
+            // that failure, the mtime bump is an artifact of the rollback, not
+            // a real edit — treat this as cloud-still-newer and retry the
+            // download instead of ever uploading. If the hash HAS changed, the
+            // user genuinely played again while the download kept failing, so
+            // the normal mtime-based decision below is correct.
+            final bool isFailedDownloadRow = cached != null &&
+                cached['status'] == 'failed' &&
+                cached['failed_op'] == 'download';
+            final String? failureLocalHash = cached?['failure_local_hash'] as String?;
+            if (isFailedDownloadRow && failureLocalHash != null && failureLocalHash == localHash) {
+              developer.log(
+                  'SYNC: $relPath unchanged since its last failed download (hash matches failure-time hash) — '
+                  'retrying download instead of uploading the rolled-back local copy',
+                  name: 'VaultSync', level: 900);
+              onProgress?.call('Queueing $relPath for patching (retry after failed download)...');
+              final localRelPath = (localInfo['originalRelPath'] as String?) ?? relPath;
+              await _syncStateDb.upsertState(localInfo['uri'], (remoteInfo['size'] as num).toInt(), (remoteInfo['updated_at'] as num).toInt(), remoteHash, 'pending_download', systemId: systemId, remotePath: remotePath, relPath: localRelPath, blockHashes: json.encode(currentBlockHashes));
+              continue;
+            }
+
             if (localTsSecToCompare >= remoteTsSec) {
               onProgress?.call('Queueing $relPath for patching (Local Newer)...');
               await _syncStateDb.upsertState(localInfo['uri'], localSize, localTs, localHash, 'pending_upload', systemId: systemId, remotePath: remotePath, relPath: relPath, blockHashes: json.encode(currentBlockHashes));

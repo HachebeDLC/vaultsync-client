@@ -30,7 +30,7 @@ class SyncStateDatabase {
 
     return await openDatabase(
       dbPath,
-      version: 4,
+      version: 5,
       onConfigure: (db) async {
         await db.rawQuery('PRAGMA journal_mode = WAL');
         await db.execute('PRAGMA synchronous = NORMAL');
@@ -48,7 +48,9 @@ class SyncStateDatabase {
             rel_path TEXT,
             error TEXT,
             block_hashes TEXT,
-            retry_count INTEGER DEFAULT 0
+            retry_count INTEGER DEFAULT 0,
+            failed_op TEXT,
+            failure_local_hash TEXT
           )
         ''');
         await db.execute('CREATE INDEX idx_sync_status ON sync_state (status)');
@@ -117,10 +119,27 @@ class SyncStateDatabase {
             )
           ''');
         }
+        if (oldVersion < 5) {
+          // Distinguishes a permanently-failed DOWNLOAD from a failed upload
+          // (both previously collapsed into the same 'failed' status string),
+          // and records the local file's content hash at the moment a
+          // download failed. SyncRepository.syncSystem's both-exist branch
+          // uses these to tell "the rolled-back local file is unchanged since
+          // the failed download" (retry the download) apart from "the user
+          // genuinely edited the save while a download was failing" (upload
+          // normally) — see the syncSystem doc comment on that check.
+          await db.execute('ALTER TABLE sync_state ADD COLUMN failed_op TEXT');
+          await db.execute('ALTER TABLE sync_state ADD COLUMN failure_local_hash TEXT');
+        }
       },
     );
   }
 
+  // Note: INSERT OR REPLACE (below) deletes any existing row for this `path`
+  // before inserting the new one, so columns not listed in the map —
+  // including `failed_op`/`failure_local_hash` — always come back NULL here.
+  // That is exactly what we want: queueing a fresh pending_upload/
+  // pending_download/synced row always clears any earlier failure record.
   Future<void> upsertState(String path, int size, int lastModified, String hash, String status, {String? systemId, String? remotePath, String? relPath, String? blockHashes}) async {
     final db = await database;
     await db.transaction((txn) async {
@@ -203,7 +222,16 @@ class SyncStateDatabase {
     });
   }
 
-  Future<void> updateStatus(String path, String status, {String? error}) async {
+  /// [failedOp] and [failureLocalHash] are only meaningful (and only ever
+  /// written) when [status] is `'failed'`:
+  ///  - [failedOp] is `'download'` or `'upload'`, distinguishing what kind of
+  ///    job failed — the plain `'failed'` status string alone doesn't say.
+  ///  - [failureLocalHash] is the local file's content hash at the moment a
+  ///    DOWNLOAD failed (after any native rollback restored it), computed the
+  ///    same way SyncRepository.syncSystem hashes files for comparison.
+  /// Any other status (e.g. `'synced'`) always clears both to null, so a
+  /// stale failure record can never leak into a row's next successful state.
+  Future<void> updateStatus(String path, String status, {String? error, String? failedOp, String? failureLocalHash}) async {
     final db = await database;
     await db.update(
       'sync_state',
@@ -211,6 +239,8 @@ class SyncStateDatabase {
         'status': status,
         'error': error,
         'retry_count': status == 'failed' ? 1 : 0,
+        'failed_op': status == 'failed' ? failedOp : null,
+        'failure_local_hash': status == 'failed' ? failureLocalHash : null,
       },
       where: 'path = ?',
       whereArgs: [path],

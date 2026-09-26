@@ -323,4 +323,61 @@ void main() {
       expect(removed, 0);
     });
   });
+
+  // Covers the v5 migration (failed_op / failure_local_hash) that lets
+  // SyncRepository.syncSystem distinguish a failed DOWNLOAD from a failed
+  // upload and compare the local file's content hash against the hash
+  // recorded at the moment that download failed — see
+  // sync_repository_failed_download_retry_test.dart for the consumer side.
+  group('failed_op / failure_local_hash (v5)', () {
+    test('updateStatus(failed) records failedOp and failureLocalHash', () async {
+      await syncDb.upsertState('/local/a.bin', 100, 100, 'target_hash', 'pending_download', systemId: 'switch');
+
+      await syncDb.updateStatus('/local/a.bin', 'failed',
+          error: 'HTTP 401', failedOp: 'download', failureLocalHash: 'restored_hash');
+
+      final state = await syncDb.getState('/local/a.bin');
+      expect(state, isNotNull);
+      expect(state!['status'], 'failed');
+      expect(state['failed_op'], 'download');
+      expect(state['failure_local_hash'], 'restored_hash');
+    });
+
+    test('updateStatus(synced) always clears failedOp and failureLocalHash', () async {
+      await syncDb.upsertState('/local/b.bin', 100, 100, 'target_hash', 'pending_download', systemId: 'switch');
+      await syncDb.updateStatus('/local/b.bin', 'failed',
+          error: 'HTTP 401', failedOp: 'download', failureLocalHash: 'restored_hash');
+
+      await syncDb.updateStatus('/local/b.bin', 'synced');
+
+      final state = await syncDb.getState('/local/b.bin');
+      expect(state!['status'], 'synced');
+      expect(state['failed_op'], isNull);
+      expect(state['failure_local_hash'], isNull);
+    });
+
+    test('upsertState (INSERT OR REPLACE) clears a prior failure record on the next queue', () async {
+      await syncDb.upsertState('/local/c.bin', 100, 100, 'target_hash', 'pending_download', systemId: 'switch');
+      await syncDb.updateStatus('/local/c.bin', 'failed',
+          error: 'HTTP 401', failedOp: 'download', failureLocalHash: 'restored_hash');
+
+      // Requeued as a fresh pending_download after the sync-decision guard fires.
+      await syncDb.upsertState('/local/c.bin', 100, 200, 'target_hash', 'pending_download', systemId: 'switch');
+
+      final state = await syncDb.getState('/local/c.bin');
+      expect(state!['status'], 'pending_download');
+      expect(state['failed_op'], isNull);
+      expect(state['failure_local_hash'], isNull);
+    });
+
+    test('a failed upload never carries a failureLocalHash', () async {
+      await syncDb.upsertState('/local/d.bin', 100, 100, 'local_hash', 'pending_upload', systemId: 'switch');
+
+      await syncDb.updateStatus('/local/d.bin', 'failed', error: 'HTTP 500', failedOp: 'upload');
+
+      final state = await syncDb.getState('/local/d.bin');
+      expect(state!['failed_op'], 'upload');
+      expect(state['failure_local_hash'], isNull);
+    });
+  });
 }

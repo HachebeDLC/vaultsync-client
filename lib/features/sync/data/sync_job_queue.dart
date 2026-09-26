@@ -176,7 +176,31 @@ class SyncJobQueue {
         } else {
           developer.log('Job permanently failed for $path after $retryCount attempts', name: 'VaultSync', level: 1000, error: e);
           _ref?.read(notificationLogProvider.notifier).addError(e, systemId: systemId);
-          await _db.updateStatus(path, 'failed', error: e.toString());
+
+          // A failed DOWNLOAD may have left a native rollback in place that
+          // restored the file's bytes but not necessarily its mtime (SAF
+          // can't set mtime at all). Record the local content's hash right
+          // now — same method the sync diff uses — so the NEXT syncSystem()
+          // call can tell "this file is unchanged since the failed download"
+          // (retry the download) apart from "the user played again while the
+          // download kept failing" (upload normally), instead of trusting
+          // mtime, which a rollback can make look newer than it really is.
+          String? failureLocalHash;
+          if (status == 'pending_download') {
+            try {
+              final masterKey = await getMasterKey();
+              final combined = await _networkService.getBlockHashesAndFileHash(path, masterKey);
+              failureLocalHash = combined['fileHash'] as String?;
+            } catch (hashError) {
+              developer.log('⚠️ QUEUE: Could not hash $path after a failed download', name: 'VaultSync', level: 900, error: hashError);
+            }
+          }
+          await _db.updateStatus(
+            path, 'failed',
+            error: e.toString(),
+            failedOp: status == 'pending_download' ? 'download' : 'upload',
+            failureLocalHash: failureLocalHash,
+          );
         }
       }
     }
