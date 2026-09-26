@@ -331,4 +331,78 @@ void main() {
       ));
     });
   });
+
+  group('RetroArch remote-key anchor mismatch (syncSystem level)', () {
+    // Reproduces the on-device bug: `nds` is rooted at
+    // `.../RetroArch/saves`, so the local scan produces bare filenames
+    // (no `saves/`/`states/` anchor) while the server's listing for the
+    // RetroArch namespace stays anchored (`saves/<file>`). Before the fix in
+    // SyncRepository.syncSystem (SyncPathResolver.normalizeRetroArchRemoteKey),
+    // these never matched: the file was queued as pending_upload (as
+    // "local-only") AND the anchored remote entry was queued as
+    // pending_download (as "remote-only") on every single sync, even though
+    // the content was byte-identical. Note: on this test runner
+    // (Platform.isLinux), SyncRepository's real scan of a nonexistent
+    // Android path throws internally and is caught, yielding an empty
+    // `localList` — which is exactly the "local scan has no anchor" case the
+    // fix depends on, so no scan mocking is required here.
+    const nds = 'nds';
+    const retroArchLocalRoot = '/storage/emulated/0/RetroArch/saves';
+    const ndsLocalUri = 'content://test/mariokartds.dsv';
+    const ndsBareRelPath = 'mariokartds.dsv';
+    const ndsRemotePath = 'RetroArch/saves/mariokartds.dsv';
+    const sharedHash = 'mariokartds-shared-hash';
+
+    test('identical-content nds save is compared via the normalized key, not queued for upload or download', () async {
+      when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({
+        ndsBareRelPath: {'uri': ndsLocalUri, 'lastModified': staleTs, 'size': 500, 'originalRelPath': ndsBareRelPath},
+      });
+      when(() => mockDiffService.fetchAllRemoteFiles(any())).thenAnswer((_) async => [
+        {'path': ndsRemotePath, 'hash': sharedHash, 'size': 500, 'updated_at': staleTs},
+      ]);
+      // DB + journal already agree: this file was synced before, same size/ts/hash.
+      when(() => mockSyncStateDb.getState(ndsLocalUri)).thenAnswer((_) async => {
+        'size': 500, 'last_modified': staleTs, 'status': 'synced', 'hash': sharedHash, 'block_hashes': null,
+      });
+      when(() => mockConflictResolver.isJournaledSynced(any(), any(), any(), any(), localTs: any(named: 'localTs')))
+          .thenReturn(true);
+
+      await repository.syncSystem(nds, retroArchLocalRoot, ignoreConnectivity: true);
+
+      // Neither side should be queued: the normalized keys make this a
+      // single "both exist, identical" entry that takes the DB-cached/
+      // journal fast path and never touches the network or the DB write.
+      verifyNever(() => mockSyncStateDb.upsertState(
+        any(), any(), any(), any(), 'pending_download',
+        systemId: any(named: 'systemId'), remotePath: any(named: 'remotePath'),
+        relPath: any(named: 'relPath'), blockHashes: any(named: 'blockHashes'),
+      ));
+      verifyNever(() => mockSyncStateDb.upsertState(
+        any(), any(), any(), any(), 'pending_upload',
+        systemId: any(named: 'systemId'), remotePath: any(named: 'remotePath'),
+        relPath: any(named: 'relPath'), blockHashes: any(named: 'blockHashes'),
+      ));
+      verifyNever(() => mockNetworkService.getBlockHashesAndFileHash(any(), any()));
+    });
+
+    test('a genuinely local-only nds save (no remote copy) still uploads normally', () async {
+      when(() => mockConflictResolver.processLocalFiles(any(), any())).thenReturn({
+        ndsBareRelPath: {'uri': ndsLocalUri, 'lastModified': staleTs, 'size': 500, 'originalRelPath': ndsBareRelPath},
+      });
+      when(() => mockDiffService.fetchAllRemoteFiles(any())).thenAnswer((_) async => []);
+      when(() => mockSyncStateDb.getState(ndsLocalUri)).thenAnswer((_) async => null);
+      when(() => mockNetworkService.getBlockHashesAndFileHash(ndsLocalUri, 'master-key'))
+          .thenAnswer((_) async => {'blockHashes': ['b1'], 'fileHash': 'new-local-hash'});
+      when(() => mockFileHashService.getLocalHash(ndsLocalUri, 500, staleTs, precomputedHash: any(named: 'precomputedHash')))
+          .thenAnswer((_) async => 'new-local-hash');
+
+      await repository.syncSystem(nds, retroArchLocalRoot, ignoreConnectivity: true);
+
+      verify(() => mockSyncStateDb.upsertState(
+        ndsLocalUri, 500, staleTs, 'new-local-hash', 'pending_upload',
+        systemId: nds, remotePath: 'RetroArch/$ndsBareRelPath', relPath: ndsBareRelPath,
+        blockHashes: any(named: 'blockHashes'),
+      )).called(1);
+    });
+  });
 }

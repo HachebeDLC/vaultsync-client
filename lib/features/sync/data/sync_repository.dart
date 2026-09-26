@@ -418,6 +418,62 @@ class SyncRepository {
           remoteFiles[rel] = f;
         }
 
+        // RetroArch: normalize anchored remote keys (`saves/x`, `states/x`)
+        // down to the un-anchored key a local scan rooted directly at
+        // `saves/` or `states/` produces (see
+        // SyncPathResolver.normalizeRetroArchRemoteKey). Without this, a
+        // system like `nds`/`gba` whose configured root is
+        // `.../RetroArch/saves` never gets recognized as RetroArch by
+        // getCloudRelPath (neither the systemId nor the bare local filename
+        // contains "retroarch"), so its local files end up keyed by bare
+        // filename while the remote listing stays keyed as `saves/x` —
+        // every sync then saw two different keys for the same file and
+        // re-queued the remote copy as a same-content "download" forever
+        // (reproduced on-device with RetroArch DS saves: Mario Kart DS,
+        // Nintendogs, WarioWare, Pokemon HeartGold, Professor Layton).
+        if (actualPrefix == 'retroarch') {
+          final rootAnchor = SyncPathResolver.retroArchRootAnchor(effectivePath);
+          final localScanHasAnchor = SyncPathResolver.retroArchScanHasAnchor(localList);
+          if (rootAnchor != null && !localScanHasAnchor) {
+            final normalized = <String, dynamic>{};
+            for (final entry in remoteFiles.entries) {
+              final key = SyncPathResolver.normalizeRetroArchRemoteKey(
+                entry.key,
+                rootAnchor: rootAnchor,
+                localScanHasAnchor: localScanHasAnchor,
+              );
+              if (normalized.containsKey(key)) {
+                developer.log(
+                    'SYNC: $systemId — remote "${entry.key}" normalizes to already-seen '
+                    'key "$key"; keeping the first and ignoring the duplicate',
+                    name: 'VaultSync',
+                    level: 900);
+                continue;
+              }
+              normalized[key] = entry.value;
+            }
+            remoteFiles = normalized;
+          }
+        }
+
+        // 3DS/Citra/Azahar: collapse a legacy doubled `saves/saves/` remote
+        // key (see SyncPathResolver.getCloudRelPath's historical fallback,
+        // which used to produce exactly this for a SAF root at the
+        // package/files level, now fixed) back to the canonical `saves/`
+        // key so any such row the server still holds compares against this
+        // device's local scan instead of being treated as remote-only and
+        // re-downloaded into `.../saves/saves/…` again.
+        if (actualPrefix == '3ds' || actualPrefix == 'citra' || actualPrefix == 'azahar') {
+          remoteFiles = SyncPathResolver.dealias3dsDoubledSavesRemoteKeys(
+            remoteFiles,
+            onDuplicate: (canonicalKey, aliasedKey) => developer.log(
+                'SYNC: $systemId — "$aliasedKey" is a doubled saves/saves/ duplicate of '
+                '"$canonicalKey"; using "$canonicalKey" and ignoring the duplicate',
+                name: 'VaultSync',
+                level: 900),
+          );
+        }
+
         // De-alias the `files/` namespace duplication (see
         // SyncPathResolver.dealiasFilesRootRemoteKeys) when this system's
         // effective root is itself an Android/data package's `files/`

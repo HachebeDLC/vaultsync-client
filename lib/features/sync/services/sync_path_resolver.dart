@@ -188,6 +188,18 @@ class SyncPathResolver {
        if (titleIdx != -1 && titleIdx < parts.length - 1) {
            return 'saves/${parts.sublist(titleIdx + 1).join('/')}';
        }
+       // A SAF root at the package/`files` level (see
+       // SystemPathService.isPackageFilesDir) already scans with a leading
+       // `saves/` segment baked into the relative path — e.g.
+       // `saves/<titleid>/...`. Without this check the fallback below always
+       // prepended another `saves/`, producing a doubled
+       // `.../saves/saves/<titleid>/...` cloud path that never matched this
+       // device's own local scan (which recomputes the same doubled key
+       // deterministically, so it "worked" locally) but did not match a
+       // canonical `saves/<titleid>/...` row from any other device, and
+       // downloaded into `Azahar/saves/saves/…` on a fresh install. Only
+       // prepend when the segment isn't already there.
+       if (localRelPath.toLowerCase().startsWith('saves/')) return localRelPath;
        // EmuDeck / desktop flat structure: scan root is azahar/saves/ or citra/saves/.
        // Prefix with saves/ to keep the cloud namespace consistent.
        return 'saves/$localRelPath';
@@ -266,11 +278,8 @@ class SyncPathResolver {
     // 1. RetroArch (Core-aware mapping)
     if (sid.contains('retroarch') || cloudRelPath.toLowerCase().startsWith('retroarch/')) {
        var suffix = relPath;
-       
-       final hasExplicitAnchor = lastScanList.any((f) {
-          final p = (f['relPath'] as String).toLowerCase();
-          return p.startsWith('saves/') || p.startsWith('states/');
-       });
+
+       final hasExplicitAnchor = retroArchScanHasAnchor(lastScanList);
 
        // The local scan has no `saves/` or `states/` anchor, so the configured
        // root is *inside* one of them and the anchor has to come off for the
@@ -288,7 +297,7 @@ class SyncPathResolver {
              : (lower.startsWith('states/') ? 'states' : null);
 
          if (cloudAnchor != null) {
-           final rootAnchor = _anchorOf(localRoot);
+           final rootAnchor = retroArchRootAnchor(localRoot);
            if (localRoot == null || rootAnchor == cloudAnchor) {
              // Root is that folder (or unknown, keeping the old behaviour).
              suffix = suffix.substring(cloudAnchor.length + 1);
@@ -362,7 +371,15 @@ class SyncPathResolver {
 
     if (sid == '3ds' || sid == 'citra' || sid == 'azahar') {
        final isRooted = lastScanList.any((f) => (f['relPath'] as String).startsWith('title/'));
-       if (!isRooted) return '${prefix}saves/$relPath';
+       if (!isRooted) {
+         // Mirror image of the getCloudRelPath fix above: a SAF root at the
+         // package/`files` level scans with `relPath` already carrying the
+         // `saves/` segment (e.g. `saves/<titleid>/...`), so prepending
+         // another one here produced the same `saves/saves/…` doubling on
+         // download that the upload side used to produce.
+         if (relPath.toLowerCase().startsWith('saves/')) return '$prefix$relPath';
+         return '${prefix}saves/$relPath';
+       }
        if (relPath.startsWith('saves/')) return relPath.substring(6);
        return relPath;
     }
@@ -390,9 +407,18 @@ class SyncPathResolver {
   ///
   /// Only one segment is dropped, and only on an exact case-insensitive match,
   /// so a root at the right level is never altered.
-  /// `saves` or `states` when [root] points *at* one of RetroArch's two save
-  /// folders, null otherwise (including a root above them, or no root at all).
-  static String? _anchorOf(String? root) {
+
+  /// Whether [root] (a system's configured local scan root) points *at* one
+  /// of RetroArch's two save folders — i.e. its last path segment is `saves`
+  /// or `states`. Returns that leaf, lowercased, or null otherwise (including
+  /// a root above both folders, at the RetroArch folder itself, or no root at
+  /// all).
+  ///
+  /// Factored out of [getLocalRelPath]'s RetroArch anchor logic so
+  /// [SyncRepository.syncSystem] can apply the exact same "is this root
+  /// anchored at saves/states?" test when normalizing the *remote* file
+  /// listing's keys — see [normalizeRetroArchRemoteKey].
+  static String? retroArchRootAnchor(String? root) {
     if (root == null || root.isEmpty) return null;
     final parts = root
         .replaceAll('\\', '/')
@@ -402,6 +428,121 @@ class SyncPathResolver {
     if (parts.isEmpty) return null;
     final leaf = parts.last.toLowerCase();
     return (leaf == 'saves' || leaf == 'states') ? leaf : null;
+  }
+
+  /// Whether a raw file-scan listing (each entry a map with a `relPath` key,
+  /// as produced by the file scanner and threaded through as `lastScanList`)
+  /// already contains files anchored under RetroArch's `saves/` or `states/`
+  /// folders.
+  ///
+  /// When this is false for a RetroArch-namespaced system, the configured
+  /// root sits *inside* one of those two folders rather than at or above
+  /// RetroArch itself, so local scan keys never carry the anchor — see
+  /// [getLocalRelPath]'s RetroArch branch (which strips the anchor off a
+  /// *cloud* path before joining it under such a root) and
+  /// [normalizeRetroArchRemoteKey] (which strips the same anchor off a
+  /// *remote listing* key for the same reason, so uploads and the existing
+  /// remote copy are recognized as the same file instead of endlessly
+  /// re-downloading a remote-looking duplicate).
+  static bool retroArchScanHasAnchor(List<dynamic> scanList) {
+    return scanList.any((f) {
+      final p = (f['relPath'] as String).toLowerCase();
+      return p.startsWith('saves/') || p.startsWith('states/');
+    });
+  }
+
+  /// Rewrites a single RetroArch remote-listing key (already stripped of the
+  /// `RetroArch/` cloud prefix, e.g. `saves/Metroid Fusion (USA).srm`) to the
+  /// un-anchored key a local scan rooted directly at `saves/` or `states/`
+  /// would produce for the same file (e.g. `Metroid Fusion (USA).srm`).
+  ///
+  /// This is the upload-side counterpart of what [getLocalRelPath] already
+  /// does for downloads: when the configured root for a RetroArch-namespaced
+  /// system (e.g. `nds`, `gba`) is itself `.../RetroArch/saves` rather than
+  /// `.../RetroArch`, [getCloudRelPath] never recognizes the file as
+  /// RetroArch's at all (neither `systemId` nor the bare local filename
+  /// contains "retroarch"), so it falls through to an un-anchored local key.
+  /// Every sync then compared that un-anchored local key against the
+  /// server's anchored `saves/x` / `states/x` listing, found no match, and
+  /// re-queued the remote copy as a same-content "download" forever. Calling
+  /// this on every entry of the remote listing before the local/remote diff
+  /// makes both sides agree on the same un-anchored key so identical files
+  /// compare equal — see [SyncRepository.syncSystem].
+  ///
+  /// Leaves [remoteKey] unchanged unless all of:
+  /// - [localScanHasAnchor] is false (the local scan itself has no anchor,
+  ///   i.e. the root really is inside `saves/` or `states/` — see
+  ///   [retroArchScanHasAnchor]; when the local scan already carries the
+  ///   anchor, both sides are already directly comparable and rewriting
+  ///   would instead cause a collision), and
+  /// - [rootAnchor] (from [retroArchRootAnchor]) is non-null, and
+  /// - [remoteKey] starts with that *same* anchor (`saves/` or `states/`). A
+  ///   remote key under the sibling anchor — e.g. a `states/x` row when the
+  ///   root is rooted at `saves/` — is left alone: it does not belong under
+  ///   this root at all (mirroring [getLocalRelPath]'s sibling-anchor skip),
+  ///   and leaving its key anchored means it can never collide with an
+  ///   unrelated local file of the same bare name.
+  static String normalizeRetroArchRemoteKey(
+    String remoteKey, {
+    required String? rootAnchor,
+    required bool localScanHasAnchor,
+  }) {
+    if (localScanHasAnchor || rootAnchor == null) return remoteKey;
+    final lower = remoteKey.toLowerCase();
+    final remoteAnchor = lower.startsWith('saves/')
+        ? 'saves'
+        : (lower.startsWith('states/') ? 'states' : null);
+    if (remoteAnchor == null || remoteAnchor != rootAnchor) return remoteKey;
+    return remoteKey.substring(remoteAnchor.length + 1);
+  }
+
+  /// Normalizes a remote-file listing for a 3DS/Citra/Azahar system by
+  /// collapsing a leading doubled `saves/saves/` segment back to the
+  /// canonical single `saves/`.
+  ///
+  /// [getCloudRelPath]'s 3DS branch used to unconditionally prepend `saves/`
+  /// even when the scanned relative path already started with `saves/` (true
+  /// for a SAF root at the package/`files` level — see
+  /// [SystemPathService.isPackageFilesDir]), producing and uploading a
+  /// doubled `3ds/saves/saves/<titleid>/...` cloud path. That fallback is now
+  /// fixed to leave an already-anchored path alone, but a row the server
+  /// already holds under the old doubled key would otherwise still look
+  /// remote-only forever against this device's (now-canonical) local scan
+  /// key and get re-downloaded as a duplicate. Rewriting the doubled key back
+  /// to canonical here makes the diff compare it against the real local file
+  /// instead.
+  ///
+  /// When both a doubled key and its canonical counterpart are present at
+  /// once, the canonical one wins and the doubled one is dropped, reported
+  /// via [onDuplicate] — mirroring [dealiasFilesRootRemoteKeys]. This never
+  /// renames or deletes anything server-side.
+  static Map<String, dynamic> dealias3dsDoubledSavesRemoteKeys(
+    Map<String, dynamic> remoteFiles, {
+    void Function(String canonicalKey, String aliasedKey)? onDuplicate,
+  }) {
+    const doubledPrefix = 'saves/saves/';
+    final hasDoubled =
+        remoteFiles.keys.any((k) => k.toLowerCase().startsWith(doubledPrefix));
+    if (!hasDoubled) return remoteFiles;
+
+    final result = <String, dynamic>{};
+    for (final entry in remoteFiles.entries) {
+      if (!entry.key.toLowerCase().startsWith(doubledPrefix)) {
+        result[entry.key] = entry.value;
+      }
+    }
+    for (final entry in remoteFiles.entries) {
+      final key = entry.key;
+      if (key.toLowerCase().startsWith(doubledPrefix)) {
+        final canonicalKey = key.substring('saves/'.length);
+        if (remoteFiles.containsKey(canonicalKey)) {
+          onDuplicate?.call(canonicalKey, key);
+          continue;
+        }
+        result[canonicalKey] = entry.value;
+      }
+    }
+    return result;
   }
 
   static String dedupeRootSegment(String localRoot, String relPath) {
